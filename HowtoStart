@@ -1,0 +1,31 @@
+n8n automation 
+browse.ai webscrapping
+bolt.me 
+OpenAi key
+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
+
+MiniFOrge Commands
+# Ortam oluşturma (ilk kurulumda bir kez)
+conda create -n sigorta python=3.10 -y
+
+
+# Proje klasörüne geç
+cd C:\Users\azizogla\Documents\Playground\Monitoring\ReadingApp
+
+# Ortamı aktive etme (her oturumda)
+conda activate sigorta
+
+# Gerekli paketleri yükleme
+conda install pytest
+pip install openai python-dotenv pillow pytesseract
+
+# Tesseract OCR'ı conda ile kurmak için (isteğe bağlı)
+conda install -c conda-forge tesseract
+
+# Test çalıştırma örneği
+pytest llm_agent/ocr_extractor -s --file="C:/Users/azizogla/Documents/Playground/Monitoring/AllianzWebside/Ruhsat.jpg"
+
+# PYTHONPATH ile test çalıştırma (Miniforge/terminal için önerilir)
+# PowerShell veya Miniforge terminalinde iki satırda çalıştırın:
+$env:PYTHONPATH="C:/Users/azizogla/Documents/Playground/Monitoring/ReadingApp"
+pytest llm_agent/ocr_extractor -s --file="C:/Users/azizogla/Documents/Playground/Monitoring/AllianzWebside/Ruhsat.jpg"
