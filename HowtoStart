@@ -42,7 +42,7 @@ pip install openai python-dotenv pillow pytesseract certifi
 # 4. .env dosyası oluştur ve OpenAI API anahtarını ekle
 echo OPENAI_API_KEY=senin_anahtarın > .env
 
-# 5. Testi çalıştır (örnek resim dosyası ile)
-pytest llm_agent/ocr_extractor -s --file="llm_agent/ocr_extractor/sample_ruhsat.jpg"
+# 5. Testi çalıştır (tdsp klasöründeki resim dosyası ile)
+pytest llm_agent/ocr_extractor -s --file="tdsp/ruhsat.jpg"
 
 # 6. Sonuçları terminalde görebilirsin
