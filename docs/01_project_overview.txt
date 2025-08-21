@@ -1,0 +1,7 @@
+# 1. Project Overview
+
+ReadingApp is a modular Python application for extracting, mapping, and filling web forms using LLMs. The system is designed to:
+- Extract structured data from documents (e.g., Turkish ruhsat/vehicle registration) using LLMs.
+- Analyze web page HTML and dynamically map data fields to form inputs.
+- Automate web form filling and submission with minimal maintenance, even if the web page changes.
+- Support decoupled, testable, and maintainable software components.

@@ -46,3 +46,6 @@ echo OPENAI_API_KEY=senin_anahtarın > .env
 pytest llm_agent/ocr_extractor -s --file="tdsp/ruhsat.jpg"
 
 # 6. Sonuçları terminalde görebilirsin
+git add .
+git commit -m "Improve ruhsat LLM extraction: English prompt, plate accuracy, and test integration"
+git push

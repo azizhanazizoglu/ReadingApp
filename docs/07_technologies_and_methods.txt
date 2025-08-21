@@ -1,0 +1,8 @@
+# 7. Technologies & Methods Used
+
+- Python 3.12+
+- OpenAI API (gpt-4o, Vision)
+- pytest (unit & integration tests)
+- SQLite (memory/db)
+- Professional SW practices: V-Model, modular design, code review, documentation
+- JSON for all data exchange between components

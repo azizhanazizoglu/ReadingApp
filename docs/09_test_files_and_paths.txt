@@ -1,0 +1,23 @@
+# 9. Test Files and Paths
+
+Below are the main test files, their purposes, and their locations in the project structure:
+
+## license_llm
+- test_license_llm_extractor.py
+  - Path: license_llm/test_license_llm_extractor.py
+  - Purpose: Tests LLM-based extraction and mapping from ruhsat images.
+
+## webbot
+- test_webbot_html_mapping.py
+  - Path: webbot/test_webbot_html_mapping.py
+  - Purpose: Tests web page download and HTML reading functionality.
+
+## memory
+- test_ocr_to_memory.py
+  - Path: memory/test_ocr_to_memory.py
+  - Purpose: Tests OCR/LLM result integration and storage in the memory/database.
+
+## master
+- master.py
+  - Path: master.py
+  - Purpose: End-to-end integration test and workflow orchestration.

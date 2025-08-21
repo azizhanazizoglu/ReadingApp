@@ -1,0 +1,14 @@
+# 2. V-Model & Development Methodology
+
+## V-Model
+- Requirements Analysis: User needs, regulatory, and technical requirements are gathered and documented.
+- System Design: High-level architecture, component boundaries, and data flows are defined.
+- Implementation: Each component is developed and unit tested independently.
+- Integration: Components are integrated and tested as a system.
+- Verification & Validation: System is validated against requirements and user stories.
+
+## Professional Practices
+- Modular, decoupled architecture
+- Automated and manual testing (unit, integration, coverage)
+- Version control (Git)
+- Documentation and code review
