@@ -1,2 +1,4 @@
 def pytest_addoption(parser):
-    parser.addoption("--file", action="store", default="sample_ruhsat.jpg", help="Test edilecek ruhsat dosyası (örn: sample_ruhsat_modern.jpg)")
+    parser.addoption(
+        "--jpg", action="store", default="ocr_agent/sample_ruhsat.jpg", help="Test edilecek ruhsat jpg dosyasının pathi"
+    )
