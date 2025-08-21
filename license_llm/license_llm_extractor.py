@@ -1,4 +1,3 @@
-RENAMED TO: c:\Users\azizh\Documents\ReadingApp\license_llm\license_llm_extractor.py
 import os
 import base64
 from dotenv import load_dotenv
