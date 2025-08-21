@@ -1,3 +1,0 @@
-# ocr_agent/requirements.txt
-pytesseract
-pillow
