@@ -70,10 +70,96 @@ ReadingApp is a modular Python system for extracting, mapping, and filling web f
 - Run integration tests for full data flow
 - Extend system to new forms/data types easily
 
-## How to Run Tests
 
-- Run all tests: `pytest`
-- Run a specific test: `pytest path/to/test_file.py`
+
+
+## Environment Setup & .env File Best Practices
+
+**Important:** Only one `.env` file should exist in the project, located at the project root (e.g., `C:/Users/azizh/Documents/ReadingApp/.env`).
+
+- Remove all `.env` files from subfolders (like `license_llm/.env`, `llm_agent/.env`, etc.) to avoid conflicts.
+- All scripts and tests will load environment variables from the root `.env` file.
+- This prevents confusion and ensures consistent environment variable usage across all components.
+
+Example `.env` (do not share your real key):
+```
+OPENAI_API_KEY=sk-...
+```
+
+Before running tests that use the LLM, you must set your OpenAI API key. The project uses a `.env` file for convenience:
+
+```
+OPENAI_API_KEY=sk-...  # (your real key)
+```
+
+To load this automatically, you can use the `python-dotenv` package or set the variable manually in your terminal:
+
+**PowerShell (Windows):**
+```powershell
+$env:OPENAI_API_KEY="sk-..."
+pytest tests/test_integration_end_to_end.py
+```
+
+Or install `python-dotenv` and add this to your test files or a `conftest.py`:
+```python
+from dotenv import load_dotenv
+load_dotenv()
+```
+
+---
+
+
+
+## Test Reporting & PDF Reports
+
+**Technologies Used for Reporting:**
+- PDF reports are generated using the `reportlab` Python library.
+- Reports are saved in `tdsp/test_reports/`.
+
+
+All main tests automatically generate a PDF report in `tdsp/test_reports/` after each run (if `reportlab` is installed). Each report includes:
+- Test requirement
+- Input data
+- Expected output
+- Actual output
+- Pass/Fail result
+
+This is designed for safety-critical software assurance and traceability.
+
+
+You can run all tests or target specific modules/components as needed. Here are the main commands:
+
+### Run All Tests
+
+```bash
+pytest
+```
+
+### Run a Specific Test File
+
+```bash
+pytest path/to/test_file.py
+```
+
+### Main Test Files & Example Commands
+
+| Purpose/Component         | Test File Path                              | Command to Run                                   |
+|--------------------------|---------------------------------------------|--------------------------------------------------|
+| LLM Extraction/Mapping   | license_llm/test_license_llm_extractor.py   | `pytest license_llm/test_license_llm_extractor.py`|
+| Webbot HTML Download     | webbot/test_webbot_html_mapping.py          | `pytest webbot/test_webbot_html_mapping.py`       |
+| Memory Integration       | memory/test_ocr_to_memory.py                | `pytest memory/test_ocr_to_memory.py`             |
+| End-to-End Integration   | tests/test_integration_end_to_end.py        | `pytest tests/test_integration_end_to_end.py`     |
+
+### Main Test Files, Requirements & Example Commands
+
+| Purpose/Component         | Test File Path                              | Command to Run                                   | Test Requirement & Expected Output |
+|--------------------------|---------------------------------------------|--------------------------------------------------|-------------------------------------|
+| LLM Extraction/Mapping   | license_llm/test_license_llm_extractor.py   | `pytest license_llm/test_license_llm_extractor.py`| Extracts ruhsat info from image, returns dict with keys like 'plaka_no', 'ad_soyad', etc. |
+| Webbot HTML Download     | webbot/test_webbot_html_mapping.py          | `pytest webbot/test_webbot_html_mapping.py`       | Downloads HTML, prints first 2000 chars, asserts HTML is non-empty. |
+| Memory Integration       | memory/test_ocr_to_memory.py                | `pytest memory/test_ocr_to_memory.py`             | Stores and retrieves OCR/LLM results, checks data integrity. |
+| End-to-End Integration   | tests/test_integration_end_to_end.py        | `pytest tests/test_integration_end_to_end.py`     | Fetches HTML, maps ruhsat JSON to HTML fields with LLM, prints and checks mapping JSON. |
+
+> You can add `-s` to see print output, e.g. `pytest -s tests/test_integration_end_to_end.py`
 
 ---
 

@@ -1,3 +1,7 @@
+
+import os
+import openai
+
 def map_json_to_html_fields(html_string: str, ruhsat_json: dict, model="gpt-4o"):
     """
     Given an HTML form and a JSON object with data to fill, use the LLM to determine which JSON field should be filled into which input/select in the HTML, and which button(s) should be clicked. The LLM should analyze all clues (label, placeholder, id, name, type, etc.) and return a mapping as JSON.

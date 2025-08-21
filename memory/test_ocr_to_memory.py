@@ -21,32 +21,67 @@ def fill_ocr_sample(llm_result: dict) -> dict:
         "tescil_tarihi": llm_result.get("tescil_tarihi", "10.10.2022")
     }
 
+from datetime import datetime
+try:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.pdfgen import canvas
+    REPORTLAB_AVAILABLE = True
+except ImportError:
+    REPORTLAB_AVAILABLE = False
+
 def test_ocr_result_to_memory(tmp_path):
+    requirement = "Store and retrieve OCR/LLM results, check data integrity and correct storage."
     # Test için geçici bir veritabanı oluştur
     db_path = os.path.join(tmp_path, 'test_insurance.db')
     db = Database(db_path=db_path)
 
     # 1. Doküman ekle (kullanıcı id'si olmadan, örnek id: 1)
     document_id = db.save_document(user_id=1, file_path="tdsp/ruhsat/Ruhsat.jpg")
-    assert document_id > 0
-
     # 2. LLM ile ruhsat görselinden veri çıkar
     from llm_agent.llm_ocr_extractor import extract_vehicle_info_from_image
     llm_result = extract_vehicle_info_from_image("tdsp/ruhsat/Ruhsat.jpg")
     ocr_sample = fill_ocr_sample(llm_result)
     ocr_json = json.dumps(ocr_sample, ensure_ascii=False)
     ocr_id = db.save_ocr_result(document_id=document_id, result_json=ocr_json)
-    assert ocr_id > 0
-
     # 3. OCR sonucunu DB'den kontrol et
     with db._get_connection() as conn:
         cur = conn.cursor()
         cur.execute("SELECT result_json FROM ocr_results WHERE id = ?", (ocr_id,))
         row = cur.fetchone()
-        assert row is not None
-        result = json.loads(row[0])
-        for key in ocr_sample:
-            assert result[key] == ocr_sample[key]
+        result = json.loads(row[0]) if row else None
+    # --- Output and PDF report ---
+    print("\n[TEST] Requirement:", requirement)
+    print("Input: Ruhsat image path: tdsp/ruhsat/Ruhsat.jpg")
+    print("Expected Output: OCR/LLM result stored and retrieved, all fields match.")
+    print("Actual Output:", result)
+    test_result = "PASS" if document_id > 0 and ocr_id > 0 and result and all(result[k] == ocr_sample[k] for k in ocr_sample) else "FAIL"
+    print("Test Result:", test_result)
+    if REPORTLAB_AVAILABLE:
+        report_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'tdsp', 'test_reports'))
+        os.makedirs(report_dir, exist_ok=True)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        pdf_path = os.path.join(report_dir, f'memory_test_report_{timestamp}.pdf')
+        c = canvas.Canvas(pdf_path, pagesize=letter)
+        c.setFont("Helvetica", 10)
+        y = 750
+        c.drawString(30, y, "[memory Test Report]")
+        y -= 20
+        c.drawString(30, y, f"Requirement: {requirement}")
+        y -= 20
+        c.drawString(30, y, f"Input: Ruhsat image path: tdsp/ruhsat/Ruhsat.jpg")
+        y -= 20
+        c.drawString(30, y, f"Expected Output: OCR/LLM result stored and retrieved, all fields match.")
+        y -= 20
+        c.drawString(30, y, f"Actual Output (truncated): {str(result)[:1000]}")
+        y -= 40
+        c.drawString(30, y, f"Test Result: {test_result}")
+        c.save()
+        print(f"[PDF REPORT] Test report saved to: {pdf_path}")
+    assert document_id > 0
+    assert ocr_id > 0
+    assert result is not None
+    for key in ocr_sample:
+        assert result[key] == ocr_sample[key]
 
 # Database class'ına test için connection döndüren yardımcı fonksiyon ekle
 # (testte private method olarak kullanılır, production'da kullanılmaz)

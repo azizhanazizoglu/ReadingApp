@@ -1,23 +1,38 @@
+
 # 9. Test Files and Paths
 
 Below are the main test files, their purposes, and their locations in the project structure:
+
+## Test Reporting
+All main tests output a PDF report to `tdsp/test_reports/` with:
+- Test requirement
+- Input data
+- Expected output
+- Actual output
+- Pass/Fail result
+
+This supports traceability and software assurance for safety-critical development.
 
 ## license_llm
 - test_license_llm_extractor.py
   - Path: license_llm/test_license_llm_extractor.py
   - Purpose: Tests LLM-based extraction and mapping from ruhsat images.
 
+
 ## webbot
 - test_webbot_html_mapping.py
   - Path: webbot/test_webbot_html_mapping.py
   - Purpose: Tests web page download and HTML reading functionality.
+  - Requirement: Download HTML from a real web page, print first 2000 chars, and assert HTML is non-empty.
 
 ## memory
 - test_ocr_to_memory.py
   - Path: memory/test_ocr_to_memory.py
   - Purpose: Tests OCR/LLM result integration and storage in the memory/database.
+  - Requirement: Store and retrieve OCR/LLM results, check data integrity and correct storage.
 
-## master
-- master.py
-  - Path: master.py
-  - Purpose: End-to-end integration test and workflow orchestration.
+## integration
+- test_integration_end_to_end.py
+  - Path: tests/test_integration_end_to_end.py
+  - Purpose: End-to-end integration test for HTML fetch, LLM mapping, and output validation.
+  - Requirement: Fetch HTML, map ruhsat JSON to HTML fields with LLM, print and check mapping JSON for required keys ('field_mapping', 'actions').
