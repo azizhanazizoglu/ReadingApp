@@ -1,6 +1,8 @@
 
 import os
 import pytest
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
 from datetime import datetime
 try:
     from reportlab.lib.pagesizes import letter
@@ -23,24 +25,31 @@ def test_extract_vehicle_info_from_image(request):
     test_result = "PASS" if isinstance(result, dict) and ("plaka_no" in result or "raw_response" in result) else "FAIL"
     print("Test Result:", test_result)
     if REPORTLAB_AVAILABLE:
-        report_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'tdsp', 'test_reports'))
+        from textwrap import wrap
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        report_dir = os.path.join(project_root, 'tdsp', 'test_reports')
         os.makedirs(report_dir, exist_ok=True)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         pdf_path = os.path.join(report_dir, f'license_llm_test_report_{timestamp}.pdf')
         c = canvas.Canvas(pdf_path, pagesize=letter)
         c.setFont("Helvetica", 10)
         y = 750
-        c.drawString(30, y, "[license_llm Test Report]")
-        y -= 20
-        c.drawString(30, y, f"Requirement: {requirement}")
-        y -= 20
-        c.drawString(30, y, f"Input file_path: {file_path}")
-        y -= 20
-        c.drawString(30, y, f"Expected Output: dict with ruhsat fields")
-        y -= 20
-        c.drawString(30, y, f"Actual Output: {str(result)[:1000]}")
-        y -= 40
-        c.drawString(30, y, f"Test Result: {test_result}")
+        def draw_wrapped(text, y, max_width=100):
+            for line in wrap(str(text), max_width):
+                c.drawString(30, y, line)
+                y -= 15
+            return y
+        y = draw_wrapped("[license_llm Test Report]", y)
+        y -= 5
+        y = draw_wrapped(f"Requirement: {requirement}", y)
+        y -= 5
+        y = draw_wrapped(f"Input file_path: {file_path}", y)
+        y -= 5
+        y = draw_wrapped(f"Expected Output: dict with ruhsat fields", y)
+        y -= 5
+        y = draw_wrapped(f"Actual Output: {str(result)}", y)
+        y -= 10
+        y = draw_wrapped(f"Test Result: {test_result}", y)
         c.save()
         print(f"[PDF REPORT] Test report saved to: {pdf_path}")
     assert isinstance(result, dict)

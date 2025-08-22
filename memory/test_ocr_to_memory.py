@@ -1,6 +1,8 @@
 # test_ocr_to_memory.py
 # OCR Agent'ın memory (db) ile entegrasyonunu test eder.
 import os
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
 import sqlite3
 import json
 import pytest
@@ -57,24 +59,31 @@ def test_ocr_result_to_memory(tmp_path):
     test_result = "PASS" if document_id > 0 and ocr_id > 0 and result and all(result[k] == ocr_sample[k] for k in ocr_sample) else "FAIL"
     print("Test Result:", test_result)
     if REPORTLAB_AVAILABLE:
-        report_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'tdsp', 'test_reports'))
+        from textwrap import wrap
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        report_dir = os.path.join(project_root, 'tdsp', 'test_reports')
         os.makedirs(report_dir, exist_ok=True)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         pdf_path = os.path.join(report_dir, f'memory_test_report_{timestamp}.pdf')
         c = canvas.Canvas(pdf_path, pagesize=letter)
         c.setFont("Helvetica", 10)
         y = 750
-        c.drawString(30, y, "[memory Test Report]")
-        y -= 20
-        c.drawString(30, y, f"Requirement: {requirement}")
-        y -= 20
-        c.drawString(30, y, f"Input: Ruhsat image path: tdsp/ruhsat/Ruhsat.jpg")
-        y -= 20
-        c.drawString(30, y, f"Expected Output: OCR/LLM result stored and retrieved, all fields match.")
-        y -= 20
-        c.drawString(30, y, f"Actual Output (truncated): {str(result)[:1000]}")
-        y -= 40
-        c.drawString(30, y, f"Test Result: {test_result}")
+        def draw_wrapped(text, y, max_width=100):
+            for line in wrap(str(text), max_width):
+                c.drawString(30, y, line)
+                y -= 15
+            return y
+        y = draw_wrapped("[memory Test Report]", y)
+        y -= 5
+        y = draw_wrapped(f"Requirement: {requirement}", y)
+        y -= 5
+        y = draw_wrapped(f"Input: Ruhsat image path: tdsp/ruhsat/Ruhsat.jpg", y)
+        y -= 5
+        y = draw_wrapped(f"Expected Output: OCR/LLM result stored and retrieved, all fields match.", y)
+        y -= 5
+        y = draw_wrapped(f"Actual Output (truncated): {str(result)}", y)
+        y -= 10
+        y = draw_wrapped(f"Test Result: {test_result}", y)
         c.save()
         print(f"[PDF REPORT] Test report saved to: {pdf_path}")
     assert document_id > 0
