@@ -32,6 +32,52 @@ class MemoryDB:
         return self.data.get(key, "")
 
 def test_end_to_end_html_to_llm_mapping():
+    html = None
+    mapping_json = {}
+    has_field_mapping = False
+    has_actions = False
+    # --- Fill HTML with mapping and save snapshot ---
+    from bs4 import BeautifulSoup
+    def fill_html_with_mapping(html, mapping_json, ruhsat_json):
+        soup = BeautifulSoup(html, 'html.parser')
+        field_mapping = mapping_json.get('field_mapping', {})
+        for json_field, selector in field_mapping.items():
+            value = ruhsat_json.get(json_field, "")
+            # Try to parse selector: input#id, input[name=], label text, etc.
+            el = None
+            if selector.startswith('input#'):
+                el = soup.find('input', id=selector.split('#',1)[1])
+            elif 'input[name=' in selector:
+                name = selector.split('input[name=',1)[1].split(']',1)[0].replace('"','').replace("'","")
+                el = soup.find('input', attrs={'name': name})
+            elif selector.startswith('label:'):
+                label_text = selector.split(':',1)[1].strip().lower()
+                label = soup.find('label', string=lambda s: s and label_text in s.lower())
+                if label and label.get('for'):
+                    el = soup.find(id=label['for'])
+            # fallback: try by id or name
+            if not el:
+                el = soup.find(id=selector) or soup.find('input', attrs={'name': selector})
+            if el:
+                el['value'] = value
+        return str(soup)
+
+    # Always save a filled HTML snapshot for debugging, even if mapping is missing
+    if html is not None:
+        try:
+            filled_html = fill_html_with_mapping(html, mapping_json if has_field_mapping else {}, ruhsat_json)
+        except Exception as e:
+            print(f"[DEBUG] fill_html_with_mapping failed: {e}")
+            filled_html = html
+        snapshot_dir = os.path.join(project_root, 'tdsp', 'test_reports', 'html_snapshots')
+        os.makedirs(snapshot_dir, exist_ok=True)
+        snapshot_path = os.path.join(snapshot_dir, f'filled_html_snapshot_{datetime.now().strftime("%Y%m%d_%H%M")}.html')
+        with open(snapshot_path, 'w', encoding='utf-8') as f:
+            f.write(filled_html)
+        print(f"[DEBUG] mapping_json: {mapping_json if has_field_mapping else 'NO MAPPING'}")
+        print(f"[HTML SNAPSHOT] Filled HTML saved to: {snapshot_path}")
+    else:
+        print("[DEBUG] No HTML available to save snapshot.")
     """Integration: webbot fetches HTML, LLM maps ruhsat JSON to HTML fields."""
     # --- Test Requirement ---
     requirement = (
@@ -74,6 +120,8 @@ def test_end_to_end_html_to_llm_mapping():
             return match.group(1).strip()
         return text.strip()
     mapping_clean = extract_json_from_markdown(mapping)
+    has_field_mapping = False
+    has_actions = False
     try:
         mapping_json = json.loads(mapping_clean)
         print("\n[Actual Output] Parsed Mapping JSON:")

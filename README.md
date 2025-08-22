@@ -1,5 +1,12 @@
 
+
 # ReadingApp: Safety-Critical Software Assurance & Test Traceability Guide
+
+## LLM ile Web Form Otomasyonu (HTML üzerinden mapping)
+
+- LLM, sadece HTML ve JSON ile form alanlarını otomatik eşleştirir. Ekran görüntüsüne gerek yoktur.
+- Webbot, Qt gibi farklı teknolojilerle entegre çalışabilir. Her sayfa değişiminde HTML alınır, LLM'e gönderilir, mapping alınır ve otomasyon devam eder.
+- Mapping çıktısı: field_mapping (JSON anahtarından HTML input/select'e) ve actions (ör: hangi butona tıklanacak).
 
 
 ## What is ReadingApp?
