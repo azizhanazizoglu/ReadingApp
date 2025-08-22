@@ -69,9 +69,6 @@ def test_end_to_end_html_to_llm_mapping():
         import re
         # Remove triple backtick code block wrappers (```json ... ``` or ``` ... ```)
         pattern = r"```(?:json)?\s*([\s\S]*?)\s*```"
-        # DÜZELTME: Tek backslash ve search kullan!
-        pattern = r"```(?:json)?\s*([\s\S]*?)\s*```"
-        pattern = r"```(?:json)?\s*([\s\S]*?)\s*```".replace('\\s', '\s').replace('\\S', '\S')
         match = re.search(pattern, text.strip(), re.IGNORECASE)
         if match:
             return match.group(1).strip()

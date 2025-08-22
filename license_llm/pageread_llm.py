@@ -8,12 +8,14 @@ def map_json_to_html_fields(html_string: str, ruhsat_json: dict, model="gpt-4o")
     """
     openai.api_key = os.getenv("OPENAI_API_KEY")
     prompt = f"""
-You are a web form filling assistant. You will be given the HTML code of a web form and a JSON object containing the data to be filled in.
+You are an advanced web form automation assistant. You will be given the HTML code of a web form (which may be part of a multi-page flow) and a JSON object containing the data to be filled in.
 
-Your tasks:
-1. For each field in the JSON, match it to the most appropriate input or select element in the HTML. Use all available clues: label text, placeholder, id, name, type, etc.
-2. Specify which button(s) should be clicked to submit or continue (e.g., 'DEVAM').
-3. Return only the mapping in the following JSON format. Do not add any explanation or extra text:
+Instructions:
+1. Analyze the HTML to determine which fields from the JSON are present on this page. Only map and fill the fields that exist on this page. Ignore fields that are not present in the HTML.
+2. For each present field, match it to the most appropriate input or select element in the HTML. Use all available clues: label text, placeholder, id, name, type, etc.
+3. Identify which button(s) should be clicked to submit or continue to the next page (e.g., 'Next', 'Continue', 'DEVAM').
+4. If the page contains a title, heading, or other unique identifier, use it to help determine context, but do not include it in the output.
+5. Return only the mapping in the following JSON format. Do not add any explanation or extra text:
 {{
   "field_mapping": {{
     "json_field_name": "input#id or input[name=] or label text"
@@ -24,12 +26,9 @@ Your tasks:
 Example mapping:
 {{
   "field_mapping": {{
-    "ad_soyad": "input#name",
-    "tckimlik": "input#identity",
-    "dogum_tarihi": "input#birthDate",
-    "plaka_no": "input#plateNo"
+    "plaka_no": "input[name=plateNo]"
   }},
-  "actions": ["click#DEVAM"]
+  "actions": ["click#Next"]
 }}
 
 Here is the HTML:
