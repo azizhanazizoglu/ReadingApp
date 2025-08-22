@@ -64,8 +64,21 @@ def test_end_to_end_html_to_llm_mapping():
     mapping = map_json_to_html_fields(html, ruhsat_json)
     print("\n[Actual Output] LLM Mapping Output (raw string):\n", mapping)
     import json
+    # --- Normalize LLM output: strip markdown code block wrappers if present ---
+    def extract_json_from_markdown(text):
+        import re
+        # Remove triple backtick code block wrappers (```json ... ``` or ``` ... ```)
+        pattern = r"```(?:json)?\s*([\s\S]*?)\s*```"
+        # DÜZELTME: Tek backslash ve search kullan!
+        pattern = r"```(?:json)?\s*([\s\S]*?)\s*```"
+        pattern = r"```(?:json)?\s*([\s\S]*?)\s*```".replace('\\s', '\s').replace('\\S', '\S')
+        match = re.search(pattern, text.strip(), re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+        return text.strip()
+    mapping_clean = extract_json_from_markdown(mapping)
     try:
-        mapping_json = json.loads(mapping)
+        mapping_json = json.loads(mapping_clean)
         print("\n[Actual Output] Parsed Mapping JSON:")
         print(json.dumps(mapping_json, indent=2, ensure_ascii=False))
         has_field_mapping = "field_mapping" in mapping_json

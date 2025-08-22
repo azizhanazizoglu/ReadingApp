@@ -49,7 +49,9 @@ def test_readWebPage():
         html = readWebPage()
         print("\n[TEST] Requirement:", requirement)
         print("Expected Output: HTML string, length > 0")
-        print("Actual Output (first 2000 chars):\n", html[:2000])
+        # Sadece ilk 200 karakteri göster, devamına ... koy
+        preview = html[:200] + ("..." if len(html) > 200 else "")
+        print("Actual Output (first 200 chars):\n", preview)
         if html and len(html) > 0:
             test_result = "PASS"
         else:
@@ -94,7 +96,9 @@ def test_readWebPage():
             y = draw_wrapped(f"Expected Output: HTML string, length > 0", y)
             y -= 5
             if html:
-                y = draw_wrapped(f"Actual Output (truncated): {html[:1000].replace(chr(10), ' ')}", y)
+                # PDF'e yazarken karakterleri normalize et
+                safe_html = html[:1000].encode('utf-8', errors='replace').decode('utf-8', errors='replace').replace(chr(10), ' ')
+                y = draw_wrapped(f"Actual Output (truncated): {safe_html}", y)
             if error_msg:
                 y = draw_wrapped(f"Error: {error_msg}", y)
             y -= 10
