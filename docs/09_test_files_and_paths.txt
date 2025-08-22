@@ -1,22 +1,27 @@
 
-# 9. Test Files and Paths
 
-Below are the main test files, their purposes, and their locations in the project structure:
+# 9. Test Files, Requirements & Traceability
 
-## Test Reporting
+This file documents all main test files, their explicit requirements, and their mapping to code components. It is designed for safety-critical software assurance, traceability, and external assessment.
+
+## Test Reporting & Auditability
 All main tests output a PDF report to `tdsp/test_reports/` with:
-- Test requirement
+- Test requirement (from this file, traceable to code)
 - Input data
 - Expected output
 - Actual output
 - Pass/Fail result
+- Error details (if any)
 
-This supports traceability and software assurance for safety-critical development.
+This supports traceability, audit, and software assurance for critical systems.
+
 
 ## license_llm
 - test_license_llm_extractor.py
   - Path: license_llm/test_license_llm_extractor.py
   - Purpose: Tests LLM-based extraction and mapping from ruhsat images.
+  - Requirement: Extract ruhsat info from image, output dict with keys like 'plaka_no', 'ad_soyad', etc.
+
 
 
 ## webbot
@@ -25,14 +30,35 @@ This supports traceability and software assurance for safety-critical developmen
   - Purpose: Tests web page download and HTML reading functionality.
   - Requirement: Download HTML from a real web page, print first 2000 chars, and assert HTML is non-empty.
 
+
 ## memory
 - test_ocr_to_memory.py
   - Path: memory/test_ocr_to_memory.py
   - Purpose: Tests OCR/LLM result integration and storage in the memory/database.
   - Requirement: Store and retrieve OCR/LLM results, check data integrity and correct storage.
 
+
 ## integration
 - test_integration_end_to_end.py
   - Path: tests/test_integration_end_to_end.py
   - Purpose: End-to-end integration test for HTML fetch, LLM mapping, and output validation.
   - Requirement: Fetch HTML, map ruhsat JSON to HTML fields with LLM, print and check mapping JSON for required keys ('field_mapping', 'actions').
+
+---
+
+
+# Traceability & Assessment
+
+This file, together with the README and `docs/traceability_matrix.md`, provides a full mapping from requirements to test files and code components. All changes and test results are traceable for external assessment and regulatory review.
+
+## How to Track & Audit
+- Her gereksinim için benzersiz Req ID ve açıklama bu dosyada tutulur.
+- Her test çalıştırıldığında, PDF raporu otomatik olarak oluşturulur ve gereksinim, input, output, hata ve sonuç içerir.
+- PDF raporları, testin adı ve tarih/saat ile arşivlenir. Her rapor, ilgili gereksinim ve kod ile eşleştirilebilir.
+- Tüm gereksinimlerin test coverage'ı ve kod ile eşleşmesi, traceability matrix ile denetlenebilir.
+- CI/CD pipeline'ında veya manuel olarak `python run_all_tests.py` ile tüm testler ve raporlar topluca üretilebilir.
+- Herhangi bir değişiklikte hem README, hem bu dosya hem de traceability_matrix.md güncellenmelidir.
+
+## Dış Denetim ve Regülasyonlar İçin
+- Tüm PDF raporları ve traceability matrix, dış denetçilere veya müşteri kalite ekiplerine sunulabilir.
+- Gereksinim değişikliği, yeni test veya kod güncellemesi olduğunda, izlenebilirlik ve coverage tekrar kontrol edilmelidir.

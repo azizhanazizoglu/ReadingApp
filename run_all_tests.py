@@ -82,6 +82,7 @@ for test in TESTS:
         print(f"  PDF Report: {pdfs[-1]}")
     print()
 
+
 # Genel özet tablo
 print("\n=== TEST SUMMARY ===")
 print(f"{'Test':35} | {'Result':6} | {'Duration(s)':11} | PDF Report")
@@ -101,3 +102,56 @@ if passed == total:
     print("\nALL TESTS PASSED ✅\n")
 else:
     print("\nSOME TESTS FAILED ❌\n")
+
+# --- OVERVIEW PDF ---
+try:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.pdfgen import canvas
+    from textwrap import wrap
+    import glob
+    # Eski overview raporlarını sil
+    report_dir = os.path.join("tdsp", "test_reports")
+    for old in glob.glob(os.path.join(report_dir, 'OVERVIEW_ALLTESTS_*.pdf')):
+        try:
+            os.remove(old)
+        except Exception:
+            pass
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    pdf_name = f'OVERVIEW_ALLTESTS_{timestamp}.pdf'
+    pdf_path = os.path.join(report_dir, pdf_name)
+    c = canvas.Canvas(pdf_path, pagesize=letter)
+    c.setFont("Helvetica", 11)
+    y = 770
+    y = y - 10
+    y = c.drawString(30, y, "[ALL TESTS OVERVIEW REPORT]") or y-15
+    y = y - 10
+    y = c.drawString(30, y, f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}") or y-15
+    y = y - 10
+    y = c.drawString(30, y, f"Total: {passed}/{total} tests passed.") or y-15
+    y = y - 10
+    c.setFont("Helvetica", 10)
+    y = c.drawString(30, y, f"{'Test':35} | {'Result':6} | {'Duration(s)':11} | PDF Report") or y-15
+    y = c.drawString(30, y-5, "-"*80) or y-20
+    for r in results:
+        line = f"{r['name']:35} | {'PASS' if r['passed'] else 'FAIL':6} | {r['duration']:11.2f} | {os.path.basename(r['pdfs'][-1]) if r['pdfs'] else '-'}"
+        y = c.drawString(30, y, line) or y-15
+        y -= 5
+        # Kısa requirement ve error
+        req = r['requirement']
+        for wline in wrap(f"Requirement: {req}", 100):
+            y = c.drawString(30, y, wline) or y-15
+            y -= 2
+        if r['output']:
+            err_lines = [l for l in r['output'].splitlines() if '[ERROR]' in l or 'FAIL' in l]
+            for el in err_lines:
+                for wline in wrap(f"Error: {el}", 100):
+                    y = c.drawString(30, y, wline) or y-15
+                    y -= 2
+        y -= 10
+        if y < 80:
+            c.showPage()
+            y = 770
+    c.save()
+    print(f"[PDF OVERVIEW] All tests overview report saved to: {pdf_path}")
+except Exception as e:
+    print(f"[PDF OVERVIEW ERROR] {e}")

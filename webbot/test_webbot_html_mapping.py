@@ -54,17 +54,31 @@ def test_readWebPage():
             test_result = "PASS"
         else:
             error_msg = "HTML is empty."
+    except requests.exceptions.RequestException as e:
+        error_msg = f"HTTP/Network Error: {str(e)}\n"
+        if hasattr(e, 'response') and e.response is not None:
+            error_msg += f"HTTP Status Code: {e.response.status_code}\nResponse Text: {e.response.text[:500]}"
+        error_msg += "\n" + traceback.format_exc()
+        print("[ERROR]", error_msg)
     except Exception as e:
-        error_msg = str(e) + "\n" + traceback.format_exc()
+        error_msg = f"Unhandled Exception: {str(e)}\n" + traceback.format_exc()
         print("[ERROR]", error_msg)
     finally:
         if REPORTLAB_AVAILABLE:
             from textwrap import wrap
+            import glob
             project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
             report_dir = os.path.join(project_root, 'tdsp', 'test_reports')
             os.makedirs(report_dir, exist_ok=True)
+            # Eski raporları sil
+            for old in glob.glob(os.path.join(report_dir, 'WEBBOT_HTMLDOWNLOAD_*.pdf')):
+                try:
+                    os.remove(old)
+                except Exception:
+                    pass
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            pdf_path = os.path.join(report_dir, f'webbot_test_report_{timestamp}.pdf')
+            pdf_name = f'WEBBOT_HTMLDOWNLOAD_{timestamp}.pdf'
+            pdf_path = os.path.join(report_dir, pdf_name)
             c = canvas.Canvas(pdf_path, pagesize=letter)
             c.setFont("Helvetica", 10)
             y = 750

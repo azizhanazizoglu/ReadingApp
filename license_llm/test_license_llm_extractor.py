@@ -26,11 +26,19 @@ def test_extract_vehicle_info_from_image(request):
     print("Test Result:", test_result)
     if REPORTLAB_AVAILABLE:
         from textwrap import wrap
+        import glob
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
         report_dir = os.path.join(project_root, 'tdsp', 'test_reports')
         os.makedirs(report_dir, exist_ok=True)
+        # Eski raporları sil
+        for old in glob.glob(os.path.join(report_dir, 'LICENSELLM_EXTRACTION_*.pdf')):
+            try:
+                os.remove(old)
+            except Exception:
+                pass
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        pdf_path = os.path.join(report_dir, f'license_llm_test_report_{timestamp}.pdf')
+        pdf_name = f'LICENSELLM_EXTRACTION_{timestamp}.pdf'
+        pdf_path = os.path.join(report_dir, pdf_name)
         c = canvas.Canvas(pdf_path, pagesize=letter)
         c.setFont("Helvetica", 10)
         y = 750

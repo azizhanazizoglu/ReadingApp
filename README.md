@@ -1,17 +1,22 @@
 
-# ReadingApp: Overview & Quick Guide
+# ReadingApp: Safety-Critical Software Assurance & Test Traceability Guide
+
 
 ## What is ReadingApp?
-ReadingApp is a modular Python system for extracting, mapping, and filling web forms using Large Language Models (LLMs). It is designed for:
+ReadingApp is a modular, safety-critical Python system for extracting, mapping, and filling web forms using Large Language Models (LLMs). It is designed for:
 - Extracting structured data from Turkish vehicle registration (ruhsat) images using LLMs.
 - Dynamically mapping extracted data to any web form, even if the web page changes.
 - Automating web form filling and submission with minimal maintenance.
 - Professional, decoupled, and testable architecture.
+- **Traceable, auditable, and standards-compliant test and reporting for software assurance (ASIL/DO-178C/IEC 61508 inspiration).**
+
 
 ## Why This Architecture?
 - **Minimal Maintenance:** LLM-based mapping adapts to web page changes, reducing manual updates.
 - **Modular Design:** Each component (extraction, mapping, web automation, memory) is independent and testable.
 - **Professional Practices:** V-Model, automated tests, clear documentation, and code review.
+- **Safety-Critical Focus:** All test requirements are explicitly documented, mapped to code, and every test run produces a professional PDF report for traceability and audit.
+- **CI/CD Ready:** All tests can be run in a single command, with summary and PDF output for each, suitable for continuous integration and external assessment.
 
 ## Key Components (Simple Overview)
 - **license_llm:** Extracts data from images and maps JSON fields to HTML forms using LLMs.
@@ -53,14 +58,17 @@ ReadingApp is a modular Python system for extracting, mapping, and filling web f
 
 ---
 
-## Test Files & Paths
 
-| Module      | Script/Test File               | Path                                   | Purpose                                                   |
-|-------------|-------------------------------|----------------------------------------|-----------------------------------------------------------|
-| license_llm | test_license_llm_extractor.py | license_llm/test_license_llm_extractor.py | Tests LLM-based extraction and mapping from ruhsat images |
-| webbot      | test_webbot_html_mapping.py   | webbot/test_webbot_html_mapping.py     | Tests web page download and HTML reading                  |
-| memory      | test_ocr_to_memory.py         | memory/test_ocr_to_memory.py           | Tests OCR/LLM result integration and storage in memory/db |
-| master      | master.py                     | master.py                              | End-to-end integration test and workflow orchestration    |
+## Test Files, Requirements & Traceability
+
+All main test files are mapped to explicit requirements and produce PDF reports for each run. This enables full traceability from requirement to test result, as required in safety-critical software development.
+
+| Module      | Script/Test File               | Path                                   | Purpose                                                   | Requirement (from docs/09_test_files_and_paths.txt) |
+|-------------|-------------------------------|----------------------------------------|-----------------------------------------------------------|-----------------------------------------------------|
+| license_llm | test_license_llm_extractor.py | license_llm/test_license_llm_extractor.py | Tests LLM-based extraction and mapping from ruhsat images | Extract ruhsat info from image, output dict with keys like 'plaka_no', 'ad_soyad', etc. |
+| webbot      | test_webbot_html_mapping.py   | webbot/test_webbot_html_mapping.py     | Tests web page download and HTML reading                  | Download HTML from a real web page, print first 2000 chars, and assert HTML is non-empty. |
+| memory      | test_ocr_to_memory.py         | memory/test_ocr_to_memory.py           | Tests OCR/LLM result integration and storage in memory/db | Store and retrieve OCR/LLM results, check data integrity and correct storage. |
+| integration | test_integration_end_to_end.py| tests/test_integration_end_to_end.py   | End-to-end integration test for HTML fetch, LLM mapping, and output validation | Fetch HTML, map ruhsat JSON to HTML fields with LLM, print and check mapping JSON for required keys ('field_mapping', 'actions'). |
 
 ---
 
@@ -110,58 +118,65 @@ load_dotenv()
 
 
 
-## Test Reporting & PDF Reports
+
+## Test Reporting, PDF Reports & Auditability
 
 **Technologies Used for Reporting:**
 - PDF reports are generated using the `reportlab` Python library.
 - Reports are saved in `tdsp/test_reports/`.
 
+**Test Reporting Process:**
+- All main tests automatically generate a PDF report in `tdsp/test_reports/` after each run (if `reportlab` is installed).
+- Each report includes:
+	- Test requirement (from docs/09_test_files_and_paths.txt, traceable to code)
+	- Input data
+	- Expected output
+	- Actual output
+	- Pass/Fail result
+	- Error details (if any)
+- Reports are timestamped and named by test and date for audit trail.
+- Reports are designed for external assessment, traceability, and safety-critical software assurance.
 
-All main tests automatically generate a PDF report in `tdsp/test_reports/` after each run (if `reportlab` is installed). Each report includes:
-- Test requirement
-- Input data
-- Expected output
-- Actual output
-- Pass/Fail result
+**CI/CD & Assessment:**
+- All tests can be run with `python run_all_tests.py` for a full summary and PDF output, suitable for CI/CD pipelines and external audits.
+- Each test's requirement, input, and output are traceable in both terminal and PDF report.
+- Reports can be archived for regulatory or customer review.
 
-This is designed for safety-critical software assurance and traceability.
+**Traceability & Coverage:**
+- Each test is mapped to a requirement and a code component.
+- The mapping is maintained in `docs/09_test_files_and_paths.txt` and this README.
+- (Planned) A traceability matrix and diagram will be added for full requirement-to-test-to-code coverage.
+
+---
 
 
-You can run all tests or target specific modules/components as needed. Here are the main commands:
+---
 
-### Run All Tests
+## Requirement-to-Test Traceability & Audit Process
 
-```bash
-pytest
-```
+### Traceability Matrix
+All requirements, test files, code components ve PDF raporları birebir eşlenmiştir. Tam tablo için: `docs/traceability_matrix.md`.
 
-### Run a Specific Test File
+| Req ID     | Requirement Summary                                                      | Test File                                 | Code Component(s)                        | PDF Report Example                                 |
+|------------|-------------------------------------------------------------------------|--------------------------------------------|-------------------------------------------|----------------------------------------------------|
+| REQ-LLM-01 | Extract ruhsat info from image, output dict with keys like 'plaka_no'... | license_llm/test_license_llm_extractor.py  | license_llm/license_llm_extractor.py      | tdsp/test_reports/license_llm_test_report_*.pdf    |
+| REQ-WEB-01 | Download HTML from a real web page, print first 2000 chars, assert HTML  | webbot/test_webbot_html_mapping.py         | webbot/test_webbot_html_mapping.py        | tdsp/test_reports/webbot_test_report_*.pdf         |
+| REQ-MEM-01 | Store and retrieve OCR/LLM results, check data integrity and storage     | memory/test_ocr_to_memory.py               | memory/db.py, memory/data_dictionary.py   | tdsp/test_reports/memory_test_report_*.pdf         |
+| REQ-INT-01 | Fetch HTML, map ruhsat JSON to HTML fields with LLM, check mapping JSON  | tests/test_integration_end_to_end.py       | license_llm/pageread_llm.py, webbot/..., master.py | (integration test, see summary)                    |
 
-```bash
-pytest path/to/test_file.py
-```
+### How to Track & Audit
+- Her gereksinim (requirement) için benzersiz bir Req ID atanır ve docs/traceability_matrix.md dosyasında tutulur.
+- Her test çalıştırıldığında, PDF raporu otomatik olarak oluşturulur ve test gereksinimi, input, output, hata ve sonuç içerir.
+- PDF raporları, testin adı ve tarih/saat ile arşivlenir. Her rapor, ilgili gereksinim ve kod ile eşleştirilebilir.
+- Tüm gereksinimlerin test coverage'ı ve kod ile eşleşmesi, traceability matrix ile denetlenebilir.
+- CI/CD pipeline'ında veya manuel olarak `python run_all_tests.py` ile tüm testler ve raporlar topluca üretilebilir.
+- Herhangi bir değişiklikte hem README, hem docs/09_test_files_and_paths.txt hem de traceability_matrix.md güncellenmelidir.
 
-### Main Test Files & Example Commands
-
-| Purpose/Component         | Test File Path                              | Command to Run                                   |
-|--------------------------|---------------------------------------------|--------------------------------------------------|
-| LLM Extraction/Mapping   | license_llm/test_license_llm_extractor.py   | `pytest license_llm/test_license_llm_extractor.py`|
-| Webbot HTML Download     | webbot/test_webbot_html_mapping.py          | `pytest webbot/test_webbot_html_mapping.py`       |
-| Memory Integration       | memory/test_ocr_to_memory.py                | `pytest memory/test_ocr_to_memory.py`             |
-| End-to-End Integration   | tests/test_integration_end_to_end.py        | `pytest tests/test_integration_end_to_end.py`     |
-
-### Main Test Files, Requirements & Example Commands
-
-| Purpose/Component         | Test File Path                              | Command to Run                                   | Test Requirement & Expected Output |
-|--------------------------|---------------------------------------------|--------------------------------------------------|-------------------------------------|
-| LLM Extraction/Mapping   | license_llm/test_license_llm_extractor.py   | `pytest license_llm/test_license_llm_extractor.py`| Extracts ruhsat info from image, returns dict with keys like 'plaka_no', 'ad_soyad', etc. |
-| Webbot HTML Download     | webbot/test_webbot_html_mapping.py          | `pytest webbot/test_webbot_html_mapping.py`       | Downloads HTML, prints first 2000 chars, asserts HTML is non-empty. |
-| Memory Integration       | memory/test_ocr_to_memory.py                | `pytest memory/test_ocr_to_memory.py`             | Stores and retrieves OCR/LLM results, checks data integrity. |
-| End-to-End Integration   | tests/test_integration_end_to_end.py        | `pytest tests/test_integration_end_to_end.py`     | Fetches HTML, maps ruhsat JSON to HTML fields with LLM, prints and checks mapping JSON. |
-
-> You can add `-s` to see print output, e.g. `pytest -s tests/test_integration_end_to_end.py`
+#### Dış Denetim ve Regülasyonlar İçin
+- Tüm PDF raporları ve traceability matrix, dış denetçilere veya müşteri kalite ekiplerine sunulabilir.
+- Gereksinim değişikliği, yeni test veya kod güncellemesi olduğunda, izlenebilirlik ve coverage tekrar kontrol edilmelidir.
 
 ---
 
 ## For More Details
-See the `docs/` folder for full documentation on requirements, architecture, methodology, and test strategy.
+See the `docs/` folder for full documentation on requirements, architecture, methodology, test strategy, and traceability. Traceability matrix: `docs/traceability_matrix.md`.
