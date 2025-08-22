@@ -1,3 +1,10 @@
+---
+## Desktop Automation (Electron + React)
+- Modern desktop app is now built using React for UI and Electron for packaging as .exe.
+- All automation, mapping, and user interaction are handled via the React interface.
+- Python backend/agent is integrated via REST API.
+- See docs/README.txt for setup and run instructions.
+---
 # 1. Project Overview
 
 ReadingApp is a modular Python application for extracting, mapping, and filling web forms using LLMs. The system is designed to:

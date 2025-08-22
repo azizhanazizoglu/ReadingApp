@@ -1,0 +1,29 @@
+# LLM Agent Entegrasyon ve API Akışı
+
+## Amaç
+- Kullanıcı ruhsat JPG yükler, LLM agent ile veri çıkarılır, React arayüzde açılan browserdan webbot ile form doldurma ve mapping yapılır.
+
+## Akış
+1. Kullanıcı JPG dosyasını yükler veya sürükler.
+2. React arayüzünde hedef web formu açılır.
+3. Kullanıcı “Otomasyona Başla”ya basar.
+4. Backend/agent (Python):
+   - JPG’yi OCR/LLM ile işler, mapping JSON’u üretir.
+   - Webbot ile React’te açık olan browser’dan HTML snapshot alır.
+   - Mapping’i ve aksiyonları React’e veya browser’a uygular.
+5. Sonuçlar React arayüzünde gösterilir.
+
+## Yeni Akış
+- Masaüstü uygulama artık Electron + React ile başlatılır.
+- Otomasyon, mapping ve tüm kullanıcı etkileşimi React arayüzü üzerinden yapılır.
+- Python backend/agent ile REST API üzerinden haberleşilir.
+
+## API Örnekleri
+- POST `/api/upload` → JPG dosyasını yükler.
+- POST `/api/start-automation` → Otomasyon pipeline’ını başlatır, mapping ve aksiyonları döner.
+- GET `/api/status` → Otomasyonun güncel durumunu döner.
+
+## Notlar
+- Her adımda state ve log tutulur.
+- Hata olursa kullanıcıya bildirilir.
+- Tüm pipeline modüler ve test edilebilir olacak şekilde tasarlanır.

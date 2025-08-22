@@ -1,0 +1,26 @@
+# Electron + React Desktop App User Story
+
+- User launches the Electron-based desktop app (which runs the React UI).
+- The user can enter a target website address and view it in the modern interface.
+- User uploads a JPG or starts automation directly from the React UI.
+- All automation, mapping, and results are managed and displayed within the React interface.
+- The backend/agent (Python) communicates via REST API.
+
+---
+
+# (Legacy) Qt Browser User Story
+
+> Note: The old PyQt5-based interface is no longer used. All new development is on Electron + React.
+
+- Kullanıcı PyQt5 tabanlı uygulamayı açar.
+- Adres çubuğuna bir URL girer ve Enter'a basar.
+- Manuel olarak giriş yapar, ana sayfaya kadar ilerler.
+- 'Otomasyona Başla' butonuna basar.
+- O anki sayfanın HTML'i LLM mapping pipeline'ına gönderilir.
+- Mapping sonucu terminalde ve `qt_browser_llm_mapping.json` dosyasında gösterilir.
+- Kullanıcı otomasyonun her adımını canlı izleyebilir.
+
+## Teknik Notlar
+- `qt_browser/main.py` ana uygulama dosyasıdır.
+- Gerekli paketler: PyQt5, PyQtWebEngine
+- Mapping pipeline: `license_llm/pageread_llm.py` fonksiyonu kullanılır.

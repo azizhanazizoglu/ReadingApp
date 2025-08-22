@@ -1,0 +1,13 @@
+# Scheduler ve State Flow User Story
+
+- Kullanıcı uygulamayı başlatır (EXE veya script).
+- Qt arayüzünde manuel adımlar tamamlanır, ana sayfada 'Otomasyona Başla'ya basılır.
+- Scheduler aktif olur, ilk görevi (ör: webbot ile HTML çekme) başlatır.
+- Her adım (webbot, memory, llm, rapor) birer job olarak scheduler'a eklenir.
+- Her job tamamlandıkça state güncellenir, hata olursa kullanıcıya bildirilir.
+- Tüm adımlar başarıyla tamamlanınca otomasyon biter, sonuçlar memory ve GUI'de gösterilir.
+
+## Teknik Notlar
+- `scheduler/job_scheduler.py` temel state/job yönetimini sağlar.
+- Her adım bağımsız fonksiyon olarak yazılır, test edilebilir.
+- EXE paketleme için PyInstaller kullanılabilir.

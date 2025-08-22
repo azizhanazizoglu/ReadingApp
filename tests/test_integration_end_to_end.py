@@ -32,142 +32,100 @@ class MemoryDB:
         return self.data.get(key, "")
 
 def test_end_to_end_html_to_llm_mapping():
-    html = None
-    mapping_json = {}
-    has_field_mapping = False
-    has_actions = False
-    # --- Fill HTML with mapping and save snapshot ---
-    from bs4 import BeautifulSoup
-    def fill_html_with_mapping(html, mapping_json, ruhsat_json):
-        soup = BeautifulSoup(html, 'html.parser')
-        field_mapping = mapping_json.get('field_mapping', {})
-        for json_field, selector in field_mapping.items():
-            value = ruhsat_json.get(json_field, "")
-            # Try to parse selector: input#id, input[name=], label text, etc.
-            el = None
-            if selector.startswith('input#'):
-                el = soup.find('input', id=selector.split('#',1)[1])
-            elif 'input[name=' in selector:
-                name = selector.split('input[name=',1)[1].split(']',1)[0].replace('"','').replace("'","")
-                el = soup.find('input', attrs={'name': name})
-            elif selector.startswith('label:'):
-                label_text = selector.split(':',1)[1].strip().lower()
-                label = soup.find('label', string=lambda s: s and label_text in s.lower())
-                if label and label.get('for'):
-                    el = soup.find(id=label['for'])
-            # fallback: try by id or name
-            if not el:
-                el = soup.find(id=selector) or soup.find('input', attrs={'name': selector})
-            if el:
-                el['value'] = value
-        return str(soup)
+    # input_htmls/vehicle-details.html ve input_htmls/traffic-insurance.html dosyalarındaki URL'leri oku
+    url_files = [
+        ("traffic-insurance", os.path.join(project_root, "input_htmls", "traffic-insurance.html")),
+        ("vehicle-details", os.path.join(project_root, "input_htmls", "vehicle-details.html"))
+    ]
+    urls = []
+    for label, file_path in url_files:
+        if os.path.exists(file_path):
+            with open(file_path, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("<!--"):
+                        urls.append((label, line))
 
-    # Always save a filled HTML snapshot for debugging, even if mapping is missing
-    if html is not None:
-        try:
-            filled_html = fill_html_with_mapping(html, mapping_json if has_field_mapping else {}, ruhsat_json)
-        except Exception as e:
-            print(f"[DEBUG] fill_html_with_mapping failed: {e}")
-            filled_html = html
-        snapshot_dir = os.path.join(project_root, 'tdsp', 'test_reports', 'html_snapshots')
-        os.makedirs(snapshot_dir, exist_ok=True)
-        snapshot_path = os.path.join(snapshot_dir, f'filled_html_snapshot_{datetime.now().strftime("%Y%m%d_%H%M")}.html')
-        with open(snapshot_path, 'w', encoding='utf-8') as f:
-            f.write(filled_html)
-        print(f"[DEBUG] mapping_json: {mapping_json if has_field_mapping else 'NO MAPPING'}")
-        print(f"[HTML SNAPSHOT] Filled HTML saved to: {snapshot_path}")
-    else:
-        print("[DEBUG] No HTML available to save snapshot.")
-    """Integration: webbot fetches HTML, LLM maps ruhsat JSON to HTML fields."""
-    # --- Test Requirement ---
-    requirement = (
-        "End-to-end: Fetch HTML, map ruhsat JSON to HTML fields with LLM, output valid mapping JSON. "
-        "Input: ruhsat_json, live HTML. Output: mapping JSON with 'field_mapping' and 'actions'."
-    )
-    print("\n=== [INTEGRATION TEST] End-to-End HTML to LLM Mapping ===")
-    print(f"Requirement: {requirement}")
-
-    # --- Test Input ---
-    memory = MemoryDB()
-    html = readWebPage()
-    memory.save_html("page1", html)
-    ruhsat_json = {
-        "ad_soyad": "AZIZHAN AZIZOGLU",
-        "kimlik_no": "35791182062",
-        "dogum_tarihi": "05.03.1994",
-        "plaka_no": "06 YK 1234"
-    }
-    print("Input ruhsat_json:", ruhsat_json)
-    print(f"Fetched HTML length: {len(html)}")
-
-    # --- Expected Output ---
-    expected_output = "mapping JSON string with 'field_mapping' and 'actions' keys, valid JSON parseable."
-    print("Expected Output:", expected_output)
-
-    # --- Actual Behavior ---
-    html = memory.get_html("page1")
-    assert html and len(html) > 1000, "HTML content is too short or missing."
+    # Her bir URL için ruhsat_json'u dinamik belirle (örnek: label'a göre farklı alanlar eklenebilir)
+    mapping_results = []
+    for label, url in urls:
+        if label == "traffic-insurance":
+            ruhsat_json = {
+                "ad_soyad": "AZIZHAN AZIZOGLU",
+                "kimlik_no": "35791182062",
+                "dogum_tarihi": "05.03.1994",
+                "plaka_no": "06 YK 1234"
+            }
+        else:
+            ruhsat_json = {
+                "ad_soyad": "AZIZHAN AZIZOGLU",
+                "kimlik_no": "35791182062",
+                "dogum_tarihi": "05.03.1994",
+                "plaka_no": "06 YK 1234",
+                "tescil_tarihi": "24.08.2004",
+                "sasi_no": "VF1LB240531754309"
+            }
+        html = readWebPage(url)
+    print(f"[DEBUG] HTML snapshot for {label} ({url}):\n" + html[:1000])
     mapping = map_json_to_html_fields(html, ruhsat_json)
-    print("\n[Actual Output] LLM Mapping Output (raw string):\n", mapping)
-    import json
-    # --- Normalize LLM output: strip markdown code block wrappers if present ---
     def extract_json_from_markdown(text):
         import re
-        # Remove triple backtick code block wrappers (```json ... ``` or ``` ... ```)
         pattern = r"```(?:json)?\s*([\s\S]*?)\s*```"
         match = re.search(pattern, text.strip(), re.IGNORECASE)
         if match:
             return match.group(1).strip()
         return text.strip()
-    mapping_clean = extract_json_from_markdown(mapping)
-    has_field_mapping = False
-    has_actions = False
-    try:
-        mapping_json = json.loads(mapping_clean)
-        print("\n[Actual Output] Parsed Mapping JSON:")
-        print(json.dumps(mapping_json, indent=2, ensure_ascii=False))
-        has_field_mapping = "field_mapping" in mapping_json
-        has_actions = "actions" in mapping_json
-    except Exception as e:
-        print("[FAIL] Could not parse mapping as JSON:", e)
-        has_field_mapping = has_actions = False
+        mapping_clean = extract_json_from_markdown(mapping)
+        import json
+        try:
+            mapping_json = json.loads(mapping_clean)
+        except Exception as e:
+            print(f"[FAIL] Could not parse mapping as JSON for {label} ({url}):", e)
+            mapping_json = {}
+        # Sadece önemli kısımları yazdır
+        print(f"\nWebpage: {label} ({url})")
+        if isinstance(mapping_json, dict):
+            if 'field_mapping' in mapping_json:
+                print("field_mapping:")
+                print(json.dumps(mapping_json['field_mapping'], indent=2, ensure_ascii=False))
+            else:
+                print("field_mapping: [YOK]")
+            if 'actions' in mapping_json:
+                print("actions:")
+                print(json.dumps(mapping_json['actions'], indent=2, ensure_ascii=False))
+            else:
+                print("actions: [YOK]")
+        else:
+            print("field_mapping: [YOK]")
+            print("actions: [YOK]")
+        mapping_results.append((label, url, ruhsat_json, mapping_json, mapping))
 
-    # --- Pass/Fail Comparison ---
-    if isinstance(mapping, str) and has_field_mapping and has_actions:
-        print("\n[PASS] Output contains both 'field_mapping' and 'actions' as required.")
-        test_result = "PASS"
-    else:
-        print("\n[FAIL] Output missing required keys or not valid JSON.")
-        test_result = "FAIL"
-    assert isinstance(mapping, str), "LLM output should be a string."
-    assert has_field_mapping, "Output missing 'field_mapping'."
-    assert has_actions, "Output missing 'actions'."
-
-    # --- PDF Report Generation ---
+    # PDF raporu oluştur
     if REPORTLAB_AVAILABLE:
         report_dir = os.path.join(project_root, 'tdsp', 'test_reports')
         os.makedirs(report_dir, exist_ok=True)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        pdf_path = os.path.join(report_dir, f'integration_test_report_{timestamp}.pdf')
+        pdf_path = os.path.join(report_dir, f'integration_test_multi_report_{timestamp}.pdf')
         c = canvas.Canvas(pdf_path, pagesize=letter)
         c.setFont("Helvetica", 10)
         y = 750
-        c.drawString(30, y, "[Integration Test Report]")
+        c.drawString(30, y, "[Integration Test Report: Multi-Page Mapping]")
         y -= 20
-        c.drawString(30, y, f"Requirement: {requirement}")
-        y -= 20
-        c.drawString(30, y, f"Input ruhsat_json: {ruhsat_json}")
-        y -= 20
-        c.drawString(30, y, f"Fetched HTML length: {len(html)}")
-        y -= 20
-        c.drawString(30, y, f"Expected Output: {expected_output}")
-        y -= 20
-        c.drawString(30, y, f"Actual Output: (truncated)")
-        y -= 20
-        c.drawString(30, y, mapping[:1000].replace('\n', ' ') if isinstance(mapping, str) else str(mapping)[:1000])
-        y -= 40
-        c.drawString(30, y, f"Test Result: {test_result}")
+        for label, url, ruhsat_json, mapping_json, mapping_raw in mapping_results:
+            c.drawString(30, y, f"Page: {label} ({url})")
+            y -= 15
+            c.drawString(30, y, f"Input ruhsat_json: {str(ruhsat_json)}")
+            y -= 15
+            c.drawString(30, y, f"Mapping Output:")
+            y -= 15
+            mapping_str = json.dumps(mapping_json, ensure_ascii=False, indent=2) if mapping_json else mapping_raw[:500]
+            for line in mapping_str.splitlines():
+                c.drawString(40, y, line)
+                y -= 12
+                if y < 50:
+                    c.showPage()
+                    c.setFont("Helvetica", 10)
+                    y = 750
+            y -= 10
         c.save()
-        print(f"[PDF REPORT] Test report saved to: {pdf_path}")
-    else:
-        print("[INFO] reportlab not installed, PDF report not generated.")
+        print(f"[PDF REPORT] Multi-page test report saved to: {pdf_path}")

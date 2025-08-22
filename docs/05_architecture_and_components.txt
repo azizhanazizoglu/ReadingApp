@@ -5,12 +5,16 @@
 - license_llm: Extracts structured data from images using LLM, provides mapping logic for web forms.
 - webbot: Handles web page download, form field interaction, and browser automation.
 - memory: Stores HTML, mapping, and extracted data in a decoupled interface.
+- electron_app: Electron main file and scripts (desktop launcher)
+- react_ui: Modern user interface (frontend)
 
 ## Component Responsibilities
 - master.py: Integration, workflow, and test runner.
 - license_llm/pageread_llm.py: LLM-based HTML-to-data mapping.
 - webbot/test_webbot_html_mapping.py: Web page download and test.
 - memory/db.py: Data storage and retrieval.
+- electron_app/main.js: Electron main process and window management.
+- react_ui/src/App.js: React main component and routing.
 
 ## Decoupling
 - Each component is independently testable and replaceable.
