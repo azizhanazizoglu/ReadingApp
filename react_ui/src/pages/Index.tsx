@@ -283,11 +283,11 @@ const Index = () => {
         <div
           className="w-full max-w-6xl rounded-3xl shadow-2xl border border-[#B3C7E6] dark:border-[#335C81] flex items-center justify-center transition-colors overflow-hidden"
           style={{
-            minHeight: 340,
-            maxHeight: 700,
-            height: '40vh',
-            marginBottom: 32,
-            marginTop: 48,
+            minHeight: 420,
+            maxHeight: 900,
+            height: 'calc(60vh + 120px)',
+            marginBottom: 8,
+            marginTop: 24,
             position: "relative",
             background: darkMode ? undefined : "rgba(245,250,255,0.97)",
           }}
@@ -315,14 +315,13 @@ const Index = () => {
         </div>
         {/* Sonuç veya bilgi mesajı */}
         {result && (
-          <div className="w-full max-w-6xl mb-4 p-4 rounded-xl bg-white/80 dark:bg-[#335C81]/80 shadow text-[#003366] dark:text-[#E6F0FA] text-center text-base break-words">
+          <div className="w-full max-w-6xl mb-2 p-4 rounded-xl bg-white/80 dark:bg-[#335C81]/80 shadow text-[#003366] dark:text-[#E6F0FA] text-center text-base break-words">
             {result}
           </div>
         )}
-
         {/* Command Output Panel */}
         <div
-          className="w-full max-w-6xl mb-16 px-6 py-3 rounded-xl shadow border border-[#B3C7E6] dark:border-[#335C81] transition-colors flex items-center justify-center"
+          className="w-full max-w-6xl mb-2 px-6 py-3 rounded-xl shadow border border-[#B3C7E6] dark:border-[#335C81] transition-colors flex items-center justify-center"
           style={{
             fontFamily: fontStack,
             minHeight: 48,
