@@ -27,20 +27,11 @@ pip install -r requirements.txt
 OPENAI_API_KEY=senin_anahtarın
 ```
 
-## 4. React UI Kurulumu ve Build
-```sh
-cd react_ui
-npm install
-npm run build
-cd ..
+## 4. Masaüstü Uygulamasını Tek Komutla Başlat (React Build + Electron)
+```powershell
+./electron_app/start_all.ps1
 ```
-
-## 5. Electron Masaüstü Uygulamasını Başlat
-```sh
-cd electron_app
-./start_all.ps1
-```
-- Script otomatik olarak React UI'ı build eder ve Electron uygulamasını başlatır.
+Bu komut kök dizinden çalıştırılır ve hem React UI'ı build eder hem de Electron masaüstü uygulamasını başlatır.
 
 ## 6. Testleri Çalıştırmak (Opsiyonel)
 ```sh

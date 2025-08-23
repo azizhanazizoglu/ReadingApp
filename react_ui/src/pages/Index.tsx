@@ -36,7 +36,6 @@ function useDarkMode() {
 
 const Index = () => {
   const [address, setAddress] = useState("");
-  const [searchFocused, setSearchFocused] = useState(false);
   const [iframeUrl, setIframeUrl] = useState("");
   const [status, setStatus] = useState(statusMessages[0]);
   const [loading, setLoading] = useState(false);
@@ -199,21 +198,16 @@ const Index = () => {
               type="text"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
-              onFocus={() => setSearchFocused(true)}
-              onBlur={() => setSearchFocused(false)}
-              className={`pr-4 py-3 w-full rounded-full bg-[#f5faff] dark:bg-[#223A5E] text-lg shadow focus:ring-2 focus:ring-[#0057A0] dark:focus:ring-[#E6F0FA] focus:outline-none transition-all border border-[#B3C7E6] dark:border-[#335C81] text-[#003366] dark:text-[#E6F0FA] font-semibold ${address ? 'pl-12 text-left' : 'pl-0 text-center'}`}
-              style={{ fontFamily: fontStack, minWidth: 320, maxWidth: '100%', transition: 'padding 0.3s, text-align 0.3s' }}
+              className="pl-0 pr-4 py-3 w-full rounded-full bg-[#f5faff] dark:bg-[#223A5E] text-lg shadow focus:ring-2 focus:ring-[#0057A0] dark:focus:ring-[#E6F0FA] focus:outline-none transition-all border border-[#B3C7E6] dark:border-[#335C81] text-[#003366] dark:text-[#E6F0FA] font-semibold text-center"
+              style={{ fontFamily: fontStack, minWidth: 320, maxWidth: '100%' }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleGo();
               }}
               autoFocus
               disabled={loading}
             />
-            <span
-              className={`absolute top-1/2 transform -translate-y-1/2 text-[#7B8FA1] dark:text-[#B3C7E6] pointer-events-none transition-all duration-300 ${address ? 'left-4' : 'left-1/2 -translate-x-1/2'}`}
-              style={{ fontWeight: 400 }}
-            >
-              <Search size={22} strokeWidth={1.6} />
+            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[#7B8FA1] dark:text-[#B3C7E6] pointer-events-none">
+              <Search size={28} strokeWidth={2.5} />
             </span>
           </div>
           <Button
@@ -289,11 +283,11 @@ const Index = () => {
         <div
           className="w-full max-w-6xl rounded-3xl shadow-2xl border border-[#B3C7E6] dark:border-[#335C81] flex items-center justify-center transition-colors overflow-hidden"
           style={{
-            minHeight: 420,
-            maxHeight: 900,
-            height: '52vh',
-            marginBottom: 40,
-            marginTop: 56,
+            minHeight: 340,
+            maxHeight: 700,
+            height: '40vh',
+            marginBottom: 32,
+            marginTop: 48,
             position: "relative",
             background: darkMode ? undefined : "rgba(245,250,255,0.97)",
           }}
@@ -328,7 +322,7 @@ const Index = () => {
 
         {/* Command Output Panel */}
         <div
-          className="w-full max-w-6xl mb-12 px-6 py-3 rounded-xl shadow border border-[#B3C7E6] dark:border-[#335C81] transition-colors flex items-center justify-center"
+          className="w-full max-w-6xl mb-16 px-6 py-3 rounded-xl shadow border border-[#B3C7E6] dark:border-[#335C81] transition-colors flex items-center justify-center"
           style={{
             fontFamily: fontStack,
             minHeight: 48,
