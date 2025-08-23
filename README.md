@@ -1,3 +1,32 @@
+# React UI: Component & Hook Overview (Özet)
+
+| Dosya/Bileşen                | Tür         | Açıklama                                                                 |
+|------------------------------|-------------|-------------------------------------------------------------------------|
+| react_ui/src/pages/Index.tsx | Sayfa       | Ana giriş noktası, tüm state ve handler yönetimi burada başlar           |
+| useAutomation                | Custom Hook | Otomasyon state ve temel işlevleri yönetir                              |
+| useAutomationHandlers        | Custom Hook | Tüm handler fonksiyonlarını (go, upload, otomasyon, iframe load) toplar  |
+| MainLayout                   | Component   | Header, BrowserView, CommandPanel, Footer gibi ana bileşenleri birleştirir|
+| Header                       | Component   | Uygulama başlığı, arama çubuğu, tema değiştirici, upload butonları      |
+| BrowserView                  | Component   | Web sitesinin gömülü olarak gösterildiği ana alan                       |
+| CommandPanel                 | Component   | Komut geçmişi ve otomasyon loglarının tek satırda gösterildiği panel     |
+| Footer                       | Component   | Her zaman görünür olan, durum ve iletişim bilgisini gösteren alt bar     |
+| SearchBar                    | Component   | Google tarzı, modern ve geniş arama çubuğu                              |
+
+**Akış Diyagramı:**
+```
+Index.tsx
+	├─ useAutomation (hook)
+	├─ useAutomationHandlers (hook)
+	└─ MainLayout
+				├─ Header
+				├─ BrowserView
+				├─ CommandPanel
+				└─ Footer
+```
+
+Tüm detaylı açıklamalar ve props listesi için: `docs/12_react_components_and_hooks.md`
+
+---
 
 
 # ReadingApp: Safety-Critical Software Assurance & Test Traceability Guide
