@@ -10,7 +10,7 @@ interface BrowserViewProps {
   result: string | null;
 }
 
-export const BrowserView: React.FC<BrowserViewProps> = ({
+export const BrowserView: React.FC<BrowserViewProps & { style?: React.CSSProperties }> = ({
   iframeUrl,
   loading,
   uploading,
@@ -18,17 +18,19 @@ export const BrowserView: React.FC<BrowserViewProps> = ({
   fontStack,
   handleIframeLoad,
   result,
+  style = {},
 }) => (
   <div
-    className="w-full max-w-6xl rounded-3xl shadow-2xl border border-[#B3C7E6] dark:border-[#335C81] flex items-center justify-center transition-colors overflow-hidden"
+    className="flex-grow w-full rounded-3xl shadow-2xl border border-[#B3C7E6] dark:border-[#335C81] flex items-center justify-center transition-colors overflow-hidden"
     style={{
-      minHeight: 420,
-      maxHeight: 900,
-      height: 'calc(60vh + 120px)',
+      minHeight: 520,
+      maxHeight: 1100,
+      height: 'calc(70vh + 80px)',
       marginBottom: 8,
       marginTop: 24,
       position: "relative",
-      background: darkMode ? undefined : "rgba(245,250,255,0.97)",
+      background: darkMode ? undefined : "rgba(238,245,255,0.97)",
+      ...style,
     }}
   >
     {iframeUrl ? (
