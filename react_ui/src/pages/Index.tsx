@@ -42,6 +42,7 @@ const Index = () => {
   const [automation, setAutomation] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [commandLog, setCommandLog] = useState<{icon: string, message: string, color: string}[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const darkMode = useDarkMode();
 
@@ -56,20 +57,42 @@ const Index = () => {
     setStatus(statusMessages[1]);
     setLoading(true);
     setResult(null);
+    setCommandLog(logs => [
+      { icon: "🟡", message: `Site açılıyor: ${url}`, color: "text-yellow-600 dark:text-yellow-300" },
+      ...logs,
+    ]);
   };
 
   // Iframe yüklendiğinde
   const handleIframeLoad = () => {
     setStatus(statusMessages[2]);
     setLoading(false);
+    setCommandLog(logs => [
+      { icon: "🟢", message: "Web sitesi başarıyla yüklendi.", color: "text-green-600 dark:text-green-300" },
+      ...logs,
+    ]);
   };
 
   // Otomasyon başlat
   const handleAutomation = async () => {
     if (!iframeUrl) return;
+    // JPEG yüklenmeden otomasyon başlatılırsa hata ver
+    if (!result || result === statusMessages[0] || result === statusMessages[1]) {
+      setCommandLog(logs => [
+        { icon: "🔴", message: "Hata: Ruhsat fotoğrafı yüklenmedi!", color: "text-red-600 dark:text-red-400" },
+        ...logs,
+      ]);
+      setStatus("Hata: Ruhsat fotoğrafı yüklenmedi!");
+      toast.error("Ruhsat fotoğrafı yüklenmedi!");
+      return;
+    }
     setAutomation(true);
     setStatus(statusMessages[3]);
     setResult(null);
+    setCommandLog(logs => [
+      { icon: "🟡", message: "Otomasyon başlatıldı.", color: "text-yellow-600 dark:text-yellow-300" },
+      ...logs,
+    ]);
     try {
       const resp = await fetch(`${BACKEND_URL}/api/automation`, {
         method: "POST",
@@ -80,9 +103,17 @@ const Index = () => {
       const data = await resp.json();
       setResult(data.result || "Otomasyon tamamlandı.");
       setStatus(statusMessages[6]);
+      setCommandLog(logs => [
+        { icon: "🟢", message: "Otomasyon tamamlandı.", color: "text-green-600 dark:text-green-300" },
+        ...logs,
+      ]);
       toast.success("Otomasyon tamamlandı!");
     } catch (e) {
       setStatus(statusMessages[7]);
+      setCommandLog(logs => [
+        { icon: "🔴", message: "Otomasyon sırasında hata oluştu.", color: "text-red-600 dark:text-red-400" },
+        ...logs,
+      ]);
       toast.error("Otomasyon sırasında hata oluştu.");
     }
     setAutomation(false);
@@ -99,6 +130,10 @@ const Index = () => {
     setUploading(true);
     setStatus(statusMessages[4]);
     setResult(null);
+    setCommandLog(logs => [
+      { icon: "🟡", message: "JPEG yükleniyor...", color: "text-yellow-600 dark:text-yellow-300" },
+      ...logs,
+    ]);
     try {
       const formData = new FormData();
       formData.append("file", file);
@@ -110,9 +145,17 @@ const Index = () => {
       const data = await resp.json();
       setResult(data.result || "JPG başarıyla yüklendi.");
       setStatus(statusMessages[5]);
+      setCommandLog(logs => [
+        { icon: "🟢", message: "JPEG başarıyla yüklendi.", color: "text-green-600 dark:text-green-300" },
+        ...logs,
+      ]);
       toast.success("JPG başarıyla yüklendi!");
     } catch (e) {
       setStatus(statusMessages[7]);
+      setCommandLog(logs => [
+        { icon: "🔴", message: "JPEG yüklenirken hata oluştu.", color: "text-red-600 dark:text-red-400" },
+        ...logs,
+      ]);
       toast.error("JPG yüklenirken hata oluştu.");
     }
     setUploading(false);
@@ -258,24 +301,53 @@ const Index = () => {
         </div>
         {/* Sonuç veya bilgi mesajı */}
         {result && (
-          <div className="w-full max-w-3xl mb-8 p-4 rounded-xl bg-white/80 dark:bg-[#335C81]/80 shadow text-[#003366] dark:text-[#E6F0FA] text-center text-base break-words">
+          <div className="w-full max-w-6xl mb-4 p-4 rounded-xl bg-white/80 dark:bg-[#335C81]/80 shadow text-[#003366] dark:text-[#E6F0FA] text-center text-base break-words">
             {result}
           </div>
         )}
+
+        {/* Command Output Panel */}
+        <div
+          className="w-full max-w-6xl mb-16 p-4 rounded-xl bg-[#f8fafc] dark:bg-[#223A5E] shadow border border-[#B3C7E6] dark:border-[#335C81] transition-colors"
+          style={{ fontFamily: fontStack, minHeight: 80 }}
+        >
+          <div className="flex flex-col gap-2">
+            {commandLog.length === 0 ? (
+              <span className="text-[#7B8FA1] dark:text-[#B3C7E6] text-base">
+                Komut çıktısı burada görünecek.
+              </span>
+            ) : (
+              commandLog.slice(0, 5).map((log, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span style={{ fontSize: 20 }}>{log.icon}</span>
+                  <span className={`text-base ${log.color}`}>{log.message}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </main>
 
       {/* Status/Info Area */}
       <footer
-        className="w-full px-8 py-4 bg-white/90 dark:bg-[#223A5E]/90 rounded-t-2xl shadow-sm flex items-center justify-center transition-colors"
+        className="w-full px-8 py-4 bg-white/95 dark:bg-[#223A5E]/95 rounded-t-2xl shadow-sm flex items-center justify-between transition-colors border-t-2 border-[#0057A0] dark:border-[#335C81]"
         style={{
           fontFamily: fontStack,
           maxWidth: 1400,
           margin: "0 auto",
-          borderTop: `2px solid #0057A0`,
+          minHeight: 60,
         }}
       >
+        <span className="text-xl font-semibold tracking-tight text-[#003366] dark:text-[#E6F0FA] select-none">
+          Zirve Sigorta
+        </span>
         <span className="text-[#7B8FA1] dark:text-[#E6F0FA] text-base">{status}</span>
+        <span className="text-[#0057A0] dark:text-[#B3C7E6] text-base font-medium select-none">
+          Acil Destek: <a href="mailto:azizhanazizoglu@gmail.com" className="underline hover:text-[#003366] dark:hover:text-white">azizhanazizoglu@gmail.com</a>
+        </span>
       </footer>
+      {/* Sayfa sonu boşluğu */}
+      <div style={{ height: 32 }} />
     </div>
   );
 };
