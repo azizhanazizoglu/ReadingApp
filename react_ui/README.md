@@ -49,6 +49,49 @@ Bu proje, modern bir React (Vite + TypeScript) arayüzüdür. Allianz temalı, g
 - Upload edilen dosya backend'e `/api/upload` ile gönderilir.
 - Tüm yeni UI fonksiyonları build sonrası Electron'da görünür.
 
-## Not
+
+---
+
+# Teknik Mimarî ve Component/Hook Akışı
+
+## Ana Component ve Hook Yapısı
+
+- **Index.tsx**: Uygulamanın giriş noktası, tüm state ve handler yönetimi burada başlar.
+- **useAutomation (hook)**: Otomasyon state ve temel işlevleri yönetir.
+- **useAutomationHandlers (hook)**: Tüm handler fonksiyonlarını (go, upload, otomasyon, iframe load) tek yerde toplar.
+- **MainLayout**: Header, BrowserView, CommandPanel, Footer gibi ana bileşenleri birleştirir.
+- **Header**: Uygulama başlığı, arama çubuğu, tema değiştirici ve upload butonları.
+- **BrowserView**: Web sitesinin gömülü olarak gösterildiği ana alan.
+- **CommandPanel**: Komut geçmişi ve otomasyon loglarının tek satırda gösterildiği panel.
+- **Footer**: Her zaman görünür olan, durum ve iletişim bilgisini gösteren alt bar.
+- **SearchBar**: Google tarzı, modern ve geniş arama çubuğu.
+
+### Akış Diyagramı
+```
+Index.tsx
+   ├─ useAutomation (hook)
+   ├─ useAutomationHandlers (hook)
+   └─ MainLayout
+            ├─ Header
+            ├─ BrowserView
+            ├─ CommandPanel
+            └─ Footer
+```
+
+---
+
+## Geliştiriciye Notlar
+- Her yeni işlev için ayrı bir component veya hook açmak kodun okunabilirliğini ve bakımını kolaylaştırır.
+- Tüm state ve handler'lar tek merkezde değil, ilgili component/hook içinde tutulmalıdır.
+- Dosya ve fonksiyon isimleri sade ve açıklayıcı olmalıdır.
+- Yeni component veya hook eklerken mutlaka TypeScript ile tipleyin ve kısa açıklama ekleyin.
+
+---
+
+## Detaylı Component ve Hook Açıklamaları
+
+Daha fazla detay ve tüm props ile kullanım örnekleri için `src/COMPONENTS_AND_HOOKS.md` dosyasına bakınız.
+
+---
 
 - Backend işlemleri bu projede yer almamaktadır. Lütfen backend’i kendi agent’iniz ile sağlayınız.
