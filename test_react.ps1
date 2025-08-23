@@ -5,3 +5,4 @@ npm run build
 cd ..
 cd electron_app
 ./start_all.ps1
+cd ..

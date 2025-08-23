@@ -165,11 +165,13 @@ const Index = () => {
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-between bg-gradient-to-br from-[#f8fafc] to-[#e6f0fa] dark:from-[#1a2233] dark:to-[#223a5e] transition-colors"
+      className="h-screen w-screen flex flex-col items-center justify-between bg-gradient-to-br from-[#f8fafc] to-[#e6f0fa] dark:from-[#1a2233] dark:to-[#223a5e] transition-colors overflow-hidden"
       style={{
         fontFamily: fontStack,
-        minHeight: "800px",
-        minWidth: "100vw",
+        minHeight: 0,
+        minWidth: 0,
+        height: '100vh',
+        width: '100vw',
       }}
     >
       {/* Top Bar */}
@@ -191,21 +193,22 @@ const Index = () => {
         </div>
         {/* Search Bar + Buttons */}
         <div className="flex items-center gap-2 flex-1 justify-center">
-          <div className="relative flex items-center">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7B8FA1] dark:text-[#B3C7E6]" size={16} />
+          <div className="relative flex items-center w-full max-w-2xl mx-auto">
             <input
               type="text"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
-              placeholder="Site adresi (örn: www.allianz.com.tr)"
-              className="pl-8 pr-2 py-1 w-[180px] rounded-lg bg-[#f8fafc] dark:bg-[#335C81] text-sm shadow focus:ring-2 focus:ring-[#0057A0] dark:focus:ring-[#E6F0FA] focus:outline-none transition-all border border-[#B3C7E6] dark:border-[#335C81] placeholder:text-[#7B8FA1] dark:placeholder:text-[#B3C7E6]"
-              style={{ fontFamily: fontStack, color: "#003366" }}
+              className="pl-0 pr-4 py-3 w-full rounded-full bg-[#f5faff] dark:bg-[#223A5E] text-lg shadow focus:ring-2 focus:ring-[#0057A0] dark:focus:ring-[#E6F0FA] focus:outline-none transition-all border border-[#B3C7E6] dark:border-[#335C81] text-[#003366] dark:text-[#E6F0FA] font-semibold text-center"
+              style={{ fontFamily: fontStack, minWidth: 320, maxWidth: '100%' }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleGo();
               }}
               autoFocus
               disabled={loading}
             />
+            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[#7B8FA1] dark:text-[#B3C7E6] pointer-events-none">
+              <Search size={28} strokeWidth={2.5} />
+            </span>
           </div>
           <Button
             className="px-4 py-1 text-sm rounded-lg bg-[#0057A0] hover:bg-[#003366] active:bg-[#002244] text-white font-semibold shadow transition-all"
@@ -266,16 +269,27 @@ const Index = () => {
       {/* Main Area */}
       <main
         className="flex flex-col items-center w-full flex-1 px-8"
-        style={{ maxWidth: 1400, width: "100%" }}
+        style={{
+          maxWidth: 1400,
+          width: "100%",
+          flex: 1,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'flex-start',
+        }}
       >
         {/* Browser View */}
         <div
-          className="flex-1 w-full max-w-6xl bg-[#e6f0fa] dark:bg-[#223A5E] rounded-3xl shadow-2xl border border-[#B3C7E6] dark:border-[#335C81] flex items-center justify-center transition-colors overflow-hidden"
+          className="w-full max-w-6xl rounded-3xl shadow-2xl border border-[#B3C7E6] dark:border-[#335C81] flex items-center justify-center transition-colors overflow-hidden"
           style={{
-            minHeight: 540,
+            minHeight: 340,
+            maxHeight: 700,
+            height: '40vh',
             marginBottom: 32,
             marginTop: 48,
             position: "relative",
+            background: darkMode ? undefined : "rgba(245,250,255,0.97)",
           }}
         >
           {iframeUrl ? (
@@ -308,23 +322,47 @@ const Index = () => {
 
         {/* Command Output Panel */}
         <div
-          className="w-full max-w-6xl mb-16 p-4 rounded-xl bg-[#f8fafc] dark:bg-[#223A5E] shadow border border-[#B3C7E6] dark:border-[#335C81] transition-colors"
-          style={{ fontFamily: fontStack, minHeight: 80 }}
+          className="w-full max-w-6xl mb-16 px-6 py-3 rounded-xl shadow border border-[#B3C7E6] dark:border-[#335C81] transition-colors flex items-center justify-center"
+          style={{
+            fontFamily: fontStack,
+            minHeight: 48,
+            maxHeight: 48,
+            background: darkMode ? undefined : "rgba(245,250,255,0.97)",
+            color: darkMode ? undefined : "#0057A0",
+            boxShadow: darkMode ? undefined : "0 4px 24px 0 rgba(0,87,160,0.08)",
+            borderTop: darkMode ? undefined : "2px solid #B3C7E6",
+            overflow: 'hidden',
+          }}
         >
-          <div className="flex flex-col gap-2">
-            {commandLog.length === 0 ? (
-              <span className="text-[#7B8FA1] dark:text-[#B3C7E6] text-base">
-                Komut çıktısı burada görünecek.
+          {commandLog.length === 0 ? (
+            <span className="text-[#7B8FA1] dark:text-[#B3C7E6] text-base font-medium" style={{fontFamily: fontStack}}>
+              Komut çıktısı burada görünecek.
+            </span>
+          ) : (
+            <div className="flex items-center gap-3 w-full justify-center animate-fade-in">
+              <span style={{ fontSize: 22, animation: commandLog[0].icon === '🟢' ? 'pop 0.5s' : commandLog[0].icon === '🔴' ? 'shake 0.5s' : 'none' }}>{commandLog[0].icon}</span>
+              <span
+                className="text-base font-semibold truncate"
+                style={{
+                  color: darkMode ? '#B3C7E6' : '#0057A0',
+                  fontFamily: fontStack,
+                  letterSpacing: 0.1,
+                  maxWidth: 420,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {commandLog[0].message}
               </span>
-            ) : (
-              commandLog.slice(0, 5).map((log, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <span style={{ fontSize: 20 }}>{log.icon}</span>
-                  <span className={`text-base ${log.color}`}>{log.message}</span>
-                </div>
-              ))
-            )}
-          </div>
+            </div>
+          )}
+          <style>{`
+            @keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.25); } 100% { transform: scale(1); } }
+            @keyframes shake { 0% { transform: translateX(0); } 20% { transform: translateX(-4px); } 40% { transform: translateX(4px); } 60% { transform: translateX(-2px); } 80% { transform: translateX(2px); } 100% { transform: translateX(0); } }
+            .animate-fade-in { animation: fadeIn 0.5s; }
+            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+          `}</style>
         </div>
       </main>
 
@@ -336,6 +374,7 @@ const Index = () => {
           maxWidth: 1400,
           margin: "0 auto",
           minHeight: 60,
+          flexShrink: 0,
         }}
       >
         <span className="text-xl font-semibold tracking-tight text-[#003366] dark:text-[#E6F0FA] select-none">
@@ -346,8 +385,7 @@ const Index = () => {
           Acil Destek: <a href="mailto:azizhanazizoglu@gmail.com" className="underline hover:text-[#003366] dark:hover:text-white">azizhanazizoglu@gmail.com</a>
         </span>
       </footer>
-      {/* Sayfa sonu boşluğu */}
-      <div style={{ height: 32 }} />
+  {/* Sayfa sonu boşluğu kaldırıldı, footer her zaman görünür */}
     </div>
   );
 };
