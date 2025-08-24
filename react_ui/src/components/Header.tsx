@@ -37,25 +37,7 @@ export const Header: React.FC<HeaderProps> = ({
   handleUploadClick,
   fileInputRef,
   handleFileChange,
-}) => {
-  // Developer log helper
-  const devLog = (code: string, message: string) => {
-    if (typeof window !== 'undefined') {
-      if (!window.__DEV_LOGS) window.__DEV_LOGS = [];
-      window.__DEV_LOGS.push({
-        time: new Date().toISOString(),
-        component: 'Header',
-        state: 'event',
-        code,
-        message
-      });
-    }
-  };
-  // Wrapper fonksiyonlar
-  const onGo = () => { devLog('HD-1001', 'Go butonuna tıklandı'); handleGo(); };
-  const onAutomation = () => { devLog('HD-1002', 'Otomasyon başlat butonuna tıklandı'); handleAutomation(); };
-  const onUpload = () => { devLog('HD-1003', 'Upload butonuna tıklandı'); handleUploadClick(); };
-  return (
+}) => (
   <header
     className="w-full flex items-center justify-between px-10 py-4 bg-white/80 dark:bg-[#223A5E]/90 shadow-md rounded-b-3xl transition-colors border-b border-[#e6f0fa] dark:border-[#335C81]"
     style={{
@@ -77,7 +59,7 @@ export const Header: React.FC<HeaderProps> = ({
       <SearchBar
         address={address}
         setAddress={setAddress}
-        onGo={onGo}
+        onGo={handleGo}
         loading={loading}
         fontStack={fontStack}
         darkMode={darkMode}
@@ -92,7 +74,7 @@ export const Header: React.FC<HeaderProps> = ({
           minHeight: 40,
           boxShadow: "0 2px 12px 0 rgba(0,87,160,0.10)",
         }}
-        onClick={onGo}
+        onClick={handleGo}
         disabled={loading || !address.trim()}
         tabIndex={0}
         aria-label="Git"
@@ -107,7 +89,7 @@ export const Header: React.FC<HeaderProps> = ({
           minHeight: 40,
           boxShadow: "0 2px 12px 0 rgba(0,87,160,0.10)",
         }}
-        onClick={onAutomation}
+        onClick={handleAutomation}
         disabled={automation || !iframeUrl}
         tabIndex={0}
         aria-label="Otomasyonu Başlat"
@@ -122,7 +104,7 @@ export const Header: React.FC<HeaderProps> = ({
           minHeight: 40,
           boxShadow: "0 2px 12px 0 rgba(0,87,160,0.10)",
         }}
-        onClick={onUpload}
+        onClick={handleUploadClick}
         disabled={uploading}
         tabIndex={0}
         aria-label="JPG Yükle"
@@ -143,5 +125,4 @@ export const Header: React.FC<HeaderProps> = ({
       <ThemeToggle />
     </div>
   </header>
-  );
-}
+);

@@ -3,7 +3,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { AllianzLogo } from "@/components/AllianzLogo";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
-import { useAutomationHandlers } from "@/hooks/useAutomationHandlers";
+import { useAutomationHandlers } from "@/components/AutomationHandlers";
 import { SearchBar } from "@/components/SearchBar";
 import { MainLayout } from "@/components/MainLayout";
 

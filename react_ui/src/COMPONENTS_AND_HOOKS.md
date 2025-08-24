@@ -32,7 +32,7 @@ Bu doküman, `react_ui` klasöründeki ana bileşenlerin (component) ve özel ho
 
 ---
 
-## 4. useAutomationHandlers Custom Hook (`hooks/useAutomationHandlers/useAutomationHandlers.ts`)
+## 4. useAutomationHandlers Custom Hook (`components/AutomationHandlers.tsx`)
 - **Amaç:**
   - Tüm handler fonksiyonlarını (handleGo, handleIframeLoad, handleAutomation, handleUploadClick, handleFileChange) tek bir yerde toplar.
   - State setter'ları ve props'lar ile birlikte çalışır.
@@ -82,7 +82,7 @@ Bu doküman, `react_ui` klasöründeki ana bileşenlerin (component) ve özel ho
 ---
 
 # Kullanım Akışı ve Bağımlılıklar
-- `Index.tsx` → `useAutomation` ile state yönetir, `useAutomationHandlers` (artık `hooks/useAutomationHandlers/useAutomationHandlers.ts`'de) ile handler fonksiyonlarını alır.
+- `Index.tsx` → `useAutomation` ile state yönetir, `useAutomationHandlers` ile handler fonksiyonlarını alır.
 - Tüm state ve fonksiyonlar `MainLayout`'a props olarak aktarılır.
 - `MainLayout` → Header, BrowserView, CommandPanel, Footer'ı birleştirir.
 - Her bir alt component sadece kendi işlevine odaklanır.
@@ -94,7 +94,7 @@ Bu doküman, `react_ui` klasöründeki ana bileşenlerin (component) ve özel ho
 ```
 Index.tsx
   ├─ useAutomation (hook)
-  ├─ useAutomationHandlers (hook, artık hooks/useAutomationHandlers/useAutomationHandlers.ts)
+  ├─ useAutomationHandlers (hook)
   └─ MainLayout
         ├─ Header
         ├─ BrowserView
