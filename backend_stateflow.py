@@ -56,25 +56,50 @@ def log_backend(msg):
 
 # Stateflow zinciri (JobScheduler ile)
 def stateflow_agent():
+    import os
+    from license_llm.license_llm_extractor import extract_vehicle_info_from_image
     scheduler = JobScheduler()
+
+    def llm_extract_job():
+        log_backend('[INFO] LLM extract job: Son JPEG dosyası aranıyor...')
+        tmp_dir = os.path.join('memory', 'TmpData')
+        jpg_files = [f for f in os.listdir(tmp_dir) if f.lower().endswith('.jpg')]
+        if not jpg_files:
+            raise Exception('TmpData klasöründe JPEG bulunamadı!')
+        # En son yüklenen dosyayı bul (timestamp'a göre)
+        jpg_files.sort(reverse=True)
+        latest_jpg = max(jpg_files, key=lambda f: os.path.getmtime(os.path.join(tmp_dir, f)))
+        latest_path = os.path.join(tmp_dir, latest_jpg)
+        log_backend(f'[INFO] LLM extract job: Son JPEG: {latest_path}')
+        ruhsat_json = extract_vehicle_info_from_image(latest_path)
+        log_backend(f'[INFO] LLM extract job: JSON çıktı: {ruhsat_json}')
+        memory['ruhsat_json'] = ruhsat_json
+        memory['state'] = 'llm_extracted'
+        return 'llm_extracted'
+
     def wait_for_file():
-        while memory['ruhsat_json'] is None:
+        while memory.get('ruhsat_json') is None:
             time.sleep(0.2)
         return 'file_ready'
+
     def webbot_job():
         html = readWebPage()
         memory['html'] = html
         return 'html_ready'
+
     def memory_job():
         if memory['html']:
             memory['state'] = 'memory_ready'
             return 'memory_ready'
         raise Exception('HTML not in memory')
+
     def llm_job():
         mapping = map_json_to_html_fields(memory['html'], memory['ruhsat_json'])
         memory['mapping'] = mapping
         memory['state'] = 'llm_done'
         return 'llm_done'
+
+    scheduler.add_job(Job('llm_extract', llm_extract_job))
     scheduler.add_job(Job('wait_for_file', wait_for_file))
     scheduler.add_job(Job('webbot', webbot_job))
     scheduler.add_job(Job('memory', memory_job))
