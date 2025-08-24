@@ -10,12 +10,15 @@ import time
 app = Flask(__name__)
 CORS(app)
 
+import datetime
 # Basit memory (global dict)
 memory = {
     'ruhsat_json': None,
     'html': None,
     'mapping': None,
     'state': 'idle',
+    'uploaded_file': None,
+    'steps': []  # Her adımda log tutmak için
 }
 backend_logs = []
 
@@ -25,6 +28,14 @@ def log_backend(msg):
     # Maksimum 100 log tut
     if len(backend_logs) > 100:
         backend_logs.pop(0)
+    # Her adımı memory['steps'] içine timestamp ile kaydet
+    memory['steps'].append({
+        'timestamp': datetime.datetime.now().isoformat(),
+        'msg': msg,
+        'state': memory.get('state')
+    })
+    if len(memory['steps']) > 100:
+        memory['steps'].pop(0)
 
 # ...diğer route ve fonksiyonlar burada...
 from flask import Flask, request, jsonify
@@ -75,6 +86,12 @@ def stateflow_agent():
         log_backend(f'[INFO] LLM extract job: JSON çıktı: {ruhsat_json}')
         memory['ruhsat_json'] = ruhsat_json
         memory['state'] = 'llm_extracted'
+        memory['steps'].append({
+            'timestamp': datetime.datetime.now().isoformat(),
+            'step': 'llm_extract',
+            'ruhsat_json': ruhsat_json,
+            'file': latest_path
+        })
         return 'llm_extracted'
 
     def wait_for_file():
@@ -85,6 +102,11 @@ def stateflow_agent():
     def webbot_job():
         html = readWebPage()
         memory['html'] = html
+        memory['steps'].append({
+            'timestamp': datetime.datetime.now().isoformat(),
+            'step': 'webbot',
+            'html_length': len(html)
+        })
         return 'html_ready'
 
     def memory_job():
@@ -97,7 +119,16 @@ def stateflow_agent():
         mapping = map_json_to_html_fields(memory['html'], memory['ruhsat_json'])
         memory['mapping'] = mapping
         memory['state'] = 'llm_done'
+        memory['steps'].append({
+            'timestamp': datetime.datetime.now().isoformat(),
+            'step': 'llm_mapping',
+            'mapping': mapping
+        })
         return 'llm_done'
+# Mapping sonucunu frontend'e özel endpoint ile sun
+@app.route('/api/mapping', methods=['GET'])
+def get_mapping():
+    return jsonify({'mapping': memory.get('mapping')})
 
     scheduler.add_job(Job('llm_extract', llm_extract_job))
     scheduler.add_job(Job('wait_for_file', wait_for_file))
@@ -133,6 +164,7 @@ def upload_file():
         log_backend(f"[ERROR] Upload sırasında hata: {e}")
         return jsonify({"error": str(e)}), 500
 
+
 @app.route('/api/start-automation', methods=['POST'])
 def start_automation():
     try:
@@ -144,6 +176,11 @@ def start_automation():
     except Exception as e:
         print(f"[ERROR] Otomasyon başlatılırken hata: {e}")
         return jsonify({"error": str(e)}), 500
+
+# Frontend uyumluluğu için alias endpoint
+@app.route('/api/automation', methods=['POST'])
+def automation_alias():
+    return start_automation()
 
 @app.route('/api/state', methods=['GET'])
 def get_state():
