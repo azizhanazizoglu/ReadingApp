@@ -6,20 +6,33 @@ interface CommandPanelProps {
   darkMode: boolean;
 }
 
-export const CommandPanel: React.FC<CommandPanelProps> = ({ commandLog, fontStack, darkMode }) => (
-  <div
-    className="w-full max-w-6xl mb-12 px-6 py-3 rounded-xl shadow border border-[#B3C7E6] dark:border-[#335C81] transition-colors flex items-center justify-center"
-    style={{
-      fontFamily: fontStack,
-      minHeight: 48,
-      maxHeight: 48,
-      background: darkMode ? undefined : "rgba(245,250,255,0.97)",
-      color: darkMode ? undefined : "#0057A0",
-      boxShadow: darkMode ? undefined : "0 4px 24px 0 rgba(0,87,160,0.08)",
-      borderTop: darkMode ? undefined : "2px solid #B3C7E6",
-      overflow: 'hidden',
-    }}
-  >
+export const CommandPanel: React.FC<CommandPanelProps> = ({ commandLog, fontStack, darkMode }) => {
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (!window.__DEV_LOGS) window.__DEV_LOGS = [];
+      window.__DEV_LOGS.push({
+        time: new Date().toISOString(),
+        component: 'CommandPanel',
+        state: 'render',
+        code: 'CP-1001',
+        message: 'CommandPanel render edildi.'
+      });
+    }
+  }, []);
+  return (
+    <div
+      className="w-full max-w-6xl mb-12 px-6 py-3 rounded-xl shadow border border-[#B3C7E6] dark:border-[#335C81] transition-colors flex items-center justify-center"
+      style={{
+        fontFamily: fontStack,
+        minHeight: 48,
+        maxHeight: 48,
+        background: darkMode ? undefined : "rgba(245,250,255,0.97)",
+        color: darkMode ? undefined : "#0057A0",
+        boxShadow: darkMode ? undefined : "0 4px 24px 0 rgba(0,87,160,0.08)",
+        borderTop: darkMode ? undefined : "2px solid #B3C7E6",
+        overflow: 'hidden',
+      }}
+    >
     {commandLog.length === 0 ? (
       <span className="text-[#7B8FA1] dark:text-[#B3C7E6] text-base font-medium" style={{fontFamily: fontStack}}>
         Komut çıktısı burada görünecek.
@@ -50,4 +63,5 @@ export const CommandPanel: React.FC<CommandPanelProps> = ({ commandLog, fontStac
       @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     `}</style>
   </div>
-);
+    );
+  };
