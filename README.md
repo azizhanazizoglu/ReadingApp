@@ -27,7 +27,7 @@ Index.tsx
 Tüm detaylı açıklamalar ve props listesi için: `docs/12_react_components_and_hooks.md`
 
 ---
-
+s
 
 # ReadingApp: Safety-Critical Software Assurance & Test Traceability Guide
 
