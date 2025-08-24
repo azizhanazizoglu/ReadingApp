@@ -1,3 +1,7 @@
+// This file has been deprecated. useAutomationHandlers is now located at hooks/useAutomationHandlers/useAutomationHandlers.ts
+// Please update your imports to use: import { useAutomationHandlers } from "@/hooks/useAutomationHandlers";
+
+// ...entire file...
 import { toast } from "sonner";
 
 export interface AutomationHandlersProps {
@@ -31,6 +35,16 @@ export function useAutomationHandlers({
 }: AutomationHandlersProps) {
   // Kullanıcı adresi yazıp "Git"e tıklayınca iframe'de göster
   const handleGo = (address: string) => {
+    if (typeof window !== 'undefined') {
+      if (!window.__DEV_LOGS) window.__DEV_LOGS = [];
+      window.__DEV_LOGS.push({
+        time: new Date().toISOString(),
+        component: 'useAutomationHandlers',
+        state: 'event',
+        code: 'UAH-1001',
+        message: `handleGo çağrıldı: ${address}`
+      });
+    }
     let url = address.trim();
     if (!url) return;
     if (!/^https?:\/\//i.test(url)) {
@@ -48,6 +62,16 @@ export function useAutomationHandlers({
 
   // Iframe yüklendiğinde
   const handleIframeLoad = () => {
+    if (typeof window !== 'undefined') {
+      if (!window.__DEV_LOGS) window.__DEV_LOGS = [];
+      window.__DEV_LOGS.push({
+        time: new Date().toISOString(),
+        component: 'useAutomationHandlers',
+        state: 'event',
+        code: 'UAH-1002',
+        message: 'handleIframeLoad çağrıldı.'
+      });
+    }
     setStatus(statusMessages[2]);
     setLoading(false);
     setCommandLog((logs: any) => [
@@ -58,6 +82,16 @@ export function useAutomationHandlers({
 
   // Otomasyon başlat
   const handleAutomation = async () => {
+    if (typeof window !== 'undefined') {
+      if (!window.__DEV_LOGS) window.__DEV_LOGS = [];
+      window.__DEV_LOGS.push({
+        time: new Date().toISOString(),
+        component: 'useAutomationHandlers',
+        state: 'event',
+        code: 'UAH-1003',
+        message: 'handleAutomation çağrıldı.'
+      });
+    }
     if (!iframeUrl) return;
     if (!result || result === statusMessages[0] || result === statusMessages[1]) {
       setCommandLog((logs: any) => [
@@ -81,7 +115,18 @@ export function useAutomationHandlers({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: iframeUrl }),
       });
-      if (!resp.ok) throw new Error("Otomasyon başlatılamadı.");
+      if (!resp.ok) {
+        if (typeof window !== 'undefined') {
+          window.__DEV_LOGS.push({
+            time: new Date().toISOString(),
+            component: 'useAutomationHandlers',
+            state: 'error',
+            code: 'UAH-9001',
+            message: 'Otomasyon başlatılamadı (backend response not ok).'
+          });
+        }
+        throw new Error("Otomasyon başlatılamadı.");
+      }
       const data = await resp.json();
       setResult(data.result || "Otomasyon tamamlandı.");
       setStatus(statusMessages[6]);
@@ -91,6 +136,15 @@ export function useAutomationHandlers({
       ]);
       toast.success("Otomasyon tamamlandı!");
     } catch (e) {
+      if (typeof window !== 'undefined') {
+        window.__DEV_LOGS.push({
+          time: new Date().toISOString(),
+          component: 'useAutomationHandlers',
+          state: 'error',
+          code: 'UAH-9002',
+          message: `Otomasyon sırasında hata: ${e?.message || e}`
+        });
+      }
       setStatus(statusMessages[7]);
       setCommandLog((logs: any) => [
         { icon: "🔴", message: "Otomasyon sırasında hata oluştu.", color: "text-red-600 dark:text-red-400" },
@@ -123,7 +177,18 @@ export function useAutomationHandlers({
         method: "POST",
         body: formData,
       });
-      if (!resp.ok) throw new Error("Yükleme başarısız.");
+      if (!resp.ok) {
+        if (typeof window !== 'undefined') {
+          window.__DEV_LOGS.push({
+            time: new Date().toISOString(),
+            component: 'useAutomationHandlers',
+            state: 'error',
+            code: 'UAH-9003',
+            message: 'JPEG yükleme başarısız (backend response not ok).'
+          });
+        }
+        throw new Error("Yükleme başarısız.");
+      }
       const data = await resp.json();
       setResult(data.result || "JPG başarıyla yüklendi.");
       setStatus(statusMessages[5]);
@@ -133,6 +198,15 @@ export function useAutomationHandlers({
       ]);
       toast.success("JPG başarıyla yüklendi!");
     } catch (e) {
+      if (typeof window !== 'undefined') {
+        window.__DEV_LOGS.push({
+          time: new Date().toISOString(),
+          component: 'useAutomationHandlers',
+          state: 'error',
+          code: 'UAH-9004',
+          message: `JPEG yüklenirken hata: ${e?.message || e}`
+        });
+      }
       setStatus(statusMessages[7]);
       setCommandLog((logs: any) => [
         { icon: "🔴", message: "JPEG yüklenirken hata oluştu.", color: "text-red-600 dark:text-red-400" },
