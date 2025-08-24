@@ -49,3 +49,6 @@ pytest llm_agent/ocr_extractor -s --file="tdsp/ruhsat.jpg"
 git add .
 git commit -m "Improve ruhsat LLM extraction: English prompt, plate accuracy, and test integration"
 git push
+
+ .\test_react.ps1 
+ 

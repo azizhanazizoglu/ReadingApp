@@ -3,7 +3,7 @@ import { Header } from "@/components/Header";
 import { BrowserView } from "@/components/BrowserView";
 import { CommandPanel } from "@/components/CommandPanel";
 import { Footer } from "@/components/Footer";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 interface MainLayoutProps {
   appName: string;
@@ -47,6 +47,23 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   status,
 }) => {
   const [logPanelOpen, setLogPanelOpen] = useState(false);
+  const [backendLogs, setBackendLogs] = useState<string[]>([]);
+
+  // Backend loglarını çek
+  useEffect(() => {
+    const fetchLogs = async () => {
+      try {
+        const res = await fetch("http://localhost:5001/api/logs");
+        const data = await res.json();
+        setBackendLogs(data.logs || []);
+      } catch (e) {
+        setBackendLogs(["[ERROR] Backend logları alınamadı."]);
+      }
+    };
+    fetchLogs();
+    const interval = setInterval(fetchLogs, 2000);
+    return () => clearInterval(interval);
+  }, []);
   return (
     <div
       className="h-screen w-screen flex flex-col items-center justify-between bg-gradient-to-br from-[#f8fafc] to-[#e6f0fa] dark:from-[#1a2233] dark:to-[#223a5e] transition-colors overflow-hidden"
@@ -82,18 +99,24 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           <button onClick={() => setLogPanelOpen(false)} className="text-[#0057A0] dark:text-[#E6F0FA] text-2xl font-bold">×</button>
         </div>
         <div className="overflow-y-auto px-6 py-4" style={{ maxHeight: 'calc(100vh - 80px)' }}>
-          {typeof window !== 'undefined' && window.__DEV_LOGS && window.__DEV_LOGS.length > 0 ? (
-            <ul className="space-y-3">
-              {window.__DEV_LOGS.slice(-50).reverse().map((log, i) => (
-                <li key={i} className="flex flex-col gap-1 p-2 rounded-lg bg-[#F8FAFC] dark:bg-[#335C81] border border-[#B3C7E6] dark:border-[#335C81]">
+          {/* Hem frontend (window.__DEV_LOGS) hem backend loglarını göster */}
+          <ul className="space-y-3">
+            {/* Frontend logları */}
+            {typeof window !== 'undefined' && window.__DEV_LOGS && window.__DEV_LOGS.length > 0 &&
+              window.__DEV_LOGS.slice(-30).reverse().map((log, i) => (
+                <li key={"frontend-"+i} className="flex flex-col gap-1 p-2 rounded-lg bg-[#F8FAFC] dark:bg-[#335C81] border border-[#B3C7E6] dark:border-[#335C81]">
                   <span className="text-xs text-[#7B8FA1] dark:text-[#B3C7E6]">{log.time.split('T')[1].slice(0,8)} | <b>{log.component}</b> | <b>{log.code}</b></span>
                   <span className="text-sm font-medium text-[#0057A0] dark:text-[#E6F0FA]">{log.message || log.state}</span>
                 </li>
               ))}
-            </ul>
-          ) : (
-            <div className="text-[#7B8FA1] dark:text-[#B3C7E6] text-base">Henüz developer log yok.</div>
-          )}
+            {/* Backend logları */}
+            {backendLogs.slice(-30).reverse().map((log, i) => (
+              <li key={"backend-"+i} className="flex flex-col gap-1 p-2 rounded-lg bg-[#FFF7E6] dark:bg-[#665C3A] border border-[#FFD580] dark:border-[#665C3A]">
+                <span className="text-xs text-[#B38B00] dark:text-[#FFD580]">{`BACKEND | #${backendLogs.length- i}`} | <b>BACKEND</b> | <b>BL-{String(1000 + backendLogs.length-i)}</b></span>
+                <span className="text-sm font-medium text-[#B38B00] dark:text-[#FFD580]">{log}</span>
+              </li>
+            ))}
+          </ul>
         </div>
         <div className="px-6 py-3 border-t border-[#B3C7E6] dark:border-[#335C81] bg-[#F8FAFC] dark:bg-[#223A5E] text-xs text-[#7B8FA1] dark:text-[#B3C7E6]">
           Son state: <span className="font-semibold text-[#0057A0] dark:text-[#E6F0FA]">{status}</span>
@@ -146,6 +169,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         />
       </main>
       <Footer fontStack={fontStack} status={status} darkMode={darkMode} />
-    </div>
+  {/* BackendLogPanel kaldırıldı, loglar birleşik panelde gösteriliyor */}
+  </div>
   );
 };
