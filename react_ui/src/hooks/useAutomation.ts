@@ -93,7 +93,7 @@ export function useAutomation({ backendUrl, statusMessages }: UseAutomationProps
       return;
     }
     setAutomation(true);
-    setStatus(statusMessages[3]);
+    setStatus("Otomasyon başlatıldı...");
     setResult(null);
     setCommandLog(logs => [
       { icon: "🟡", message: "Otomasyon başlatıldı.", color: "text-yellow-600 dark:text-yellow-300" },
@@ -117,14 +117,43 @@ export function useAutomation({ backendUrl, statusMessages }: UseAutomationProps
         }
         throw new Error("Otomasyon başlatılamadı.");
       }
-      const data = await resp.json();
-      setResult(data.result || "Otomasyon tamamlandı.");
-      setStatus(statusMessages[6]);
-      setCommandLog(logs => [
-        { icon: "🟢", message: "Otomasyon tamamlandı.", color: "text-green-600 dark:text-green-300" },
-        ...logs,
-      ]);
-      toast.success("Otomasyon tamamlandı!");
+      // Poll backend state until tamamlandı/hata
+      let pollCount = 0;
+      let finished = false;
+      while (!finished && pollCount < 120) { // max 2 minutes
+        await new Promise(res => setTimeout(res, 1000));
+        const stateResp = await fetch(`${backendUrl}/api/state`);
+        const stateData = await stateResp.json();
+        const state = stateData.state;
+        if (state === "tamamlandı") {
+          setStatus("Otomasyon tamamlandı.");
+          setCommandLog(logs => [
+            { icon: "🟢", message: "Otomasyon tamamlandı.", color: "text-green-600 dark:text-green-300" },
+            ...logs,
+          ]);
+          toast.success("Otomasyon tamamlandı!");
+          finished = true;
+        } else if (state === "hata") {
+          setStatus("Otomasyon sırasında hata oluştu.");
+          setCommandLog(logs => [
+            { icon: "🔴", message: "Otomasyon sırasında hata oluştu.", color: "text-red-600 dark:text-red-400" },
+            ...logs,
+          ]);
+          toast.error("Otomasyon sırasında hata oluştu.");
+          finished = true;
+        } else if (state === "devam ediyor" || state === "başladı") {
+          setStatus("Otomasyon devam ediyor...");
+        }
+        pollCount++;
+      }
+      if (!finished) {
+        setStatus("Otomasyon sırasında zaman aşımı.");
+        setCommandLog(logs => [
+          { icon: "�", message: "Otomasyon sırasında zaman aşımı.", color: "text-red-600 dark:text-red-400" },
+          ...logs,
+        ]);
+        toast.error("Otomasyon sırasında zaman aşımı.");
+      }
     } catch (e) {
       if (typeof window !== 'undefined') {
         window.__DEV_LOGS.push({
@@ -135,7 +164,7 @@ export function useAutomation({ backendUrl, statusMessages }: UseAutomationProps
           message: `Otomasyon sırasında hata: ${e?.message || e}`
         });
       }
-      setStatus(statusMessages[7]);
+      setStatus("Otomasyon sırasında hata oluştu.");
       setCommandLog(logs => [
         { icon: "🔴", message: "Otomasyon sırasında hata oluştu.", color: "text-red-600 dark:text-red-400" },
         ...logs,
