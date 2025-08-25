@@ -9,9 +9,15 @@ This matrix provides a full mapping from high-level requirements to test files a
 | REQ-MEM-01    | Store and retrieve OCR/LLM results, check data integrity and correct storage.            | memory/test_ocr_to_memory.py               | memory/db.py, memory/data_dictionary.py   | tdsp/test_reports/memory_test_report_*.pdf         |
 | REQ-INT-01    | Fetch HTML, map ruhsat JSON to HTML fields with LLM, print and check mapping JSON.       | tests/test_integration_end_to_end.py       | license_llm/pageread_llm.py, webbot/..., master.py | (integration test, see summary)                    |
 
+| REQ-UP-01     | Upload JPEG and persist to jpgDownload                                                   | test_flask_server.py (upload section)      | backend/file_upload.py                              | (n/a)                                               |
+| REQ-TS1-01    | Extract JSON via LLM and save to jpg2json                                                | license_llm/test_license_llm_extractor.py  | license_llm/license_llm_extractor.py                | tdsp/test_reports/license_llm_test_report_*.pdf    |
+| REQ-TS2-01    | Run webbot+mapping and save to json2mapping                                              | license_llm/test_pageread_llm.py           | license_llm/pageread_llm.py, backend/stateflow_*    | (n/a)                                               |
+| REQ-LOG-01    | Provide structured logs over REST                                                        | test_flask_server.py (logs section)        | backend/logging_utils.py, backend/app.py            | (n/a)                                               |
+| REQ-ST-01     | Turkish states exposed and synced with frontend                                          | test_flask_server.py (state section)       | backend/stateflow_agent.py, backend/app.py          | (n/a)                                               |
+
 - Each requirement is uniquely identified (REQ-*) and mapped to its test and code.
 - PDF reports are generated for each test run and archived for audit.
-- This matrix is maintained in sync with README.md and docs/09_test_files_and_paths.txt.
+- This matrix is maintained in sync with README.md and docs/09_test_files_and_paths.md.
 
 ---
 

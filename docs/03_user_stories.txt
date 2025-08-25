@@ -1,6 +1,0 @@
-# 3. User Stories
-
-- As a user, I want to extract structured data from a ruhsat image using LLM, so that I can automate insurance form filling.
-- As a developer, I want the system to dynamically map data fields to any web form, so that maintenance is minimal if the web page changes.
-- As a tester, I want to run integration tests that cover the full data flow from document to web form.
-- As a product owner, I want clear documentation and modular code, so that the system can be extended to new forms and data types.

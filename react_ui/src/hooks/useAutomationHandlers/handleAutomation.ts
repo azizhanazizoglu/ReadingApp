@@ -1,4 +1,3 @@
-import { toast } from "sonner";
 import { AutomationHandlersProps } from "./useAutomationHandlers";
 
 export function handleAutomationFactory({
@@ -39,8 +38,7 @@ export function handleAutomationFactory({
         { icon: "🔴", message: "Hata: Ruhsat fotoğrafı yüklenmedi!", color: "text-red-600 dark:text-red-400" },
         ...logs,
       ]);
-      setStatus("Hata: Ruhsat fotoğrafı yüklenmedi!");
-      toast.error("Ruhsat fotoğrafı yüklenmedi!");
+  setStatus("Hata: Ruhsat fotoğrafı yüklenmedi!");
       if (typeof window !== 'undefined') {
         window.__DEV_LOGS.push({
           time: new Date().toISOString(),
@@ -84,7 +82,7 @@ export function handleAutomationFactory({
         { icon: "🟢", message: "Otomasyon tamamlandı.", color: "text-green-600 dark:text-green-300" },
         ...logs,
       ]);
-      toast.success("Otomasyon tamamlandı!");
+  // toaster removed
     } catch (e) {
       if (typeof window !== 'undefined') {
         window.__DEV_LOGS.push({
@@ -100,7 +98,7 @@ export function handleAutomationFactory({
         { icon: "🔴", message: "Otomasyon sırasında hata oluştu.", color: "text-red-600 dark:text-red-400" },
         ...logs,
       ]);
-      toast.error("Otomasyon sırasında hata oluştu.");
+  // toaster removed
     }
     setAutomation(false);
   };

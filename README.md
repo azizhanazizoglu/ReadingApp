@@ -1,218 +1,311 @@
-# React UI: Component & Hook Overview (Özet)
+## ReadingApp
 
-| Dosya/Bileşen                | Tür         | Açıklama                                                                 |
-|------------------------------|-------------|-------------------------------------------------------------------------|
-| react_ui/src/pages/Index.tsx | Sayfa       | Ana giriş noktası, tüm state ve handler yönetimi burada başlar           |
-| useAutomation                | Custom Hook | Otomasyon state ve temel işlevleri yönetir                              |
-| useAutomationHandlers        | Custom Hook | Tüm handler fonksiyonlarını (go, upload, otomasyon, iframe load) toplar  |
-| MainLayout                   | Component   | Header, BrowserView, CommandPanel, Footer gibi ana bileşenleri birleştirir|
-| Header                       | Component   | Uygulama başlığı, arama çubuğu, tema değiştirici, upload butonları      |
-| BrowserView                  | Component   | Web sitesinin gömülü olarak gösterildiği ana alan                       |
-| CommandPanel                 | Component   | Komut geçmişi ve otomasyon loglarının tek satırda gösterildiği panel     |
-| Footer                       | Component   | Her zaman görünür olan, durum ve iletişim bilgisini gösteren alt bar     |
-| SearchBar                    | Component   | Google tarzı, modern ve geniş arama çubuğu                              |
+Modern, modüler bir LLM + Otomasyon platformu. Ruhsat JPEG → LLM → JSON → HTML mapping → Form doldurma akışını uçtan uca sağlar. React (Vite + TS) ve opsiyonel Electron arayüz, Python Flask backend, yapılandırılmış loglama ve izlenebilirlik ile gelir.
 
-**Akış Diyagramı:**
-```
-Index.tsx
-	├─ useAutomation (hook)
-	├─ useAutomationHandlers (hook)
-	└─ MainLayout
-				├─ Header
-				├─ BrowserView
-				├─ CommandPanel
-				└─ Footer
-```
+Bu README ana giriş noktasıdır. Tüm ayrıntılı dokümantasyon profesyonel Markdown formatında `docs/` altındadır.
 
-Tüm detaylı açıklamalar ve props listesi için: `docs/12_react_components_and_hooks.md`
-
----
-s
-
-# ReadingApp: Safety-Critical Software Assurance & Test Traceability Guide
-
-## LLM ile Web Form Otomasyonu (HTML üzerinden mapping)
-
-- LLM, sadece HTML ve JSON ile form alanlarını otomatik eşleştirir. Ekran görüntüsüne gerek yoktur.
-- Webbot, Qt gibi farklı teknolojilerle entegre çalışabilir. Her sayfa değişiminde HTML alınır, LLM'e gönderilir, mapping alınır ve otomasyon devam eder.
-- Mapping çıktısı: field_mapping (JSON anahtarından HTML input/select'e) ve actions (ör: hangi butona tıklanacak).
-
-
-## What is ReadingApp?
-ReadingApp is a modular, safety-critical Python system for extracting, mapping, and filling web forms using Large Language Models (LLMs). It is designed for:
-- Extracting structured data from Turkish vehicle registration (ruhsat) images using LLMs.
-- Dynamically mapping extracted data to any web form, even if the web page changes.
-- Automating web form filling and submission with minimal maintenance.
-- Professional, decoupled, and testable architecture.
-- **Traceable, auditable, and standards-compliant test and reporting for software assurance (ASIL/DO-178C/IEC 61508 inspiration).**
-
-
-## Why This Architecture?
-- **Minimal Maintenance:** LLM-based mapping adapts to web page changes, reducing manual updates.
-- **Modular Design:** Each component (extraction, mapping, web automation, memory) is independent and testable.
-- **Professional Practices:** V-Model, automated tests, clear documentation, and code review.
-- **Safety-Critical Focus:** All test requirements are explicitly documented, mapped to code, and every test run produces a professional PDF report for traceability and audit.
-- **CI/CD Ready:** All tests can be run in a single command, with summary and PDF output for each, suitable for continuous integration and external assessment.
-
-## Key Components (Simple Overview)
-- **license_llm:** Extracts data from images and maps JSON fields to HTML forms using LLMs.
-- **webbot:** Downloads web pages, interacts with forms, automates browser actions.
-- **memory:** Stores HTML, mappings, and extracted data in a decoupled way.
-- **master:** Orchestrates the workflow and runs integration tests.
-
-## Data Flow (How it Works)
-1. **Extract:** license_llm extracts data from ruhsat image → JSON.
-2. **Download:** webbot downloads HTML → memory.
-3. **Map:** license_llm maps JSON fields to HTML inputs → mapping JSON.
-4. **Fill:** webbot fills the form using mapping JSON.
-
-## Technologies Used
-- Python 3.12+, OpenAI API (gpt-4o, Vision), pytest, SQLite
-- JSON for all data exchange
+## İçindekiler
+- [Özellikler ve Güncellemeler](#features-updates)
+- [Monorepo Yapısı ve Bileşenler](#monorepo-components)
+- [Hızlı Başlangıç (Backend, React UI, Electron)](#quick-start)
+- [API Özeti ve Sözleşmeler](#api-summary-contracts)
+- [Test, Raporlama ve İzlenebilirlik](#tests-traceability)
+- [Smoke Tests (Hızlı Sağlık Kontrolü)](#smoke-tests)
+- [Loglama, Hata Kodları ve Geçici Klasörler](#logging-error-tmp)
+- [Güvenlik ve Emniyet Odaklı Gelişim (V-Model)](#safety-vmodel)
+- [Sorun Giderme (Troubleshooting)](#troubleshooting)
 
 ---
 
-## Modules & Main Scripts
+# Teknik El Kitabı (Academic Style)
 
-### license_llm
-- **license_llm_agent.py**: Orchestrates LLM-based extraction from images.
-- **license_llm_extractor.py**: Extracts structured data (e.g., ruhsat fields) from images using LLM.
-- **pageread_llm.py**: Maps extracted JSON data to HTML form fields using LLM.
+Bu bölüm, tüm alt klasörlerdeki bilgileri tek bir “kitapçık” formatında toplar. Profesyonel akademik üslupta, tek README ile tam kapsama sağlar.
 
-### webbot
-- **pageread_llm.py**: (If present) Handles LLM-based HTML mapping (see license_llm for main logic).
-- **test_webbot_html_mapping.py**: Tests web page download and HTML reading.
-- **__init__.py**: Module init.
+## İçindekiler (Index)
+1. [Özet (Abstract)](#abstract)
+2. [Sistem Mimarisi (Architecture)](#architecture)
+3. [Bileşen Özeti (Components Overview)](#components-overview)
+4. [Veri Akışı ve Durum Makinesi (TS1/TS2)](#ts-flow)
+5. [Geçici Veri Politikası (TmpData)](#tmpdata-policy)
+6. [API Tanımı (Flask Endpoints)](#api)
+7. [Frontend (React UI)](#frontend)
+8. [Zamanlayıcı (Scheduler)](#scheduler)
+9. [LLM Bileşenleri (llm_agent, license_llm)](#llm-components)
+10. [WebBot Bileşeni (webbot)](#webbot)
+11. [Qt Browser ve Electron](#qt-electron)
+12. [Girdi HTML’leri (input_htmls)](#input-htmls)
+13. [Test ve İzlenebilirlik](#tests-traceability)
+14. [Loglama ve Hata Kodları](#logging-errors)
+15. [Kurulum ve Çalıştırma](#setup-run)
+16. [Sorun Giderme ve Destek](#troubleshooting)
+17. [Belgeler Dizini (docs/ Index)](#docs-index)
 
-### memory
-- **data_dictionary.py**: Defines data structures and dictionaries for storage.
-- **db.py**: Handles data storage and retrieval (e.g., SQLite).
-- **test_ocr_to_memory.py**: Tests integration of OCR/LLM results into memory.
+<a id="abstract"></a>
+## 1) Özet (Abstract)
+ReadingApp, ruhsat JPEG → LLM JSON → HTML mapping → form doldurma akışını uçtan uca yöneten modüler bir platformdur. Frontend (React + Vite + TS) ve Backend (Flask) arasında yapılandırılmış loglama ve izlenebilirlik ilkeleri esastır. Geçici veri politikası, her çalıştırmada yalnızca “son” çıktıların kalmasını sağlar.
 
-### master
-- **master.py**: Orchestrates the full workflow and runs end-to-end integration tests.
+<a id="architecture"></a>
+## 2) Sistem Mimarisi (Architecture)
+- Backend (Flask): Routes, stateflow agent, structured logging, in-memory durum (memory)
+- Frontend (React + Vite + TS): Header, MainLayout, Log paneli, Geliştirici Modu
+- Electron (opsiyonel): Masaüstü paketleme
+- İlgili alt bileşenler: `llm_agent`, `license_llm`, `webbot`, `qt_browser`
 
----
+<a id="components-overview"></a>
+## 3) Bileşen Özeti (Components Overview)
+- `backend/`: API uçları; TS1/TS2 akışını tetikler; log ve state yönetimi
+- `react_ui/`: UI, developer mod butonları (Home, Ts1, Ts2), birleşik log paneli, sabit footer
+- `scheduler/`: Basit job scheduler ve adım takibi (waiting → running → done → error)
+- `llm_agent/`: OCR/LLM metinlerinden yapılandırılmış veri üretimi için yardımcı bileşen
+- `license_llm/`: Ruhsat görüntüsünden LLM ile yapılandırılmış veri çıkarımı
+- `webbot/`: HTML analiz ederek alanların doldurulmasını ve ilerlemeyi planlar
+- `qt_browser/`: PyQt5 ile basit tarayıcı; HTML snapshot alma ve manuel giriş akışı
+- `input_htmls/`: Test ve mapping akışları için HTML örnekleri
 
+<a id="ts-flow"></a>
+## 4) Veri Akışı ve Durum Makinesi (TS1/TS2)
+Durumlar: başladı → devam ediyor (her job) → tamamlandı | hata
+- TS1: JPEG → LLM → JSON (jpg2json’a yazılır; base adı JPG ile eşleşir)
+- TS2: Web HTML (webbot) + LLM mapping → JSON (json2mapping’e yazılır)
 
-## Test Files, Requirements & Traceability
+<a id="tmpdata-policy"></a>
+## 5) Geçici Veri Politikası (TmpData)
+- Upload: `memory/TmpData/jpgDownload` yeni yükleme öncesi temizlenir → yalnızca son JPEG kalır.
+- TS1: `/api/start-automation` öncesi `memory/TmpData/jpg2json` temizlenir → yalnızca son JSON kalır.
+- TS2: `/api/test-state-2` öncesi `memory/TmpData/json2mapping` temizlenir → yalnızca son mapping JSON kalır (silinmez).
+- Bellek: `memory` içinde son `ruhsat_json`, `html`, `mapping`, `latest_base` tutulur. TS2 gerekirse `jpg2json`’dan fallback ile JSON’u yükleyebilir.
 
-All main test files are mapped to explicit requirements and produce PDF reports for each run. This enables full traceability from requirement to test result, as required in safety-critical software development.
+<a id="api"></a>
+## 6) API Tanımı (Flask Endpoints)
+- POST `/api/upload`: JPEG yükler; `jpgDownload` temizlenir ve yeni dosya kaydedilir.
+- POST `/api/start-automation`: TS1’i başlatır; `jpg2json` temizlenir; LLM JSON üretilir ve kaydedilir.
+- POST `/api/test-state-2`: TS2’yi tetikler; `json2mapping` temizlenir; mapping JSON üretilir ve kaydedilir (kalıcı).
+- GET `/api/state`: Bellekteki son durum döner.
+- GET `/api/mapping`: Son mapping (memory) döner.
+- GET `/api/logs`: Yapılandırılmış log halkası döner.
+- GET `/health`: Sağlık kontrolü.
 
-| Module      | Script/Test File               | Path                                   | Purpose                                                   | Requirement (from docs/09_test_files_and_paths.txt) |
-|-------------|-------------------------------|----------------------------------------|-----------------------------------------------------------|-----------------------------------------------------|
-| license_llm | test_license_llm_extractor.py | license_llm/test_license_llm_extractor.py | Tests LLM-based extraction and mapping from ruhsat images | Extract ruhsat info from image, output dict with keys like 'plaka_no', 'ad_soyad', etc. |
-| webbot      | test_webbot_html_mapping.py   | webbot/test_webbot_html_mapping.py     | Tests web page download and HTML reading                  | Download HTML from a real web page, print first 2000 chars, and assert HTML is non-empty. |
-| memory      | test_ocr_to_memory.py         | memory/test_ocr_to_memory.py           | Tests OCR/LLM result integration and storage in memory/db | Store and retrieve OCR/LLM results, check data integrity and correct storage. |
-| integration | test_integration_end_to_end.py| tests/test_integration_end_to_end.py   | End-to-end integration test for HTML fetch, LLM mapping, and output validation | Fetch HTML, map ruhsat JSON to HTML fields with LLM, print and check mapping JSON for required keys ('field_mapping', 'actions'). |
+<a id="frontend"></a>
+## 7) Frontend (React UI)
+- Header: App adı, arama, upload, otomasyon; Geliştirici Mod butonları (Home, Ts1, Ts2). İnce dikey ayraçlar kaldırılmıştır; sade görünüm.
+- MainLayout: Sağdan açılan birleşik log paneli (frontend + backend), footer için compact özet üretir.
+- Footer: Sabit 60px yükseklik; tek satır truncation. Türkçe tek tip format: `[BİLGİ|UYARI|HATA|DEBUG] KOD: kısa_metin (klasör/dosya)`; hover’da tam metin `title` ile görülebilir.
 
----
+<a id="scheduler"></a>
+## 8) Zamanlayıcı (Scheduler)
+Basit JobScheduler: her adım (llm_extract, wait_for_file, webbot, memory, llm) sırayla çalışır. Her job “waiting → running → done | error” durumlarını raporlar. Hata durumunda akış durdurulur ve kullanıcıya bildirilir.
 
-## User Stories (Summary)
-- Extract data from ruhsat images for insurance automation
-- Dynamically map data to any web form
-- Run integration tests for full data flow
-- Extend system to new forms/data types easily
+<a id="llm-components"></a>
+## 9) LLM Bileşenleri (llm_agent, license_llm)
+- `llm_agent`: OCR metninden yapılandırılmış veri üretimine yardımcı işlevler; örnek kullanım testlerde.
+- `license_llm`: Ruhsat görüntüsünden LLM ile alan çıkarımı; `extract_vehicle_info_from_image` ana fonksiyondur.
 
+<a id="webbot"></a>
+## 10) WebBot Bileşeni (webbot)
+HTML arayüzleri analiz ederek hangi alanların doldurulacağını belirler; LLM ile birlikte form doldurma otomasyonunda kullanılır.
 
+<a id="qt-electron"></a>
+## 11) Qt Browser ve Electron
+- `qt_browser`: PyQt5 tabanlı basit tarayıcı; manuel giriş sonrası HTML snapshot alır; otomasyon user story’si test dokümanında.
+- `electron_app`: React UI build’in masaüstüne gömülmesi için temel yapı (örnek entegrasyon komutları ileride).
 
+<a id="input-htmls"></a>
+## 12) Girdi HTML’leri (input_htmls)
+Testler ve mapping akışları için örnek HTML’ler (ör. `traffic-insurance.html`, `vehicle-details.html`). WebBot/LLM mapping için kullanılır.
 
-## Environment Setup & .env File Best Practices
+<a id="tests-traceability"></a>
+## 13) Test ve İzlenebilirlik
+- Test stratejisi ve dosya yolu standartları: `docs/08_test_strategy.md`, `docs/09_test_files_and_paths.md`
+- İzlenebilirlik matrisi: `docs/traceability_matrix.md`
+- Tüm testler ve PDF özet: `python run_all_tests.py`
 
-**Important:** Only one `.env` file should exist in the project, located at the project root (e.g., `C:/Users/azizh/Documents/ReadingApp/.env`).
+<a id="logging-errors"></a>
+## 14) Loglama ve Hata Kodları
+- Yapılandırılmış log alanları: level, code, component, message, time, extra
+- FE/BE kod aralıkları: `docs/error_codes.md`
+- Log paneli: sağdan açılır; footer’da compact Türkçe özet gösterilir.
 
-- Remove all `.env` files from subfolders (like `license_llm/.env`, `llm_agent/.env`, etc.) to avoid conflicts.
-- All scripts and tests will load environment variables from the root `.env` file.
-- This prevents confusion and ensures consistent environment variable usage across all components.
-
-Example `.env` (do not share your real key):
+<a id="setup-run"></a>
+## 15) Kurulum ve Çalıştırma
+Önkoşullar: Python 3.12+, Node.js 18+, pnpm
 ```
-OPENAI_API_KEY=sk-...
+# Backend
+pip install -r requirements.txt
+python backend/app.py  # http://localhost:5001
+
+# React UI
+cd react_ui
+pnpm install
+pnpm dev
+
+# Electron (opsiyonel)
+cd electron_app
+pnpm install
+pnpm start
 ```
 
-Before running tests that use the LLM, you must set your OpenAI API key. The project uses a `.env` file for convenience:
+<a id="troubleshooting"></a>
+## 16) Sorun Giderme ve Destek
+- Backend başlatma sorunları: bağımlılıkları ve portu (5001) kontrol edin; konsol traceback’ine bakın.
+- UI derleme sorunları: Node 18+, pnpm; temiz kuruluma `pnpm install` sonrası `pnpm dev`.
+- Destek: azizhanazizoglu@gmail.com
 
+<a id="docs-index"></a>
+## 17) Belgeler Dizini (docs/ Index)
+- [01_project_overview.md](docs/01_project_overview.md)
+- [02_vmodel_and_methodology.md](docs/02_vmodel_and_methodology.md)
+- [03_user_stories.md](docs/03_user_stories.md)
+- [04_software_requirements.md](docs/04_software_requirements.md)
+- [05_architecture_and_components.md](docs/05_architecture_and_components.md)
+- [06_data_interfaces_and_variables.md](docs/06_data_interfaces_and_variables.md)
+- [07_technologies_and_methods.md](docs/07_technologies_and_methods.md)
+- [08_test_strategy.md](docs/08_test_strategy.md)
+- [09_test_files_and_paths.md](docs/09_test_files_and_paths.md)
+- [10_electron_react_desktop_user_story.md](docs/10_electron_react_desktop_user_story.md)
+- [10_qt_browser_user_story.md](docs/10_qt_browser_user_story.md)
+- [11_scheduler_and_state_flow.md](docs/11_scheduler_and_state_flow.md)
+- [12_llm_agent_integration.md](docs/12_llm_agent_integration.md)
+- [12_react_components_and_hooks.md](docs/12_react_components_and_hooks.md)
+- [error_codes.md](docs/error_codes.md)
+- [FOLDER_STRUCTURE_AND_NAMING_CONVENTION.md](docs/FOLDER_STRUCTURE_AND_NAMING_CONVENTION.md)
+- [traceability_matrix.md](docs/traceability_matrix.md)
+- [SAFETY_ASSURANCE_AND_TRACEABILITY.md](docs/SAFETY_ASSURANCE_AND_TRACEABILITY.md)
+
+<a id="features-updates"></a>
+## Özellikler ve Güncellemeler
+Tüm .txt dokümanlar .md’ye taşındı. Detaylar ve derinlemesine anlatımlar için `docs/` klasörüne bakın.
+
+### Neler Yeni (2025-08-25)
+- Yapılandırılmış backend loglama (level, code, component, message, time, extra); `/api/logs` ile FE panelde birleşik gösterim
+- Ts1 (JPG → LLM → JSON) ve Ts2 (Webbot → Mapping) uçtan uca akışlar; mapping çıktıları `memory/TmpData/json2mapping` altında kalıcı
+- Geçici klasör standardı ve temizlik politikası:
+	- Upload: `jpgDownload` yeni yükleme öncesi temizlenir; yalnızca son JPEG saklanır.
+	- TS1: `/api/start-automation` öncesi `jpg2json` temizlenir; yalnızca son JSON saklanır.
+	- TS2: `/api/test-state-2` öncesi `json2mapping` temizlenir; yalnızca son mapping JSON saklanır (silinmez).
+- Türkçe state makinesi: “başladı → devam ediyor → tamamlandı | hata”
+- Developer Mode: Header’da Home/Ts1/Ts2, kompakt SearchBar, Toaster ve yapılandırılmış log paneli
+- Footer: Sabit 60px yükseklik, tek satır compact Türkçe format: `[BİLGİ|UYARI|HATA|DEBUG] KOD: kısa_metin (klasör/dosya)`
+- Backend route’ları: `/api/upload`, `/api/start-automation`, `/api/state`, `/api/mapping`, `/api/logs`, `/api/test-state-2`, `/health`
+
+<a id="monorepo-components"></a>
+## Monorepo Yapısı ve Bileşenler
+- Backend (Flask): `backend/` — Uygulama ve servisler, stateflow, yapılandırılmış loglama
+- React UI (Vite + TS): `react_ui/` — Arayüz, geliştirici modu, log paneli
+- Electron (opsiyonel): `electron_app/` — Masaüstü paketleme/başlatma
+- LLM Agent: `llm_agent/` ve `license_llm/` — LLM/ocr entegrasyonu ve örnek çıkarımlar
+- OCR Agent: `ocr_agent/` — OCR/LLM bağımlılıkları (requirements)
+	- Gereksinimler: `ocr_agent/requirements.txt`
+- Qt Browser (opsiyonel): `qt_browser/`
+- Dokümantasyon: `docs/` — Proje genel dokümanları ve izlenebilirlik
+	- Giriş: `docs/` dizinindeki ilgili başlıklar
+
+<a id="quick-start"></a>
+## Hızlı Başlangıç
+Önkoşullar: Python 3.12+, Node.js 18+, pnpm.
+
+1) Backend (Flask)
+		- Bağımlılıklar: `pip install -r requirements.txt`
+	- Çalıştırma: `python backend/app.py` (varsayılan: http://localhost:5001)
+
+2) React UI
+	 - `cd react_ui`
+	 - `pnpm install`
+	 - `pnpm dev`
+
+3) Electron (opsiyonel)
+	 - `cd electron_app`
+	 - `pnpm install`
+	 - `pnpm start`
+
+Notlar ve troubleshooting için `docs/README.md` ve aşağıdaki Sorun Giderme bölümünü inceleyin.
+
+<a id="api-summary-contracts"></a>
+## API Özeti ve Sözleşmeler
+- POST `/api/upload` → JPEG yükle
+- POST `/api/start-automation` → Ts1 başlatır
+- POST `/api/test-state-2` → Ts2 (webbot + mapping) test
+- GET `/api/state` → state
+- GET `/api/mapping` → son mapping
+- GET `/api/logs` → yapılandırılmış loglar
+- GET `/health` → sağlık kontrolü
+
+Tam sözleşmeler ve akışlar: `docs/12_llm_agent_integration.md`.
+
+## Test, Raporlama ve İzlenebilirlik
+- Test stratejisi: `docs/08_test_strategy.md`
+- Test dosyaları ve yolları: `docs/09_test_files_and_paths.md`
+- İzlenebilirlik matrisi: `docs/traceability_matrix.md`
+- Tüm testleri çalıştırma ve PDF özet: `python run_all_tests.py`
+
+<a id="smoke-tests"></a>
+## Smoke Tests (Hızlı Sağlık Kontrolü)
+Smoke test, sistemin en kritik uçlarının “ayakta” olduğunu hızlıca doğrulayan, küçük ve uçtan uca mini testlerdir. Amaç; derin senaryolardan ziyade, temel servislerin kalkıp kalkmadığını ve basit bir akışın hata vermeden çalıştığını görmek. Bu proje için smoke testler:
+
+- Konum: `tests/smokeTests/`
+- Kapsam ve doğrulamalar:
+	- GET `/health` → 200 ve `{ "status": "ok" }`
+	- POST `/api/upload` → Basit bir JPEG yüklemesi kabul ediliyor mu? Dosya `memory/TmpData/jpgDownload` altına kaydoluyor mu?
+	- POST `/api/start-automation` → TS1 akışı (JPEG→JSON) çalışıyor mu? `memory/TmpData/jpg2json` altında JSON üretiliyor mu? (OpenAI çağrısı monkeypatch ile taklit edilir.)
+	- POST `/api/test-state-2` → Basit bir HTML + JSON ile mapping üretilip `memory/TmpData/json2mapping` altına kaydediliyor mu? (LLM çağrısı monkeypatch ile taklit edilir; test, code-fenced JSON’dan sağlam parse’ı da doğrular.)
+- Dış bağımlılıklar: OpenAI ve internet erişimi gerektirmez; testler LLM fonksiyonlarını monkeypatch ile taklit eder ve offline, deterministik çalışır.
+- Disk etkileri: `memory/TmpData` altında küçük JSON dosyaları yazılır ve eski mapping’ler temizlenebilir (kalıcı veri etkisi yoktur).
+
+Hedef sayfa (referans):
+- https://preview--screen-to-data.lovable.app/traffic-insurance
+
+TS2 Doğrulama kriterleri (acceptance):
+- Mapping JSON içinde şu alanlar bulunmalı ve input seçicilerine eşlenmiş olmalı:
+	- `tckimlik` → örn. `input#identity`
+	- `dogum_tarihi` → örn. `input#birthDate`
+	- `ad_soyad` → örn. `input#name`
+	- `plaka_no` → örn. `input#plate`
+- Actions içinde `click#DEVAM` olmalı.
+
+Tek komut (Windows PowerShell) — tam JSON çıktısı terminale yazdırılır:
 ```
-OPENAI_API_KEY=sk-...  # (your real key)
+python -m pytest tests/smokeTests -s -vv
 ```
 
-To load this automatically, you can use the `python-dotenv` package or set the variable manually in your terminal:
+Koşum sonunda “Smoke Mapping Output” bölümünde son mapping dosya yolu ve pretty-printed JSON görüntülenir.
 
-**PowerShell (Windows):**
-```powershell
-$env:OPENAI_API_KEY="sk-..."
-pytest tests/test_integration_end_to_end.py
+Örnek çıktı (özetlenmiş):
+```
+----------------------------- Smoke Mapping Output -----------------------------
+Latest mapping file: memory/TmpData/json2mapping/<...>_mapping.json
+Fields: ad_soyad, dogum_tarihi, plaka_no, tckimlik
+Actions: ['click#DEVAM']
+Full JSON:
+{
+	"field_mapping": {
+		"tckimlik": "input#identity",
+		"dogum_tarihi": "input#birthDate",
+		"ad_soyad": "input#name",
+		"plaka_no": "input#plate"
+	},
+	"actions": ["click#DEVAM"]
+}
 ```
 
-Or install `python-dotenv` and add this to your test files or a `conftest.py`:
-```python
-from dotenv import load_dotenv
-load_dotenv()
-```
+<a id="logging-error-tmp"></a>
+## Loglama, Hata Kodları ve Geçici Klasörler
+- Hata kodları: Backend BE-xxxx ve FE (HD-/IDX-/UAH-): `docs/error_codes.md`
+- Geçici klasörler: `memory/TmpData/jpgDownload`, `jpg2json`, `json2mapping`
 
----
+<a id="safety-vmodel"></a>
+## Güvenlik ve Emniyet Odaklı Gelişim
+V-Model, güvenlik hedefleri, doğrulama ve izlenebilirlik yaklaşımı: `docs/SAFETY_ASSURANCE_AND_TRACEABILITY.md`
 
+## Sorun Giderme (Troubleshooting)
+- Backend başlamıyor veya hata ile çıkıyor:
+	- Doğru Python sürümü ve bağımlılıkların kurulu olduğundan emin olun: `pip install -r ocr_agent/requirements.txt`
+		- Port çakışması olup olmadığını kontrol edin (bu proje backend: 5001).
+	- Konsol çıktısındaki traceback’i inceleyin ve eksik paketleri yükleyin.
+- React UI derlenmiyor:
+	- Node 18+ ve pnpm kurulu olmalı. `pnpm install` sonrası `pnpm dev` ile başlayın.
+- Electron (isteğe bağlı) açılmıyor:
+	- Electron bağımlılıklarını kurup `pnpm start` ile başlatın; hata durumunda konsolu kontrol edin.
 
+## Lisans ve Katkı
+- Lisans: (gerekiyorsa ekleyin)
+- Katkı rehberi: (PR kuralları, kod stili vb.)
 
-
-## Test Reporting, PDF Reports & Auditability
-
-**Technologies Used for Reporting:**
-- PDF reports are generated using the `reportlab` Python library.
-- Reports are saved in `tdsp/test_reports/`.
-
-**Test Reporting Process:**
-- All main tests automatically generate a PDF report in `tdsp/test_reports/` after each run (if `reportlab` is installed).
-- Each report includes:
-	- Test requirement (from docs/09_test_files_and_paths.txt, traceable to code)
-	- Input data
-	- Expected output
-	- Actual output
-	- Pass/Fail result
-	- Error details (if any)
-- Reports are timestamped and named by test and date for audit trail.
-- Reports are designed for external assessment, traceability, and safety-critical software assurance.
-
-**CI/CD & Assessment:**
-- All tests can be run with `python run_all_tests.py` for a full summary and PDF output, suitable for CI/CD pipelines and external audits.
-- Each test's requirement, input, and output are traceable in both terminal and PDF report.
-- Reports can be archived for regulatory or customer review.
-
-**Traceability & Coverage:**
-- Each test is mapped to a requirement and a code component.
-- The mapping is maintained in `docs/09_test_files_and_paths.txt` and this README.
-- (Planned) A traceability matrix and diagram will be added for full requirement-to-test-to-code coverage.
-
----
-
-
----
-
-## Requirement-to-Test Traceability & Audit Process
-
-### Traceability Matrix
-All requirements, test files, code components ve PDF raporları birebir eşlenmiştir. Tam tablo için: `docs/traceability_matrix.md`.
-
-| Req ID     | Requirement Summary                                                      | Test File                                 | Code Component(s)                        | PDF Report Example                                 |
-|------------|-------------------------------------------------------------------------|--------------------------------------------|-------------------------------------------|----------------------------------------------------|
-| REQ-LLM-01 | Extract ruhsat info from image, output dict with keys like 'plaka_no'... | license_llm/test_license_llm_extractor.py  | license_llm/license_llm_extractor.py      | tdsp/test_reports/license_llm_test_report_*.pdf    |
-| REQ-WEB-01 | Download HTML from a real web page, print first 2000 chars, assert HTML  | webbot/test_webbot_html_mapping.py         | webbot/test_webbot_html_mapping.py        | tdsp/test_reports/webbot_test_report_*.pdf         |
-| REQ-MEM-01 | Store and retrieve OCR/LLM results, check data integrity and storage     | memory/test_ocr_to_memory.py               | memory/db.py, memory/data_dictionary.py   | tdsp/test_reports/memory_test_report_*.pdf         |
-| REQ-INT-01 | Fetch HTML, map ruhsat JSON to HTML fields with LLM, check mapping JSON  | tests/test_integration_end_to_end.py       | license_llm/pageread_llm.py, webbot/..., master.py | (integration test, see summary)                    |
-
-### How to Track & Audit
-- Her gereksinim (requirement) için benzersiz bir Req ID atanır ve docs/traceability_matrix.md dosyasında tutulur.
-- Her test çalıştırıldığında, PDF raporu otomatik olarak oluşturulur ve test gereksinimi, input, output, hata ve sonuç içerir.
-- PDF raporları, testin adı ve tarih/saat ile arşivlenir. Her rapor, ilgili gereksinim ve kod ile eşleştirilebilir.
-- Tüm gereksinimlerin test coverage'ı ve kod ile eşleşmesi, traceability matrix ile denetlenebilir.
-- CI/CD pipeline'ında veya manuel olarak `python run_all_tests.py` ile tüm testler ve raporlar topluca üretilebilir.
-- Herhangi bir değişiklikte hem README, hem docs/09_test_files_and_paths.txt hem de traceability_matrix.md güncellenmelidir.
-
-#### Dış Denetim ve Regülasyonlar İçin
-- Tüm PDF raporları ve traceability matrix, dış denetçilere veya müşteri kalite ekiplerine sunulabilir.
-- Gereksinim değişikliği, yeni test veya kod güncellemesi olduğunda, izlenebilirlik ve coverage tekrar kontrol edilmelidir.
-
----
-
-## For More Details
-See the `docs/` folder for full documentation on requirements, architecture, methodology, test strategy, and traceability. Traceability matrix: `docs/traceability_matrix.md`.

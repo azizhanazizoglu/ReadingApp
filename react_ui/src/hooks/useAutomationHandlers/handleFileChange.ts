@@ -1,4 +1,3 @@
-import { toast } from "sonner";
 import { AutomationHandlersProps } from "./useAutomationHandlers";
 
 export function handleFileChangeFactory({
@@ -53,11 +52,11 @@ export function handleFileChangeFactory({
       const data = await resp.json();
       setResult(data.result || "JPG başarıyla yüklendi.");
       setStatus(statusMessages[5]);
-      setCommandLog((logs: any) => [
+  setCommandLog((logs: any) => [
         { icon: "🟢", message: "JPEG başarıyla yüklendi.", color: "text-green-600 dark:text-green-300" },
         ...logs,
       ]);
-      toast.success("JPG başarıyla yüklendi!");
+  // toaster removed
     } catch (e) {
       if (typeof window !== 'undefined') {
         window.__DEV_LOGS.push({
@@ -73,7 +72,7 @@ export function handleFileChangeFactory({
         { icon: "🔴", message: "JPEG yüklenirken hata oluştu.", color: "text-red-600 dark:text-red-400" },
         ...logs,
       ]);
-      toast.error("JPEG yüklenirken hata oluştu.");
+  // toaster removed
     }
     setUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = "";

@@ -1,7 +1,0 @@
-# 8. Test Strategy
-
-- Unit tests for each component (webbot, license_llm, memory)
-- Integration test via master.py (end-to-end data flow)
-- Test coverage measurement (pytest --cov)
-- Test data: sample ruhsat images, sample HTML pages
-- Validation: mapping JSON correctness, data integrity in memory/db, webbot action simulation

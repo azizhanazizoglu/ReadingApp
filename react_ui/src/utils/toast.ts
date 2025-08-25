@@ -1,17 +1,17 @@
-import { toast } from "sonner";
-
+// Toaster removed. Provide no-op helpers to keep call sites safe.
 export const showSuccess = (message: string) => {
-  toast.success(message);
+  if (import.meta.env.DEV) console.info("SUCCESS:", message);
 };
 
 export const showError = (message: string) => {
-  toast.error(message);
+  if (import.meta.env.DEV) console.error("ERROR:", message);
 };
 
 export const showLoading = (message: string) => {
-  return toast.loading(message);
+  if (import.meta.env.DEV) console.info("LOADING:", message);
+  return undefined as unknown as string;
 };
 
-export const dismissToast = (toastId: string) => {
-  toast.dismiss(toastId);
+export const dismissToast = (_toastId: string) => {
+  // no-op
 };

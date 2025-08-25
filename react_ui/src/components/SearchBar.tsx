@@ -9,6 +9,7 @@ interface SearchBarProps {
   darkMode: boolean;
   searchFocused: boolean;
   setSearchFocused: (val: boolean) => void;
+  compact?: boolean;
 }
 
 export const SearchBar: React.FC<SearchBarProps> = ({
@@ -20,6 +21,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   darkMode,
   searchFocused,
   setSearchFocused,
+  compact = false,
 }) => {
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -49,7 +51,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     }
   };
   return (
-    <div className="relative flex items-center w-full max-w-2xl mx-auto">
+    <div className={`relative flex items-center w-full ${compact ? 'max-w-md' : 'max-w-2xl'} mx-auto`}>
       <input
         type="text"
         value={address}
@@ -57,7 +59,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         onFocus={() => setSearchFocused(true)}
         onBlur={() => setSearchFocused(false)}
         className={`pr-4 py-3 w-full rounded-full bg-[#f5faff] dark:bg-[#223A5E] text-base shadow focus:ring-2 focus:ring-[#0057A0] dark:focus:ring-[#E6F0FA] focus:outline-none transition-all border border-[#B3C7E6] dark:border-[#335C81] text-[#003366] dark:text-[#E6F0FA] font-normal ${address ? 'pl-12 text-left' : 'pl-0 text-center'} animate-search-move`}
-        style={{ fontFamily: fontStack, minWidth: 320, maxWidth: '100%', fontWeight: 400, letterSpacing: 0.01, transition: 'padding 0.3s, text-align 0.3s' }}
+        style={{ fontFamily: fontStack, minWidth: compact ? 260 : 320, maxWidth: '100%', fontWeight: 400, letterSpacing: 0.01, transition: 'padding 0.3s, text-align 0.3s' }}
         onKeyDown={handleEnter}
         autoFocus
         disabled={loading}

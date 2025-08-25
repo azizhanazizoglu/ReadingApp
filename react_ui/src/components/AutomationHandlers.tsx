@@ -2,7 +2,6 @@
 // Please update your imports to use: import { useAutomationHandlers } from "@/hooks/useAutomationHandlers";
 
 // ...entire file...
-import { toast } from "sonner";
 
 export interface AutomationHandlersProps {
   iframeUrl: string;
@@ -98,8 +97,8 @@ export function useAutomationHandlers({
         { icon: "🔴", message: "Hata: Ruhsat fotoğrafı yüklenmedi!", color: "text-red-600 dark:text-red-400" },
         ...logs,
       ]);
-      setStatus("Hata: Ruhsat fotoğrafı yüklenmedi!");
-      toast.error("Ruhsat fotoğrafı yüklenmedi!");
+  setStatus("Hata: Ruhsat fotoğrafı yüklenmedi!");
+  // toaster removed
       return;
     }
     setAutomation(true);
@@ -134,7 +133,7 @@ export function useAutomationHandlers({
         { icon: "🟢", message: "Otomasyon tamamlandı.", color: "text-green-600 dark:text-green-300" },
         ...logs,
       ]);
-      toast.success("Otomasyon tamamlandı!");
+  // toaster removed
     } catch (e) {
       if (typeof window !== 'undefined') {
         window.__DEV_LOGS.push({
@@ -150,7 +149,7 @@ export function useAutomationHandlers({
         { icon: "🔴", message: "Otomasyon sırasında hata oluştu.", color: "text-red-600 dark:text-red-400" },
         ...logs,
       ]);
-      toast.error("Otomasyon sırasında hata oluştu.");
+  // toaster removed
     }
     setAutomation(false);
   };
@@ -196,7 +195,7 @@ export function useAutomationHandlers({
         { icon: "🟢", message: "JPEG başarıyla yüklendi.", color: "text-green-600 dark:text-green-300" },
         ...logs,
       ]);
-      toast.success("JPG başarıyla yüklendi!");
+  // toaster removed
     } catch (e) {
       if (typeof window !== 'undefined') {
         window.__DEV_LOGS.push({
@@ -212,7 +211,7 @@ export function useAutomationHandlers({
         { icon: "🔴", message: "JPEG yüklenirken hata oluştu.", color: "text-red-600 dark:text-red-400" },
         ...logs,
       ]);
-      toast.error("JPG yüklenirken hata oluştu.");
+  // toaster removed
     }
     setUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = "";

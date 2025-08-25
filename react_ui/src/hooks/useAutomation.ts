@@ -1,6 +1,5 @@
 
 import { useState, useRef } from "react";
-import { toast } from "sonner";
 
 export interface CommandLog {
   icon: string;
@@ -88,8 +87,7 @@ export function useAutomation({ backendUrl, statusMessages }: UseAutomationProps
         { icon: "🔴", message: "Hata: Ruhsat fotoğrafı yüklenmedi!", color: "text-red-600 dark:text-red-400" },
         ...logs,
       ]);
-      setStatus("Hata: Ruhsat fotoğrafı yüklenmedi!");
-      toast.error("Ruhsat fotoğrafı yüklenmedi!");
+  setStatus("Hata: Ruhsat fotoğrafı yüklenmedi!");
       return;
     }
     setAutomation(true);
@@ -131,7 +129,7 @@ export function useAutomation({ backendUrl, statusMessages }: UseAutomationProps
             { icon: "🟢", message: "Otomasyon tamamlandı.", color: "text-green-600 dark:text-green-300" },
             ...logs,
           ]);
-          toast.success("Otomasyon tamamlandı!");
+          // toaster removed
           finished = true;
         } else if (state === "hata") {
           setStatus("Otomasyon sırasında hata oluştu.");
@@ -139,7 +137,7 @@ export function useAutomation({ backendUrl, statusMessages }: UseAutomationProps
             { icon: "🔴", message: "Otomasyon sırasında hata oluştu.", color: "text-red-600 dark:text-red-400" },
             ...logs,
           ]);
-          toast.error("Otomasyon sırasında hata oluştu.");
+          // toaster removed
           finished = true;
         } else if (state === "devam ediyor" || state === "başladı") {
           setStatus("Otomasyon devam ediyor...");
@@ -152,7 +150,7 @@ export function useAutomation({ backendUrl, statusMessages }: UseAutomationProps
           { icon: "�", message: "Otomasyon sırasında zaman aşımı.", color: "text-red-600 dark:text-red-400" },
           ...logs,
         ]);
-        toast.error("Otomasyon sırasında zaman aşımı.");
+  // toaster removed
       }
     } catch (e) {
       if (typeof window !== 'undefined') {
@@ -169,7 +167,7 @@ export function useAutomation({ backendUrl, statusMessages }: UseAutomationProps
         { icon: "🔴", message: "Otomasyon sırasında hata oluştu.", color: "text-red-600 dark:text-red-400" },
         ...logs,
       ]);
-      toast.error("Otomasyon sırasında hata oluştu.");
+  // toaster removed
     }
     setAutomation(false);
   };
@@ -185,7 +183,7 @@ export function useAutomation({ backendUrl, statusMessages }: UseAutomationProps
     setUploading(true);
     setStatus(statusMessages[4]);
     setResult(null);
-    setCommandLog(logs => [
+  setCommandLog(logs => [
       { icon: "🟡", message: "JPEG yükleniyor...", color: "text-yellow-600 dark:text-yellow-300" },
       ...logs,
     ]);
@@ -215,7 +213,7 @@ export function useAutomation({ backendUrl, statusMessages }: UseAutomationProps
         { icon: "🟢", message: "JPEG başarıyla yüklendi.", color: "text-green-600 dark:text-green-300" },
         ...logs,
       ]);
-      toast.success("JPG başarıyla yüklendi!");
+  // toaster removed
     } catch (e) {
       if (typeof window !== 'undefined') {
         window.__DEV_LOGS.push({
@@ -231,7 +229,7 @@ export function useAutomation({ backendUrl, statusMessages }: UseAutomationProps
         { icon: "🔴", message: "JPEG yüklenirken hata oluştu.", color: "text-red-600 dark:text-red-400" },
         ...logs,
       ]);
-      toast.error("JPG yüklenirken hata oluştu.");
+  // toaster removed
     }
     setUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = "";

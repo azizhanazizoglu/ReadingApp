@@ -4,7 +4,7 @@ run_all_tests.py
 - Tüm ana testleri çalıştırır.
 - Her testin sonucunu (PASS/FAIL) ve PDF raporunu terminalde özetler.
 - En sonda genel bir özet tablo ve toplam başarı oranı verir.
-- Her testin requirement'ını docs/09_test_files_and_paths.txt dosyasından çeker ve PDF raporuna ekler.
+- Her testin requirement'ını docs/09_test_files_and_paths.md dosyasından (fallback: .txt) çeker ve PDF raporuna ekler.
 - CI/CD (Jenkins) entegrasyonuna uygundur.
 """
 import subprocess
@@ -40,17 +40,22 @@ TESTS = [
     }
 ]
 
-DOCS_PATH = os.path.join("docs", "09_test_files_and_paths.txt")
+DOCS_CANDIDATES = [
+    os.path.join("docs", "09_test_files_and_paths.md"),
+    os.path.join("docs", "09_test_files_and_paths.txt"),
+]
 
 # Requirement'ları docs dosyasından çek
 requirements = {}
-if os.path.exists(DOCS_PATH):
-    with open(DOCS_PATH, encoding="utf-8") as f:
-        content = f.read()
-    for key in ["license_llm", "webbot", "memory", "integration"]:
-        m = re.search(rf"## {key}\n.*?Requirement: (.*?)\n", content, re.DOTALL)
-        if m:
-            requirements[key] = m.group(1).strip()
+for DOCS_PATH in DOCS_CANDIDATES:
+    if os.path.exists(DOCS_PATH):
+        with open(DOCS_PATH, encoding="utf-8") as f:
+            content = f.read()
+        for key in ["license_llm", "webbot", "memory", "integration"]:
+            m = re.search(rf"## {key}\n.*?Requirement: (.*?)\n", content, re.DOTALL)
+            if m:
+                requirements[key] = m.group(1).strip()
+        break
 
 # Testleri sırayla çalıştır
 results = []

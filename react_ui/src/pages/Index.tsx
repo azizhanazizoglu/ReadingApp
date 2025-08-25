@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { useAutomationHandlers } from "@/hooks/useAutomationHandlers";
 import { SearchBar } from "@/components/SearchBar";
 import { MainLayout } from "@/components/MainLayout";
+// Developer panel artık Header içinde toggle ile gösteriliyor
 
 // Varsayılan backend adresi (gerekirse .env ile değiştirilebilir)
 const BACKEND_URL = "http://localhost:5001";
@@ -40,6 +41,7 @@ function useDarkMode() {
 
 const Index = () => {
   const [address, setAddress] = useState("");
+  const [developerMode, setDeveloperMode] = useState(false);
   const darkMode = useDarkMode();
   const { 
     iframeUrl, 
@@ -82,27 +84,72 @@ const Index = () => {
     BACKEND_URL,
   });
 
+  // Developer buton handlerları
+  const handleHome = () => {
+    setAddress("https://preview--screen-to-data.lovable.app/traffic-insurance");
+  };
+  const handleTestSt1 = () => handleAutomation();
+  const handleTestSt2 = async () => {
+    try {
+      const r = await fetch(`${BACKEND_URL}/api/test-state-2`, { method: "POST" });
+      if (r.ok) {
+        const data = await r.json();
+        if (typeof window !== "undefined") {
+          if (!(window as any).__DEV_LOGS) (window as any).__DEV_LOGS = [];
+          (window as any).__DEV_LOGS.push({
+            time: new Date().toISOString(),
+            component: "Index",
+            state: "event",
+            code: "IDX-TS2-200",
+            message: `Mapping kaydedildi: ${data.path}`,
+          });
+        }
+      } else {
+        const err = await r.json().catch(() => ({} as any));
+        throw new Error(err.error || "Test State 2 failed");
+      }
+    } catch (e) {
+      if (typeof window !== "undefined") {
+        if (!(window as any).__DEV_LOGS) (window as any).__DEV_LOGS = [];
+        (window as any).__DEV_LOGS.push({
+          time: new Date().toISOString(),
+          component: "Index",
+          state: "error",
+          code: "IDX-TS2-500",
+          message: String(e),
+        });
+      }
+    }
+  };
+
   return (
-    <MainLayout
-      appName={APP_NAME}
-      darkMode={darkMode}
-      fontStack={fontStack}
-      address={address}
-      setAddress={setAddress}
-      handleGo={handleGo}
-      loading={loading}
-      automation={automation}
-      handleAutomation={handleAutomation}
-      iframeUrl={iframeUrl}
-      uploading={uploading}
-      handleUploadClick={handleUploadClick}
-      fileInputRef={fileInputRef}
-      handleFileChange={handleFileChange}
-      result={result}
-      handleIframeLoad={handleIframeLoad}
-      commandLog={commandLog}
-      status={status}
-    />
+    <>
+      <MainLayout
+        appName={APP_NAME}
+        darkMode={darkMode}
+        fontStack={fontStack}
+        address={address}
+        setAddress={setAddress}
+        handleGo={handleGo}
+        loading={loading}
+        automation={automation}
+        handleAutomation={handleAutomation}
+        iframeUrl={iframeUrl}
+        uploading={uploading}
+        handleUploadClick={handleUploadClick}
+        fileInputRef={fileInputRef}
+        handleFileChange={handleFileChange}
+        result={result}
+        handleIframeLoad={handleIframeLoad}
+        commandLog={commandLog}
+        status={status}
+  developerMode={developerMode}
+  onToggleDeveloperMode={() => setDeveloperMode((v) => !v)}
+  onDevHome={handleHome}
+  onDevTestSt1={handleTestSt1}
+  onDevTestSt2={handleTestSt2}
+      />
+    </>
   );
 };
 

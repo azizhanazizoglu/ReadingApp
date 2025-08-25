@@ -163,3 +163,13 @@ Index.tsx
 - Kısa açıklama ve örnek kullanım ekleyin.
 
 ---
+
+## UI Güncellemeleri (Header & Footer)
+
+- Header: İnce dikey ayraçlar kaldırıldı; Dev butonları (Home, Ts1, Ts2) ile hızlı test yapılabilir.
+- Footer: Yüksekliği sabit 60px; metin tek satır ve kısaltılmış. Footer’da gösterilen durum tüm loglar için tek tip Türkçe formattadır: `[BİLGİ|UYARI|HATA|DEBUG] KOD: kısa_metin (klasör/dosya)`. Tam metin için hover ile `title` görünür.
+
+## Log Paneli
+
+- Sağdan açılan panel hem frontend (window.__DEV_LOGS) hem backend (structured/legacy) loglarını listeler.
+- Backend son durumundan türetilen özet footer’da compact biçimde gösterilir; panelde tam içerik görünür.

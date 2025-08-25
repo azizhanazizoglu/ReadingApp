@@ -2,8 +2,9 @@ import React, { RefObject } from "react";
 import { AllianzLogo } from "@/components/AllianzLogo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Zap, UploadCloud } from "lucide-react";
+import { ArrowRight, Zap, UploadCloud, Home, Code2 } from "lucide-react";
 import { SearchBar } from "@/components/SearchBar";
+import { DevModeToggle } from "@/components/DevModeToggle";
 
 interface HeaderProps {
   appName: string;
@@ -20,6 +21,11 @@ interface HeaderProps {
   handleUploadClick: () => void;
   fileInputRef: RefObject<HTMLInputElement>;
   handleFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  developerMode?: boolean;
+  onToggleDeveloperMode?: () => void;
+  onDevHome?: () => void;
+  onDevTestSt1?: () => void;
+  onDevTestSt2?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -37,6 +43,11 @@ export const Header: React.FC<HeaderProps> = ({
   handleUploadClick,
   fileInputRef,
   handleFileChange,
+  developerMode = false,
+  onToggleDeveloperMode,
+  onDevHome,
+  onDevTestSt1,
+  onDevTestSt2,
 }) => {
   // Developer log helper
   const devLog = (code: string, message: string) => {
@@ -57,7 +68,7 @@ export const Header: React.FC<HeaderProps> = ({
   const onUpload = () => { devLog('HD-1003', 'Upload butonuna tıklandı'); handleUploadClick(); };
   return (
   <header
-    className="w-full flex items-center justify-between px-10 py-4 bg-white/80 dark:bg-[#223A5E]/90 shadow-md rounded-b-3xl transition-colors border-b border-[#e6f0fa] dark:border-[#335C81]"
+    className={"w-full flex items-center justify-between px-10 py-4 bg-white/80 dark:bg-[#223A5E]/90 shadow-md rounded-b-3xl transition-colors border-b border-[#e6f0fa] dark:border-[#335C81]"}
     style={{
       fontFamily: fontStack,
       height: 80,
@@ -73,7 +84,77 @@ export const Header: React.FC<HeaderProps> = ({
       </span>
     </div>
     {/* Search Bar + Buttons */}
-    <div className="flex items-center gap-2 flex-1 justify-center">
+  <div className="flex items-center gap-3 flex-1 justify-center">
+      {/* Developer butonları - search bar solunda */}
+    {developerMode && (
+  <div className="flex items-center gap-2 mr-3 pr-0">
+          <Button
+            className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] active:scale-95 text-[#0057A0] dark:bg-[#335C81] dark:hover:bg-[#223A5E] dark:text-[#E6F0FA] shadow"
+            style={{ fontFamily: fontStack, minWidth: 40, minHeight: 40 }}
+            onClick={() => {
+              // Ana sayfa: search bar'a adres yaz
+              setAddress("https://preview--screen-to-data.lovable.app/traffic-insurance");
+            }}
+            aria-label="Ana Sayfa (Dev)"
+          >
+            <Home size={20} />
+          </Button>
+          <Button
+            className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] active:scale-95 text-[#0057A0] shadow"
+            style={{ fontFamily: fontStack, minWidth: 52, minHeight: 40, fontWeight: 700 }}
+            onClick={async () => {
+              if (onDevTestSt1) onDevTestSt1();
+              try {
+                const r = await fetch('http://localhost:5001/api/start-automation', { method: 'POST' });
+                if (!r.ok) throw new Error('Start automation failed');
+              } catch {}
+            }}
+            aria-label="Test State 1"
+          >
+            Ts1
+          </Button>
+          <Button
+            className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] active:scale-95 text-[#0057A0] shadow"
+            style={{ fontFamily: fontStack, minWidth: 52, minHeight: 40, fontWeight: 700 }}
+            onClick={async () => {
+              if (onDevTestSt2) onDevTestSt2();
+              try {
+                const r = await fetch('http://localhost:5001/api/test-state-2', { method: 'POST' });
+                if (r.ok) {
+                  const data = await r.json();
+                  if (typeof window !== 'undefined') {
+                    if (!window.__DEV_LOGS) window.__DEV_LOGS = [];
+                    window.__DEV_LOGS.push({
+                      time: new Date().toISOString(),
+                      component: 'Header',
+                      state: 'event',
+                      code: 'HD-TS2-200',
+                      message: `Mapping kaydedildi: ${data.path}`
+                    });
+                  }
+                } else {
+                  const err = await r.json().catch(() => ({}));
+                  throw new Error(err.error || 'Test State 2 failed');
+                }
+              } catch (e) {
+                if (typeof window !== 'undefined') {
+                  if (!window.__DEV_LOGS) window.__DEV_LOGS = [];
+                  window.__DEV_LOGS.push({
+                    time: new Date().toISOString(),
+                    component: 'Header',
+                    state: 'error',
+                    code: 'HD-TS2-500',
+                    message: String(e)
+                  });
+                }
+              }
+            }}
+            aria-label="Test State 2"
+          >
+            Ts2
+          </Button>
+        </div>
+      )}
       <SearchBar
         address={address}
         setAddress={setAddress}
@@ -83,8 +164,9 @@ export const Header: React.FC<HeaderProps> = ({
         darkMode={darkMode}
         searchFocused={false}
         setSearchFocused={() => {}}
+        compact={developerMode}
       />
-      <Button
+  <Button
         className="px-3 py-1 rounded-full bg-[#0057A0] hover:bg-[#003366] active:scale-95 text-white shadow transition-all flex items-center justify-center"
         style={{
           fontFamily: fontStack,
@@ -99,7 +181,8 @@ export const Header: React.FC<HeaderProps> = ({
       >
         <ArrowRight size={22} strokeWidth={2.2} className="transition-transform duration-150 group-active:scale-90" />
       </Button>
-      <Button
+  {/** vertical divider removed for cleaner look **/}
+  <Button
         className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] active:scale-95 text-[#0057A0] dark:bg-[#335C81] dark:hover:bg-[#223A5E] dark:text-[#E6F0FA] shadow transition-all flex items-center justify-center"
         style={{
           fontFamily: fontStack,
@@ -114,7 +197,7 @@ export const Header: React.FC<HeaderProps> = ({
       >
         <Zap size={22} strokeWidth={2.2} className={automation ? "animate-pulse" : ""} />
       </Button>
-      <Button
+  <Button
         className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] active:scale-95 text-[#0057A0] dark:bg-[#335C81] dark:hover:bg-[#223A5E] dark:text-[#E6F0FA] shadow transition-all flex items-center justify-center"
         style={{
           fontFamily: fontStack,
@@ -139,7 +222,8 @@ export const Header: React.FC<HeaderProps> = ({
       </Button>
     </div>
     {/* Theme Toggle */}
-    <div className="flex items-center min-w-[48px] justify-end">
+  <div className="flex items-center min-w-[48px] justify-end gap-2 pl-3">
+      <DevModeToggle onClick={() => onToggleDeveloperMode && onToggleDeveloperMode()} active={developerMode} />
       <ThemeToggle />
     </div>
   </header>

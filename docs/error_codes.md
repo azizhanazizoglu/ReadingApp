@@ -42,3 +42,43 @@ Her bir component ve handler için hata kodları, açıklamaları ve ilgili kayn
 | UAH-9503   | handleFileChange: JPEG yüklenirken hata | useAutomationHandlers.handleFileChange | [handleFileChange.ts](../react_ui/src/hooks/useAutomationHandlers/handleFileChange.ts) |
 
 > Diğer component ve handler'lar için de aynı şekilde kodlar eklenecek.
+
+## Backend Log Kodları
+
+| Kod     | Açıklama                                             | Component/Function        | Kaynak Dosya                                 |
+|---------|------------------------------------------------------|---------------------------|----------------------------------------------|
+| BE-1001 | /api/upload isteği alındı                            | file_upload.handle_file_upload | [file_upload.py](../backend/file_upload.py) |
+| BE-1002 | Yüklenen dosya adı                                   | file_upload.handle_file_upload | [file_upload.py](../backend/file_upload.py) |
+| BE-1003 | Dosya jpgDownload klasörüne kaydedildi               | file_upload.handle_file_upload | [file_upload.py](../backend/file_upload.py) |
+| BE-9001 | Upload sırasında beklenmeyen hata                    | file_upload.handle_file_upload | [file_upload.py](../backend/file_upload.py) |
+| BE-2001 | /api/start-automation isteği alındı                  | app.start_automation       | [app.py](../backend/app.py)                 |
+| BE-2002 | stateflow_agent thread başlatıldı                    | app.start_automation       | [app.py](../backend/app.py)                 |
+| BE-9002 | Otomasyon başlatılırken hata                         | app.start_automation       | [app.py](../backend/app.py)                 |
+| BE-2101 | /api/state isteği alındı                             | app.get_state              | [app.py](../backend/app.py)                 |
+| BE-3001 | /api/test-state-2 çağrıldı (Webbot -> Mapping)       | app.test_state_2           | [app.py](../backend/app.py)                 |
+| BE-3002 | Mapping kaydedildi                                   | app.test_state_2           | [app.py](../backend/app.py)                 |
+| BE-9301 | /api/test-state-2 sırasında hata                     | app.test_state_2           | [app.py](../backend/app.py)                 |
+| BE-4001 | stateflow_agent thread started                       | stateflow_agent            | [stateflow_agent.py](../backend/stateflow_agent.py) |
+| BE-4002 | Scheduler'a işler eklendi                            | stateflow_agent            | [stateflow_agent.py](../backend/stateflow_agent.py) |
+| BE-4003 | Scheduler tüm işleri çalıştırıyor                    | stateflow_agent            | [stateflow_agent.py](../backend/stateflow_agent.py) |
+| BE-4004 | stateflow_agent tüm işleri tamamladı                 | stateflow_agent            | [stateflow_agent.py](../backend/stateflow_agent.py) |
+| BE-4101 | LLM extract job başladı (JPEG aranıyor)              | stateflow_agent            | [stateflow_agent.py](../backend/stateflow_agent.py) |
+| BE-4102 | Son JPEG bulundu                                     | stateflow_agent            | [stateflow_agent.py](../backend/stateflow_agent.py) |
+| BE-4103 | LLM extractor çağrılıyor                             | stateflow_agent            | [stateflow_agent.py](../backend/stateflow_agent.py) |
+| BE-4104 | LLM yanıtı alındı (debug)                            | stateflow_agent            | [stateflow_agent.py](../backend/stateflow_agent.py) |
+| BE-4105 | LLM JSON çıktısı hazır                               | stateflow_agent            | [stateflow_agent.py](../backend/stateflow_agent.py) |
+| BE-4106 | JSON dosyası jpg2json klasörüne kaydedildi           | stateflow_agent            | [stateflow_agent.py](../backend/stateflow_agent.py) |
+| BE-4201 | Webbot HTML içerik alındı                            | stateflow_agent            | [stateflow_agent.py](../backend/stateflow_agent.py) |
+| BE-4301 | Mapping JSON json2mapping klasörüne kaydedildi       | stateflow_agent            | [stateflow_agent.py](../backend/stateflow_agent.py) |
+| BE-9101 | JSON kaydetme başarısız; raw txt olarak kaydedildi   | stateflow_agent            | [stateflow_agent.py](../backend/stateflow_agent.py) |
+| BE-9102 | LLM extraction veya dosya kaydı sırasında hata       | stateflow_agent            | [stateflow_agent.py](../backend/stateflow_agent.py) |
+| BE-9103 | Mapping JSON kaydedilemedi                           | stateflow_agent            | [stateflow_agent.py](../backend/stateflow_agent.py) |
+| BE-9104 | stateflow_agent thread çöktü                         | stateflow_agent            | [stateflow_agent.py](../backend/stateflow_agent.py) |
+| BE-9105 | stateflow_agent exception traceback                  | stateflow_agent            | [stateflow_agent.py](../backend/stateflow_agent.py) |
+
+## Frontend Ek Kodlar
+
+| Kod        | Açıklama                                | Component            |
+|------------|-----------------------------------------|----------------------|
+| IDX-TS2-200| Index: Ts2 başarılı, mapping kaydedildi | Index.tsx            |
+| IDX-TS2-500| Index: Ts2 hata                         | Index.tsx            |

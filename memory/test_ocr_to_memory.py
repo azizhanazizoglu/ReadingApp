@@ -34,15 +34,21 @@ except ImportError:
 import traceback
 
 def get_requirement():
-    """docs/09_test_files_and_paths.txt içinden requirement'ı çek"""
-    docs_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'docs', '09_test_files_and_paths.txt'))
-    if os.path.exists(docs_path):
-        with open(docs_path, encoding="utf-8") as f:
-            content = f.read()
-        import re
-        m = re.search(r"## memory.*?Requirement: (.*?)\n", content, re.DOTALL)
-        if m:
-            return m.group(1).strip()
+    """docs/09_test_files_and_paths.md içinden requirement'ı çek (fallback: .txt)"""
+    base_docs = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'docs'))
+    candidates = [
+        os.path.join(base_docs, '09_test_files_and_paths.md'),
+        os.path.join(base_docs, '09_test_files_and_paths.txt'),
+    ]
+    for docs_path in candidates:
+        if os.path.exists(docs_path):
+            with open(docs_path, encoding="utf-8") as f:
+                content = f.read()
+            import re
+            m = re.search(r"## memory.*?Requirement: (.*?)\n", content, re.DOTALL)
+            if m:
+                return m.group(1).strip()
+            break
     return "Store and retrieve OCR/LLM results, check data integrity and correct storage."
 
 def test_ocr_result_to_memory(tmp_path):

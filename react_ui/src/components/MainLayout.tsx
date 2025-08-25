@@ -24,6 +24,11 @@ interface MainLayoutProps {
   handleIframeLoad: () => void;
   commandLog: any[];
   status: string;
+  developerMode?: boolean;
+  onToggleDeveloperMode?: () => void;
+  onDevHome?: () => void;
+  onDevTestSt1?: () => void;
+  onDevTestSt2?: () => void;
 }
 
 export const MainLayout: React.FC<MainLayoutProps> = ({
@@ -45,9 +50,14 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   handleIframeLoad,
   commandLog,
   status,
+  developerMode = false,
+  onToggleDeveloperMode,
+  onDevHome,
+  onDevTestSt1,
+  onDevTestSt2,
 }) => {
   const [logPanelOpen, setLogPanelOpen] = useState(false);
-  const [backendLogs, setBackendLogs] = useState<string[]>([]);
+  const [backendLogs, setBackendLogs] = useState<any[]>([]);
   const [backendStatus, setBackendStatus] = useState<string>("");
 
   // Backend loglarını çek
@@ -56,13 +66,41 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
       try {
         const res = await fetch("http://localhost:5001/api/logs");
         const data = await res.json();
-        setBackendLogs(data.logs || []);
-        // En güncel backend info'yu status olarak ayarla
-        if (data.logs && data.logs.length > 0) {
-          setBackendStatus(data.logs[data.logs.length - 1]);
-        } else {
-          setBackendStatus("");
-        }
+        const logs = data.logs || [];
+        setBackendLogs(logs);
+        // En güncel backend info'yu status olarak ayarla (tek tip, Türkçe, kısaltılmış)
+        if (logs.length > 0) {
+          const last = logs[logs.length - 1];
+          try {
+            const levelMap: Record<string, string> = { 'INFO': 'BİLGİ', 'WARN': 'UYARI', 'WARNING': 'UYARI', 'ERROR': 'HATA', 'DEBUG': 'DEBUG' };
+            if (typeof last === 'string') {
+              const msg = last.toString();
+              const trLevel = 'BİLGİ';
+              const code = 'BE-LEGACY';
+              const shortMsg = msg.length > 90 ? (msg.slice(0, 90) + '…') : msg;
+              setBackendStatus(`[${trLevel}] ${code}: ${shortMsg}`);
+            } else {
+              const level = (last.level || 'INFO').toString().toUpperCase();
+              const trLevel = levelMap[level] || 'BİLGİ';
+              const code = last.code || 'BE-XXXX';
+              const rawMsg = (last.message || '').toString();
+              const extra = last.extra || {};
+              let suffix = '';
+              if (extra && extra.path) {
+                const p = extra.path.toString();
+                const parts = p.split(/\\|\//);
+                const file = parts[parts.length - 1] || '';
+                const folder = parts[parts.length - 2] || '';
+                suffix = file ? ` (${folder}/${file})` : '';
+              }
+              const msg = rawMsg + suffix;
+              const shortMsg = msg.length > 90 ? (msg.slice(0, 90) + '…') : msg;
+              setBackendStatus(`[${trLevel}] ${code}: ${shortMsg}`);
+            }
+          } catch {
+            setBackendStatus('');
+          }
+        } else setBackendStatus("");
       } catch (e) {
         setBackendLogs(["[ERROR] Backend logları alınamadı."]);
         setBackendStatus("[ERROR] Backend logları alınamadı.");
@@ -74,7 +112,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   }, []);
   return (
     <div
-      className="h-screen w-screen flex flex-col items-center justify-between bg-gradient-to-br from-[#f8fafc] to-[#e6f0fa] dark:from-[#1a2233] dark:to-[#223a5e] transition-colors overflow-hidden"
+      className={"h-screen w-screen flex flex-col items-center justify-between bg-gradient-to-br from-[#f8fafc] to-[#e6f0fa] dark:from-[#1a2233] dark:to-[#223a5e] transition-colors overflow-hidden"}
       style={{
         fontFamily: fontStack,
         minHeight: 0,
@@ -118,12 +156,28 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                 </li>
               ))}
             {/* Backend logları */}
-            {backendLogs.slice(-30).reverse().map((log, i) => (
-              <li key={"backend-"+i} className="flex flex-col gap-1 p-2 rounded-lg bg-[#FFF7E6] dark:bg-[#665C3A] border border-[#FFD580] dark:border-[#665C3A]">
-                <span className="text-xs text-[#B38B00] dark:text-[#FFD580]">{`BACKEND | #${backendLogs.length- i}`} | <b>BACKEND</b> | <b>BL-{String(1000 + backendLogs.length-i)}</b></span>
-                <span className="text-sm font-medium text-[#B38B00] dark:text-[#FFD580]">{log}</span>
-              </li>
-            ))}
+            {backendLogs.slice(-30).reverse().map((log, i) => {
+              const key = `backend-${i}`;
+              if (typeof log === 'string') {
+                return (
+                  <li key={key} className="flex flex-col gap-1 p-2 rounded-lg bg-[#FFF7E6] dark:bg-[#665C3A] border border-[#FFD580] dark:border-[#665C3A]">
+                    <span className="text-xs text-[#B38B00] dark:text-[#FFD580]">BACKEND | <b>BE-LEGACY</b></span>
+                    <span className="text-sm font-medium text-[#B38B00] dark:text-[#FFD580]">{log}</span>
+                  </li>
+                );
+              }
+              const t = (log.time || '').toString();
+              const hh = t.includes('T') ? t.split('T')[1].slice(0,8) : t.slice(11,19);
+              return (
+                <li key={key} className="flex flex-col gap-1 p-2 rounded-lg bg-[#FFF7E6] dark:bg-[#665C3A] border border-[#FFD580] dark:border-[#665C3A]">
+                  <span className="text-xs text-[#B38B00] dark:text-[#FFD580]">{hh} | <b>{log.component}</b> | <b>{log.code}</b> | <b>{log.level}</b></span>
+                  <span className="text-sm font-medium text-[#B38B00] dark:text-[#FFD580]">{log.message}</span>
+                  {log.extra && (
+                    <span className="text-[11px] text-[#B38B00]/80 dark:text-[#FFD580]/80 break-all">{JSON.stringify(log.extra)}</span>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
         <div className="px-6 py-3 border-t border-[#B3C7E6] dark:border-[#335C81] bg-[#F8FAFC] dark:bg-[#223A5E] text-xs text-[#7B8FA1] dark:text-[#B3C7E6]">
@@ -131,7 +185,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         </div>
       </div>
 
-      <Header
+  <Header
         appName={appName}
         darkMode={darkMode}
         fontStack={fontStack}
@@ -146,8 +200,13 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         handleUploadClick={handleUploadClick}
         fileInputRef={fileInputRef}
         handleFileChange={handleFileChange}
+  developerMode={developerMode}
+  onToggleDeveloperMode={onToggleDeveloperMode}
+  onDevHome={onDevHome}
+  onDevTestSt1={onDevTestSt1}
+  onDevTestSt2={onDevTestSt2}
       />
-      <main
+  <main
         className="flex flex-col items-center w-full flex-1 px-8"
         style={{
           maxWidth: 1400,
