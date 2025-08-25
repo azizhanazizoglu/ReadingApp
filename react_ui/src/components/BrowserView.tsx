@@ -102,13 +102,23 @@ export const BrowserView: React.FC<BrowserViewProps & { style?: React.CSSPropert
           [ Web sitesi burada görünecek ]
         </span>
       )}
-  {/* Loading/uploading overlay removed as per user request */}
+      {(loading || uploading) && (
+        <div className="absolute inset-0 flex items-center justify-center bg-white/70 dark:bg-[#223A5E]/80 z-10 rounded-3xl">
+          <span className="text-[#0057A0] dark:text-[#E6F0FA] text-lg font-semibold animate-pulse">
+            {loading ? "Yükleniyor..." : "Yükleniyor..."}
+          </span>
+        </div>
+      )}
       {timeoutActive && (
         <div className="timeout-overlay" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.7)', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <span style={{ color: 'red', fontWeight: 'bold', fontSize: 20 }}>Yükleme çok uzun sürdü! (Timeout)</span>
         </div>
       )}
-  {/* Info/result box removed as per user request. Browser always stays large. */}
+      {result && (
+        <div className="w-full max-w-6xl mb-4 p-4 rounded-xl bg-white/80 dark:bg-[#335C81]/80 shadow text-[#003366] dark:text-[#E6F0FA] text-center text-base break-words">
+          {result}
+        </div>
+      )}
     </div>
   );
 };
