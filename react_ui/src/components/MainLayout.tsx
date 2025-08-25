@@ -48,6 +48,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
 }) => {
   const [logPanelOpen, setLogPanelOpen] = useState(false);
   const [backendLogs, setBackendLogs] = useState<string[]>([]);
+  const [backendStatus, setBackendStatus] = useState<string>("");
 
   // Backend loglarını çek
   useEffect(() => {
@@ -56,8 +57,15 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         const res = await fetch("http://localhost:5001/api/logs");
         const data = await res.json();
         setBackendLogs(data.logs || []);
+        // En güncel backend info'yu status olarak ayarla
+        if (data.logs && data.logs.length > 0) {
+          setBackendStatus(data.logs[data.logs.length - 1]);
+        } else {
+          setBackendStatus("");
+        }
       } catch (e) {
         setBackendLogs(["[ERROR] Backend logları alınamadı."]);
+        setBackendStatus("[ERROR] Backend logları alınamadı.");
       }
     };
     fetchLogs();
@@ -168,7 +176,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           darkMode={darkMode}
         />
       </main>
-      <Footer fontStack={fontStack} status={status} darkMode={darkMode} />
+  <Footer fontStack={fontStack} status={backendStatus} darkMode={darkMode} />
   {/* BackendLogPanel kaldırıldı, loglar birleşik panelde gösteriliyor */}
   </div>
   );
