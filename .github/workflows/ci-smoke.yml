@@ -1,0 +1,102 @@
+name: CI - Smoke
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+
+      - name: Run smoke tests (prints mapping JSON)
+        run: |
+          python -m pytest tests/smokeTests -s -vv
+
+      - name: Build mapping summary
+        id: summary
+        run: |
+          python - << 'PY'
+          import os, json, glob
+          base = 'memory/TmpData/json2mapping'
+          paths = sorted(glob.glob(os.path.join(base, '*.json')), key=os.path.getmtime)
+          found = 'false'
+          if paths:
+            latest = paths[-1]
+            with open(latest, encoding='utf-8') as f:
+              data = json.load(f)
+            fm = data.get('field_mapping', {})
+            actions = data.get('actions', [])
+            fields = sorted(list(fm.keys()))
+            os.makedirs('ci_artifacts', exist_ok=True)
+            with open('ci_artifacts/mapping_summary.json','w',encoding='utf-8') as f:
+              json.dump({
+                'file': latest,
+                'fields': fields,
+                'actions': actions,
+                'preview': data
+              }, f, ensure_ascii=False, indent=2)
+            with open('ci_artifacts/summary.md','w',encoding='utf-8') as f:
+              f.write('## Smoke Mapping Output\n')
+              f.write(f'- File: {latest}\n')
+              f.write(f'- Fields: {", ".join(fields)}\n')
+              f.write(f'- Actions: {json.dumps(actions, ensure_ascii=False)}\n\n')
+              f.write('```json\n')
+              f.write(json.dumps(data, ensure_ascii=False, indent=2))
+              f.write('\n```\n')
+            found = 'true'
+            mapping_file = latest
+          else:
+            mapping_file = ''
+          # Set outputs
+          gh_out = os.environ.get('GITHUB_OUTPUT')
+          if gh_out:
+            with open(gh_out, 'a') as out:
+              out.write(f"found={found}\n")
+              out.write(f"mapping_file={mapping_file}\n")
+          PY
+
+      - name: Add job summary
+        if: steps.summary.outputs.found == 'true'
+        run: |
+          cat ci_artifacts/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment summary on PR
+        if: github.event_name == 'pull_request' && steps.summary.outputs.found == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('ci_artifacts/summary.md', 'utf8');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
+
+      - name: Upload latest mapping JSON (if any)
+        uses: actions/upload-artifact@v4
+        with:
+          name: json2mapping-${{ github.ref_name }}-${{ github.sha }}
+          path: |
+            memory/TmpData/json2mapping/*.json
+            ci_artifacts/*.md
+            ci_artifacts/*.json
+          if-no-files-found: ignore

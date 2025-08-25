@@ -14,6 +14,8 @@ Bu README ana giriş noktasıdır. Tüm ayrıntılı dokümantasyon profesyonel 
 - [Loglama, Hata Kodları ve Geçici Klasörler](#logging-error-tmp)
 - [Güvenlik ve Emniyet Odaklı Gelişim (V-Model)](#safety-vmodel)
 - [Sorun Giderme (Troubleshooting)](#troubleshooting)
+- [Hızlı Link Rehberi (Deep Links)](#deep-links)
+- [Git Flow ve PR Kılavuzu](#git-flow-pr)
 
 ---
 
@@ -285,6 +287,76 @@ Full JSON:
 	"actions": ["click#DEVAM"]
 }
 ```
+
+CI
+- GitHub Actions, main dalına push/PR geldiğinde smoke testleri çalıştırır ve son mapping JSON’u bir artifact olarak yükler.
+- Workflow: `.github/workflows/ci-smoke.yml`
+
+Jenkins tecrübesi olanlar için GitHub Actions kullanım ipuçları
+- Nerede göreceğim?
+	- Repo sayfasında “Actions” sekmesinden tüm koşumları görebilirsin.
+	- PR açarsan, PR üzerinde workflow sonucu ve eklenen otomatik yorum (mapping özeti) görünür.
+- Nasıl tetiklerim?
+	- Push veya Pull Request ile otomatik tetiklenir.
+	- Manuel tetikleme için “Actions” → “CI - Smoke” → “Run workflow”.
+- Sonuçları nasıl incelerim?
+	- Job loglarında pytest çıktıları ve “Smoke Mapping Output” özeti var.
+	- Artifacts bölümünden `json2mapping-<branch>-<sha>` paketini indir; içinde:
+
+<a id="deep-links"></a>
+## Hızlı Link Rehberi (Deep Links)
+- Backend (Flask)
+	- Uygulama: [`backend/app.py`](backend/app.py) — Routes, TS1/TS2 uçları, loglar
+	- Stateflow ajanı: [`backend/stateflow_agent.py`](backend/stateflow_agent.py) — TS1 (run_ts1_extract), tam akış (stateflow_agent)
+	- Bellek/depolama: [`backend/memory_store.py`](backend/memory_store.py), [`backend/file_upload.py`](backend/file_upload.py), [`backend/logging_utils.py`](backend/logging_utils.py)
+	- Eski/ek yapılar: [`backend/stateflow.py`](backend/stateflow.py), [`backend/routes.py`](backend/routes.py)
+- LLM bileşenleri
+	- Ruhsat çıkarımı: [`license_llm/license_llm_extractor.py`](license_llm/license_llm_extractor.py)
+	- HTML mapping: [`license_llm/pageread_llm.py`](license_llm/pageread_llm.py)
+- WebBot
+	- HTML indirme: [`webbot/test_webbot_html_mapping.py`](webbot/test_webbot_html_mapping.py) (readWebPage)
+- React UI
+	- Giriş sayfası: [`react_ui/index.html`](react_ui/index.html)
+	- Yapılandırma: [`react_ui/package.json`](react_ui/package.json), [`react_ui/README.md`](react_ui/README.md)
+- Testler
+	- Smoke: [`tests/smokeTests/test_smoke_backend.py`](tests/smokeTests/test_smoke_backend.py) — TS1/TS2 doğrulamaları ve JSON yazdırma
+	- Smoke terminal özeti: [`tests/smokeTests/conftest.py`](tests/smokeTests/conftest.py)
+	- Entegrasyon: [`tests/test_integration_end_to_end.py`](tests/test_integration_end_to_end.py)
+- Komut/Scripts
+	- Son mapping’i yazdır: [`scripts/show_latest_mapping.py`](scripts/show_latest_mapping.py)
+- CI
+	- GitHub Actions: [`.github/workflows/ci-smoke.yml`](.github/workflows/ci-smoke.yml)
+
+	<a id="git-flow-pr"></a>
+	## Git Flow ve PR Kılavuzu
+	- Branch adlandırma
+		- feature/<kısa-konu> (örn. feature/ts2-mapping-robust)
+		- fix/<kısa-konu> (örn. fix/footer-truncation)
+		- chore/<kısa-konu> (örn. chore/ci-smoke)
+	- Commit mesajı (öneri)
+		- tür(scope): kısa özet — örn. feat(backend): TS2 mapping JSON parse’ını güçlendir
+		- Gerekirse alt satırlarda detay; “Refs: #<issue>” eklenebilir.
+	- PR açma adımları
+		1) Lokal doğrulama: `python -m pytest tests/smokeTests -s -vv` (mapping JSON’da tckimlik/dogum_tarihi/ad_soyad/plaka_no ve actions: click#DEVAM beklenir)
+		2) README ve doküman güncellemeleri (API/test/CI davranışı değiştiyse)
+		3) PR başlığı: kısa ve eylem odaklı; açıklama: değişiklik özeti + etkilenen modüller
+		4) En az 1 reviewer iste (tercihen backend+tests odaklı kişi)
+		5) CI sonuçlarını kontrol et (Actions → CI - Smoke). PR’a otomatik mapping özeti yorumu düşer.
+	- Merge stratejisi
+		- Squash and merge önerilir (temiz tarihçe). Branch silinebilir.
+	- Sürümleme / Tag (opsiyonel)
+		- Anlamlı bir kilometretaşı sonrası `vX.Y.Z` etiketi atılabilir.
+		- Üretilen mapping JSON’lar
+		- `mapping_summary.json` (fields/actions/preview)
+		- `summary.md` (PR yorumuna da eklenir)
+- Önerilen komutlar (lokalde):
+	- Tüm smoke detaylarını görmek için: `python -m pytest tests/smokeTests -s -vv`
+- Jenkins gibi mi çalıştırırım?
+	- Eşdeğer “pipeline” yapısı: job = workflow, stage = step (Actions’ta steps)
+	- YAML’da ek stage/step ekleyerek bağımlılık kurulumunu, testleri, artifact yüklemeyi yönetirsin.
+	- On-prem Jenkins istersen: aynı pytest komutlarını Jenkins pipeline’da çalıştır; artifact arşivlemesi için “Archive the artifacts” ile `memory/TmpData/json2mapping/*.json` ve `ci_artifacts/*` path’lerini ekle.
+	- Secrets (OPENAI_API_KEY vb.) GitHub → Settings → Secrets üzerinden Actions’a tanımlanır; Jenkins’te “Credentials” ile benzer mantık.
+	- Koşum tetikleme: Jenkins’te “Build Now” analog olarak Actions’ta “Run workflow”.
 
 <a id="logging-error-tmp"></a>
 ## Loglama, Hata Kodları ve Geçici Klasörler
