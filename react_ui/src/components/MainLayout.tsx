@@ -29,6 +29,14 @@ interface MainLayoutProps {
   onDevHome?: () => void;
   onDevTestSt1?: () => void;
   onDevTestSt2?: () => void;
+  onDevTestSt3?: () => void;
+  // TS3 debug options
+  ts3Highlight?: boolean;
+  ts3Typing?: boolean;
+  ts3Delay?: number;
+  setTs3Highlight?: (v: boolean) => void;
+  setTs3Typing?: (v: boolean) => void;
+  setTs3Delay?: (v: number) => void;
 }
 
 export const MainLayout: React.FC<MainLayoutProps> = ({
@@ -55,6 +63,13 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   onDevHome,
   onDevTestSt1,
   onDevTestSt2,
+  onDevTestSt3,
+  ts3Highlight = true,
+  ts3Typing = true,
+  ts3Delay = 200,
+  setTs3Highlight,
+  setTs3Typing,
+  setTs3Delay,
 }) => {
   const [logPanelOpen, setLogPanelOpen] = useState(false);
   const [backendLogs, setBackendLogs] = useState<any[]>([]);
@@ -214,6 +229,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   onDevHome={onDevHome}
   onDevTestSt1={onDevTestSt1}
   onDevTestSt2={onDevTestSt2}
+  onDevTestSt3={onDevTestSt3}
       />
   <main
         className="flex flex-col items-center w-full flex-1 px-8"
@@ -244,6 +260,32 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           fontStack={fontStack}
           darkMode={darkMode}
         />
+        {developerMode && (
+          <div className="mt-4 w-full max-w-3xl rounded-lg border border-[#B3C7E6] dark:border-[#335C81] bg-white/80 dark:bg-[#223A5E]/80 p-4">
+            <div className="text-sm font-semibold text-[#0057A0] dark:text-[#E6F0FA] mb-3">TS3 Görsel Debug Ayarları</div>
+            <div className="flex flex-wrap items-center gap-4 text-sm">
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={!!ts3Highlight} onChange={(e) => setTs3Highlight && setTs3Highlight(e.target.checked)} />
+                <span className="text-[#003366] dark:text-[#E6F0FA]">Highlight</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={!!ts3Typing} onChange={(e) => setTs3Typing && setTs3Typing(e.target.checked)} />
+                <span className="text-[#003366] dark:text-[#E6F0FA]">Simulate Typing</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <span className="text-[#003366] dark:text-[#E6F0FA]">Delay (ms)</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={50}
+                  value={ts3Delay}
+                  onChange={(e) => setTs3Delay && setTs3Delay(Math.max(0, Number(e.target.value) || 0))}
+                  className="w-24 rounded border border-[#B3C7E6] dark:border-[#335C81] bg-white/80 dark:bg-[#1a2233] px-2 py-1 text-[#003366] dark:text-[#E6F0FA]"
+                />
+              </label>
+            </div>
+          </div>
+        )}
       </main>
   <Footer fontStack={fontStack} status={backendStatus} darkMode={darkMode} />
   {/* BackendLogPanel kaldırıldı, loglar birleşik panelde gösteriliyor */}

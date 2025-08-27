@@ -16,6 +16,7 @@ All documents are in Markdown. This index replaces old .txt files.
 - 10_qt_browser_user_story.md
 - 11_scheduler_and_state_flow.md
 - 12_llm_agent_integration.md
+- 13_ts3_autofill_and_debugging.md
 - error_codes.md
 - FOLDER_STRUCTURE_AND_NAMING_CONVENTION.md
 - traceability_matrix.md
@@ -24,6 +25,7 @@ Additional:
 - SAFETY_ASSURANCE_AND_TRACEABILITY.md
 
 ## Recent Updates (2025-08-27)
-- TS2 akışı güncellendi: Electron webview DOM → backend → HTML ve meta artefaktları diske kaydediliyor
-- Yeni log kodları eklendi (BE-3001P/A/W/W-FAIL/B/C, BE-3002)
+- TS2 akışı: Electron webview DOM → backend → HTML ve meta artefaktları diske kaydediliyor
+- TS3 eklendi: Mapping + TS1 ile form doldurma, Developer Mode ayar paneli (Highlight, Simulate Typing, Step Delay)
+- IDX-TS3-* logları ve sorun giderme rehberi eklendi
 - Test dosyaları ve artefakt yolları dokümantasyonu güncellendi

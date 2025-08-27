@@ -341,6 +341,13 @@ Jenkins tecrübesi olanlar için GitHub Actions kullanım ipuçları
 		2) README ve doküman güncellemeleri (API/test/CI davranışı değiştiyse)
 		3) PR başlığı: kısa ve eylem odaklı; açıklama: değişiklik özeti + etkilenen modüller
 		4) En az 1 reviewer iste (tercihen backend+tests odaklı kişi)
+
+### Continuous Integration (CI)
+- GitHub Actions workflow: `.github/workflows/ci-smoke.yml`
+- İşler:
+	- `smoke`: hızlı, deterministik smoke testler (LLM/ağ stub’lu). Son mapping özeti Job Summary’de.
+	- `live-llm`: `OPENAI_API_KEY` mevcutsa gerçek LLM ile `tests/liveTests`.
+- Detaylar ve kullanım: `docs/ci_github_actions.md`
 		5) CI sonuçlarını kontrol et (Actions → CI - Smoke). PR’a otomatik mapping özeti yorumu düşer.
 	- Merge stratejisi
 		- Squash and merge önerilir (temiz tarihçe). Branch silinebilir.

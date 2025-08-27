@@ -17,6 +17,10 @@ Artefakt yolları (absolute olarak `PROJECT_ROOT` altına yazılır):
 - `memory/TmpData/webbot2html/page.json` (url, timestamp, length)
 - `memory/TmpData/webbot2html/form_meta.json` (inputs/selects/textareas/buttons sayıları)
 
+TS3 notları:
+- TS3, yeni bir artefakt üretmez; `/api/mapping` ve `/api/state` ile çalışır.
+- Form doldurma, Electron webview içinde yürütülür ve görsel vurgular (Highlight) isteğe bağlıdır.
+
 Koşum notları:
 - TS2 testinde LLM ve ağ çağrıları monkeypatch ile stub edilir; gerçek anahtar gerektirmez.
 - Tüm smoke testleri çalıştırmak için:

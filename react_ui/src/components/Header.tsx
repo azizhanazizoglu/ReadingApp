@@ -26,6 +26,7 @@ interface HeaderProps {
   onDevHome?: () => void;
   onDevTestSt1?: () => void;
   onDevTestSt2?: () => void;
+  onDevTestSt3?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -48,6 +49,7 @@ export const Header: React.FC<HeaderProps> = ({
   onDevHome,
   onDevTestSt1,
   onDevTestSt2,
+  onDevTestSt3,
 }) => {
   // Developer log helper
   const devLog = (code: string, message: string) => {
@@ -165,6 +167,14 @@ export const Header: React.FC<HeaderProps> = ({
             aria-label="Test State 2"
           >
             Ts2
+          </Button>
+          <Button
+            className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] active:scale-95 text-[#0057A0] shadow"
+            style={{ fontFamily: fontStack, minWidth: 52, minHeight: 40, fontWeight: 700 }}
+            onClick={() => { if (onDevTestSt3) onDevTestSt3(); }}
+            aria-label="Test State 3"
+          >
+            Ts3
           </Button>
         </div>
       )}

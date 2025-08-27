@@ -4,6 +4,8 @@ import { AllianzLogo } from "@/components/AllianzLogo";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { useAutomationHandlers } from "@/hooks/useAutomationHandlers";
+import { runTs2 } from "@/services/ts2Service";
+import { runTs3 } from "@/services/ts3Service";
 import { SearchBar } from "@/components/SearchBar";
 import { MainLayout } from "@/components/MainLayout";
 // Developer panel artık Header içinde toggle ile gösteriliyor
@@ -42,6 +44,10 @@ function useDarkMode() {
 const Index = () => {
   const [address, setAddress] = useState("");
   const [developerMode, setDeveloperMode] = useState(false);
+  // TS3 options for debugging UX
+  const [ts3Highlight, setTs3Highlight] = useState(true);
+  const [ts3Typing, setTs3Typing] = useState(true);
+  const [ts3Delay, setTs3Delay] = useState(200);
   const darkMode = useDarkMode();
   const { 
     iframeUrl, 
@@ -90,78 +96,31 @@ const Index = () => {
   };
   const handleTestSt1 = () => handleAutomation();
   const handleTestSt2 = async () => {
-    try {
-      let activeUrl = iframeUrl || address;
-      let html: string | undefined;
-      // Önce webview içinden HTML'i dene (Electron)
-      const webview: any = document.getElementById("app-webview");
-      if (webview && typeof webview.executeJavaScript === 'function') {
-        try {
-          if (typeof window !== "undefined") {
-            (window as any).__DEV_LOGS = (window as any).__DEV_LOGS || [];
-            (window as any).__DEV_LOGS.push({ time: new Date().toISOString(), component: "Index", state: "debug", code: "IDX-TS2-WV-TRY", message: "webview.executeJavaScript ile HTML çekme denemesi" });
-          }
-          html = await webview.executeJavaScript('document.documentElement.outerHTML', true);
-          const loc = await webview.executeJavaScript('document.URL', true);
-          if (typeof window !== "undefined") {
-            (window as any).__DEV_LOGS.push({ time: new Date().toISOString(), component: "Index", state: "debug", code: "IDX-TS2-WV-OK", message: `webview HTML alındı len=${html?.length || 0} url=${loc}` });
-          }
-          if (!activeUrl && typeof loc === 'string') activeUrl = loc;
-        } catch (e) {
-          if (typeof window !== "undefined") {
-            (window as any).__DEV_LOGS.push({ time: new Date().toISOString(), component: "Index", state: "error", code: "IDX-TS2-WV-ERR", message: String(e) });
-          }
-          // sessizce iframe fallback
-        }
-      }
-      // Son çare: iframe
-      if (!html) {
-        const iframe = document.getElementById("app-iframe") as HTMLIFrameElement | null;
-        if (iframe && iframe.contentDocument) {
-          html = iframe.contentDocument.documentElement.outerHTML;
-          if (!activeUrl) activeUrl = iframe.contentDocument.URL;
-        }
-      }
-      const payload: any = {};
-      if (activeUrl) payload.url = activeUrl;
-      if (html) payload.html = html;
-      if (typeof window !== "undefined") {
+    const dev = (c: string, m: string) => {
+      if (typeof window !== 'undefined') {
         (window as any).__DEV_LOGS = (window as any).__DEV_LOGS || [];
-        (window as any).__DEV_LOGS.push({ time: new Date().toISOString(), component: "Index", state: "debug", code: "IDX-TS2-PAYLOAD", message: `payload: url=${activeUrl || ''} html_len=${html?.length || 0}` });
+        (window as any).__DEV_LOGS.push({ time: new Date().toISOString(), component: 'Index', state: 'debug', code: c, message: m });
       }
-      const r = await fetch(`${BACKEND_URL}/api/test-state-2`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (r.ok) {
-        const data = await r.json();
-        if (typeof window !== "undefined") {
-          if (!(window as any).__DEV_LOGS) (window as any).__DEV_LOGS = [];
-          (window as any).__DEV_LOGS.push({
-            time: new Date().toISOString(),
-            component: "Index",
-            state: "event",
-            code: "IDX-TS2-200",
-            message: `TS2 çağrıldı${activeUrl ? ` (url=${activeUrl})` : ""}${html ? `, html inline` : ""}. Mapping kaydedildi: ${data.path}`,
-          });
-        }
-      } else {
-        const err = await r.json().catch(() => ({} as any));
-        throw new Error(err.error || "Test State 2 failed");
-      }
-    } catch (e) {
-      if (typeof window !== "undefined") {
-        if (!(window as any).__DEV_LOGS) (window as any).__DEV_LOGS = [];
-        (window as any).__DEV_LOGS.push({
-          time: new Date().toISOString(),
-          component: "Index",
-          state: "error",
-          code: "IDX-TS2-500",
-          message: String(e),
-        });
+    };
+    try { await runTs2(BACKEND_URL, iframeUrl || address, dev); }
+    catch (e: any) {
+      if (typeof window !== 'undefined') {
+        (window as any).__DEV_LOGS = (window as any).__DEV_LOGS || [];
+        (window as any).__DEV_LOGS.push({ time: new Date().toISOString(), component: 'Index', state: 'error', code: 'IDX-TS2-500', message: String(e) });
       }
     }
+  };
+
+  const handleTestSt3 = async () => {
+    const dev = (c: string, m: string) => {
+      if (typeof window !== 'undefined') {
+        (window as any).__DEV_LOGS = (window as any).__DEV_LOGS || [];
+        (window as any).__DEV_LOGS.push({ time: new Date().toISOString(), component: 'Index', state: 'event', code: c, message: m });
+      }
+    };
+  // Kullanıcı ayarlarını uygula
+  try { await runTs3(BACKEND_URL, dev, { highlight: ts3Highlight, stepDelayMs: ts3Delay, simulateTyping: ts3Typing }); }
+    catch (e: any) { dev('IDX-TS3-ERR', String(e)); }
   };
 
   return (
@@ -190,6 +149,13 @@ const Index = () => {
   onDevHome={handleHome}
   onDevTestSt1={handleTestSt1}
   onDevTestSt2={handleTestSt2}
+  onDevTestSt3={handleTestSt3}
+  ts3Highlight={ts3Highlight}
+  ts3Typing={ts3Typing}
+  ts3Delay={ts3Delay}
+  setTs3Highlight={setTs3Highlight}
+  setTs3Typing={setTs3Typing}
+  setTs3Delay={setTs3Delay}
       />
     </>
   );

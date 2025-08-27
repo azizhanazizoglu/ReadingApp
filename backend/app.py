@@ -42,6 +42,7 @@ from backend.file_upload import handle_file_upload
 from backend.stateflow_agent import stateflow_agent, run_ts1_extract
 from webbot.test_webbot_html_mapping import readWebPage
 from license_llm.pageread_llm import map_json_to_html_fields
+from webbot.webbot_filler import build_fill_plan, analyze_selectors, generate_injection_script
 
 @app.route('/health', methods=['GET'])
 def health():
@@ -97,6 +98,71 @@ def get_mapping():
 @app.route('/api/logs', methods=['GET'])
 def get_logs():
     return jsonify({'logs': backend_logs})
+
+@app.route('/api/ts3/plan', methods=['POST'])
+def ts3_plan():
+    """Build a fill plan from mapping + ruhsat_json + optional rawresponse for diagnostics."""
+    try:
+        body = request.get_json(silent=True) or {}
+        mapping = body.get('mapping') or memory.get('mapping') or {}
+        ruhsat_json = body.get('ruhsat_json') or memory.get('ruhsat_json') or {}
+        raw = body.get('raw') or ruhsat_json.get('rawresponse') or memory.get('rawresponse') or ''
+        options = body.get('options') or {"use_dummy_when_empty": True}
+        plan, resolved, logs = build_fill_plan(mapping, ruhsat_json, raw_text=raw, options=options)
+        return jsonify({
+            "plan": [it.__dict__ for it in plan],
+            "resolved": resolved,
+            "logs": logs,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/ts3/analyze-selectors', methods=['POST'])
+def ts3_analyze_selectors():
+    """Return count/errors for each mapping selector against provided or last HTML."""
+    try:
+        body = request.get_json(silent=True) or {}
+        html = body.get('html') or memory.get('html') or ''
+        mapping = body.get('mapping') or memory.get('mapping') or {"field_mapping": {}}
+        analysis = analyze_selectors(html, mapping)
+        return jsonify({"analysis": analysis})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/ts3/generate-script', methods=['POST'])
+def ts3_generate_script():
+    """Return a JS injection script built from the current mapping and state for TS3 fill (diagnostics/smoke)."""
+    try:
+        body = request.get_json(silent=True) or {}
+        mapping = body.get('mapping') or memory.get('mapping') or {"field_mapping": {}}
+        ruhsat_json = body.get('ruhsat_json') or memory.get('ruhsat_json') or {}
+        raw = body.get('raw') or ruhsat_json.get('rawresponse') or memory.get('rawresponse') or ''
+        options = body.get('options') or {}
+        use_dummy = bool(options.get('use_dummy_when_empty', True))
+        highlight = bool(options.get('highlight', True))
+        simulate_typing = bool(options.get('simulate_typing', True))
+        step_delay_ms = int(options.get('step_delay_ms', 0))
+        overrides = body.get('values') or {}
+        plan, resolved, logs = build_fill_plan(mapping, ruhsat_json, raw_text=raw, options={"use_dummy_when_empty": use_dummy})
+        # Apply overrides if provided (direct strings to write by field key)
+        if isinstance(overrides, dict) and overrides:
+            for it in plan:
+                if it.field in overrides:
+                    it.value = overrides[it.field]
+                    resolved[it.field] = overrides[it.field]
+                    try:
+                        logs.append(f"override {it.field} <- {str(overrides[it.field])[:60]}{'…' if len(str(overrides[it.field]))>60 else ''}")
+                    except Exception:
+                        logs.append(f"override {it.field}")
+        script = generate_injection_script(plan, highlight=highlight, simulate_typing=simulate_typing, step_delay_ms=step_delay_ms)
+        return jsonify({
+            "script": script,
+            "plan": [it.__dict__ for it in plan],
+            "resolved": resolved,
+            "logs": logs,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/test-state-2', methods=['POST'])
 def test_state_2():
