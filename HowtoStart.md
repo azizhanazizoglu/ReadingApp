@@ -39,6 +39,20 @@ pip install -r requirements.txt
 python backend/app.py  # http://localhost:5001
 ```
 
+Not:
+- TS2 (HTML+JSON→mapping) artık heuristik kullanmaz. Çıktı doğrudan LLM’in ürettiği JSON’dan parse edilir.
+- Bu davranış, uçtan uca entegrasyon testindeki akışla birebir aynıdır.
+
+TS2 veri akışı (iframe tabanlı):
+- TS2 butonu, UI’daki iframe’in güncel HTML’ini backend’e gönderir (sayfa arka planda tekrar açılmaz).
+- Backend aşağıdaki artefaktları üretir:
+	- `memory/TmpData/webbot2html/page.html` (tam sayfa HTML)
+	- `memory/TmpData/webbot2html/form.html` (ilk <form> bloğu, token tasarrufu için)
+	- `memory/TmpData/webbot2html/page.json` (url, timestamp, length)
+	- `memory/TmpData/webbot2html/form_meta.json` (inputs/selects/textareas/buttons sayıları)
+- Mapping çıktısı: `memory/TmpData/json2mapping/<base>_mapping.json`
+- LLM prompt özeti: input/select/textarea/label/datalist alanları özetlenir; select/datalist seçenekleri `MAX_SELECT_OPTIONS` (varsayılan 20) ile sınırlandırılır.
+
 ## 5) React UI’ı Başlat (Geliştirme)
 ```powershell
 cd react_ui
@@ -133,6 +147,48 @@ Invoke-RestMethod http://localhost:5001/api/logs
 - TS2 boş mapping üretiyor:
 	- Smoke test ile doğrulayın (`-s -vv`), real LLM yerine stub kullanır.
 	- Gerçek akışta mapping JSON code-fence çıkarımı yapılır; yine de boşsa HTML’i ve LLM çıktısını kontrol edin.
+
+## 12) Hızlı Git Komutları (PowerShell)
+- Durumu gör ve son 5 commit’i özetle
+```powershell
+git status
+git log --oneline -n 5
+```
+
+- Değişiklikleri geri al (çalışma alanını son commit’e döndür)
+```powershell
+# Staged dosyaları geri al
+git restore --staged .
+# Çalışma alanındaki değişiklikleri at
+git restore .
+# Takip edilmeyen (untracked) dosyaları da silmek istersen
+git clean -fd
+```
+
+- Son commit’i geri al (tarihçeyi bozmadan, yeni revert commit oluşturur)
+```powershell
+git revert HEAD
+git push
+```
+
+- Branch’i bir commit geriye al (tarihçe yeniden yazılır – dikkat)
+```powershell
+git reset --hard HEAD~1
+# Uzak branch’i de güncellemek için (paylaşılan dalda dikkat!)
+git push --force-with-lease
+```
+
+- Belirli bir dosyayı HEAD’teki hâline döndür
+```powershell
+git restore --source=HEAD path\to\file
+```
+
+- Değişiklikleri commit’le ve gönder
+```powershell
+git add -A
+git commit -m "fix: mesaj"
+git push
+```
 
 ---
 

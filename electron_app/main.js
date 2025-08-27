@@ -8,7 +8,10 @@ function createWindow() {
     height: 900,
     webPreferences: {
       nodeIntegration: false,
-      contextIsolation: true,
+  contextIsolation: true,
+  // WebView kullanımını aç ve cross-origin erişimi kolaylaştır
+  webviewTag: true,
+  webSecurity: false,
     },
   });
   // SPA için file:// protokolüyle yükle

@@ -91,7 +91,49 @@ const Index = () => {
   const handleTestSt1 = () => handleAutomation();
   const handleTestSt2 = async () => {
     try {
-      const r = await fetch(`${BACKEND_URL}/api/test-state-2`, { method: "POST" });
+      let activeUrl = iframeUrl || address;
+      let html: string | undefined;
+      // Önce webview içinden HTML'i dene (Electron)
+      const webview: any = document.getElementById("app-webview");
+      if (webview && typeof webview.executeJavaScript === 'function') {
+        try {
+          if (typeof window !== "undefined") {
+            (window as any).__DEV_LOGS = (window as any).__DEV_LOGS || [];
+            (window as any).__DEV_LOGS.push({ time: new Date().toISOString(), component: "Index", state: "debug", code: "IDX-TS2-WV-TRY", message: "webview.executeJavaScript ile HTML çekme denemesi" });
+          }
+          html = await webview.executeJavaScript('document.documentElement.outerHTML', true);
+          const loc = await webview.executeJavaScript('document.URL', true);
+          if (typeof window !== "undefined") {
+            (window as any).__DEV_LOGS.push({ time: new Date().toISOString(), component: "Index", state: "debug", code: "IDX-TS2-WV-OK", message: `webview HTML alındı len=${html?.length || 0} url=${loc}` });
+          }
+          if (!activeUrl && typeof loc === 'string') activeUrl = loc;
+        } catch (e) {
+          if (typeof window !== "undefined") {
+            (window as any).__DEV_LOGS.push({ time: new Date().toISOString(), component: "Index", state: "error", code: "IDX-TS2-WV-ERR", message: String(e) });
+          }
+          // sessizce iframe fallback
+        }
+      }
+      // Son çare: iframe
+      if (!html) {
+        const iframe = document.getElementById("app-iframe") as HTMLIFrameElement | null;
+        if (iframe && iframe.contentDocument) {
+          html = iframe.contentDocument.documentElement.outerHTML;
+          if (!activeUrl) activeUrl = iframe.contentDocument.URL;
+        }
+      }
+      const payload: any = {};
+      if (activeUrl) payload.url = activeUrl;
+      if (html) payload.html = html;
+      if (typeof window !== "undefined") {
+        (window as any).__DEV_LOGS = (window as any).__DEV_LOGS || [];
+        (window as any).__DEV_LOGS.push({ time: new Date().toISOString(), component: "Index", state: "debug", code: "IDX-TS2-PAYLOAD", message: `payload: url=${activeUrl || ''} html_len=${html?.length || 0}` });
+      }
+      const r = await fetch(`${BACKEND_URL}/api/test-state-2`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
       if (r.ok) {
         const data = await r.json();
         if (typeof window !== "undefined") {
@@ -101,7 +143,7 @@ const Index = () => {
             component: "Index",
             state: "event",
             code: "IDX-TS2-200",
-            message: `Mapping kaydedildi: ${data.path}`,
+            message: `TS2 çağrıldı${activeUrl ? ` (url=${activeUrl})` : ""}${html ? `, html inline` : ""}. Mapping kaydedildi: ${data.path}`,
           });
         }
       } else {

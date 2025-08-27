@@ -11,7 +11,7 @@ declare global {
   }
 }
 import React from "react";
-import { useLoadingTimeout } from "../errorHandling/errorHandling";
+// timeout overlay kaldırıldı; sürekli etkileşimli bir tarayıcı görünümü isteniyor
 
 
 interface BrowserViewProps {
@@ -22,6 +22,7 @@ interface BrowserViewProps {
   fontStack: string;
   handleIframeLoad: () => void;
   result: string | null;
+  onUrlChange?: (url: string) => void;
 }
 
 
@@ -33,10 +34,10 @@ export const BrowserView: React.FC<BrowserViewProps & { style?: React.CSSPropert
   fontStack,
   handleIframeLoad,
   result,
+  onUrlChange,
   style = {},
 }) => {
-  const [timeoutActive, setTimeoutActive] = React.useState(false);
-  useLoadingTimeout({ loading, setTimeoutActive });
+  // Timeout overlay devre dışı
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
       if (!window.__DEV_LOGS) window.__DEV_LOGS = [];
@@ -74,6 +75,56 @@ export const BrowserView: React.FC<BrowserViewProps & { style?: React.CSSPropert
       });
     }
   };
+
+  // Webview event bindings: sync URL and loading states
+  React.useEffect(() => {
+    const el = document.getElementById('app-webview') as any;
+    if (!el) return;
+    const onDomReady = () => {
+      try {
+        // URL'yi al ve üst seviyeye bildir
+        const u = el.getURL ? el.getURL() : el.src;
+        if (onUrlChange && typeof u === 'string' && u) onUrlChange(u);
+      } catch {}
+    };
+    const onDidNavigate = (_e: any, url?: string) => {
+      try {
+        const u = (typeof url === 'string' && url) ? url : (el.getURL ? el.getURL() : el.src);
+        if (onUrlChange && typeof u === 'string' && u) onUrlChange(u);
+      } catch {}
+    };
+    const onStart = () => {
+      if (typeof window !== 'undefined') {
+        if (!window.__DEV_LOGS) window.__DEV_LOGS = [];
+        window.__DEV_LOGS.push({ time: new Date().toISOString(), component: 'BrowserView', state: 'event', code: 'BV-2001', message: 'webview did-start-loading' });
+      }
+    };
+    const onStop = () => {
+      if (typeof window !== 'undefined') {
+        if (!window.__DEV_LOGS) window.__DEV_LOGS = [];
+        window.__DEV_LOGS.push({ time: new Date().toISOString(), component: 'BrowserView', state: 'event', code: 'BV-2002', message: 'webview did-stop-loading' });
+      }
+      // Yükleme bitti kabul edelim
+      try { handleIframeLoad(); } catch {}
+      // URL'i güncelle
+      try {
+        const u = el.getURL ? el.getURL() : el.src;
+        if (onUrlChange && typeof u === 'string' && u) onUrlChange(u);
+      } catch {}
+    };
+    el.addEventListener('dom-ready', onDomReady);
+    el.addEventListener('did-navigate', onDidNavigate);
+    el.addEventListener('did-navigate-in-page', onDidNavigate);
+    el.addEventListener('did-start-loading', onStart);
+    el.addEventListener('did-stop-loading', onStop);
+    return () => {
+      try { el.removeEventListener('dom-ready', onDomReady); } catch {}
+      try { el.removeEventListener('did-navigate', onDidNavigate); } catch {}
+      try { el.removeEventListener('did-navigate-in-page', onDidNavigate); } catch {}
+      try { el.removeEventListener('did-start-loading', onStart); } catch {}
+      try { el.removeEventListener('did-stop-loading', onStop); } catch {}
+    };
+  }, [iframeUrl, handleIframeLoad, onUrlChange]);
   return (
     <div
       className="flex-grow w-full rounded-3xl shadow-2xl border border-[#B3C7E6] dark:border-[#335C81] flex items-center justify-center transition-colors overflow-hidden"
@@ -89,26 +140,25 @@ export const BrowserView: React.FC<BrowserViewProps & { style?: React.CSSPropert
       }}
     >
       {iframeUrl ? (
-        <iframe
+        // Electron ortamında webview, cross-origin DOM etkileşimi için daha esnek
+        // Not: webview sadece Electron'da çalışır; tarayıcıda fall-back gerekebilir.
+        // Vite dev/preview yerine Electron build kullanıyoruz.
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        <webview
+          id="app-webview"
           key={iframeUrl}
           src={iframeUrl}
-          title="Webpage"
           className="w-full h-full min-h-[540px] rounded-3xl border-none"
           style={{ background: "white" }}
-          onLoad={handleIframeLoad}
         />
       ) : (
         <span className="text-[#7B8FA1] dark:text-[#B3C7E6] text-xl select-none">
           [ Web sitesi burada görünecek ]
         </span>
       )}
-  {/* Loading/uploading overlay removed as per user request */}
-      {timeoutActive && (
-        <div className="timeout-overlay" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.7)', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ color: 'red', fontWeight: 'bold', fontSize: 20 }}>Yükleme çok uzun sürdü! (Timeout)</span>
-        </div>
-      )}
-  {/* Info/result box removed as per user request. Browser always stays large. */}
+  {/* Timeout overlay kaldırıldı: tarayıcı hep etkileşimde kalsın */}
+      {/* Info/result box removed as per user request. Browser always stays large. */}
     </div>
   );
 };

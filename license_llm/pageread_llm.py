@@ -17,9 +17,14 @@ def map_json_to_html_fields(html_string: str, ruhsat_json: dict, model="gpt-4o")
   else:
     soup = BeautifulSoup(html_string, "html.parser")
     fields = []
-    for tag in soup.find_all(["input", "select", "label"]):
-      # input/select için id, name, placeholder, type, value
-      if tag.name in ["input", "select"]:
+    # Cap for select options
+    try:
+      max_select_opts = int(os.getenv("MAX_SELECT_OPTIONS", "20"))
+    except Exception:
+      max_select_opts = 20
+  for tag in soup.find_all(["input", "select", "label", "textarea", "datalist", "button"]):
+      # input/select/textarea için id, name, placeholder, type, value
+      if tag.name in ["input", "select", "textarea"]:
         desc = f"<{tag.name}"
         for attr in ["id", "name", "placeholder", "type", "value"]:
           if tag.has_attr(attr):
@@ -33,34 +38,76 @@ def map_json_to_html_fields(html_string: str, ruhsat_json: dict, model="gpt-4o")
             label_text = label.get_text(strip=True)
         if label_text:
           desc += f" [label: {label_text}]"
+        # select ise ilk N option'ı özetle
+        if tag.name == "select":
+          options = tag.find_all("option")
+          if options:
+            desc += f" [options_count: {len(options)}]"
+            subset = options[:max_select_opts]
+            opt_pairs = []
+            for o in subset:
+              txt = o.get_text(strip=True)
+              val = o.get("value", "")
+              if val and val != txt:
+                opt_pairs.append(f"{txt}::{val}")
+              else:
+                opt_pairs.append(txt)
+            desc += " [options: " + ", ".join(opt_pairs) + (" …" if len(options) > len(subset) else "") + "]"
         fields.append(desc)
       elif tag.name == "label":
         fields.append(str(tag))
-    html_fields = '\n'.join(fields)
-  prompt = f"""
-  - Aşağıda bir web formunun HTML alanları (formun tam içeriği veya input/select/label ve çevresi) ve doldurulacak Türkçe JSON verisi var. Görevin:
-   - JSON anahtarlarını en uygun input/select alanına eşleştir (id, name, placeholder, label'a bak).
-   - Sadece HTML'de GERÇEKTEN bulunan alanlara mapping yap. HTML'de olmayan alanları mapping'e ekleme.
-   - Her sayfa için uygun field_mapping ve actions üret.
-   - Sadece mapping JSON'u döndür. Açıklama ekleme.
+      elif tag.name == "datalist":
+        # Datalist destekliyse, seçenekleri özetle
+        opts = tag.find_all("option")
+        if opts:
+          names = [o.get("value", o.get_text(strip=True)) for o in opts[:max_select_opts]]
+          fields.append(f"<datalist id=\"{tag.get('id','')}\"> [options_count: {len(opts)}] [options: {', '.join(names)}{(' …' if len(opts) > max_select_opts else '')}]")
+      elif tag.name == "button":
+        # Butonları da özetle ki actions çıkabilsin
+        desc = "<button"
+        for attr in ["id", "name", "type", "value"]:
+          if tag.has_attr(attr):
+            desc += f' {attr}="{tag[attr]}"'
+        text = tag.get_text(strip=True)
+        if text:
+          desc += f">{text}</button>"
+        else:
+          desc += ">...</button>"
+        fields.append(desc)
+  html_fields = '\n'.join(fields)
+  prompt_header = """
+Sen bir form eşleme yardımcısısın. Aşağıdaki HTML alanlarını (formun kendisi veya input/select/label özeti) ve doldurulacak Türkçe JSON verisini kullanarak, JSON anahtarlarını doğru input/select öğelerine eşle.
 
-Örnek mapping formatı:
+Kurallar:
+- id, name, placeholder, label metinlerinden yararlan; semantik eşleşme yap.
+- Dil-agnostik çalış: Label/placeholder metinleri Türkçe/İngilizce/Fransızca vb. dillerde olabilir; aksan/diakritik ve yazım/çoğul/ek varyasyonlarını normalize ederek anlamına göre eşleştir (yalnızca kelime eşleşmesine takılma).
+- Eşanlamlıları anla ve normalle:
+  - plaka_no ≈ ["plaka", "plaka no", "plaka numarası", "plate", "plate no", "plate number"].
+  - sasi_no ≈ ["şasi", "şasi no", "şasi numarası", "vin", "chassis"].
+  - tescil_tarihi ≈ ["tescil tarihi", "kayıt tarihi", "registration date"].
+  - tckimlik ≈ ["tc", "tc kimlik", "kimlik no", "identity"].
+  - dogum_tarihi ≈ ["doğum tarihi", "birth date", "birthdate"].
+  - ad_soyad ≈ ["ad soyad", "ad/soyad", "isim", "name"].
+- Sadece HTML’de GERÇEKTEN bulunan alanlara mapping yap (yoksa ekleme).
+- Emin değilsen bir alanı eşleme; uydurma/hallucination yapma.
+- CSS seçicide öncelik: id (input#id) > name (input[name='...']).
+- Buton eylemleri için actions üret (örn. click#DEVAM, click#İLERİ, click#NEXT). HTML’de olmayan bir butonu yazma.
+- Çıktıyı sadece JSON olarak ver; açıklama yazma. JSON’u üçlü tırnak çitleri içinde (```json ... ```) döndür.
+
+Örnek format:
+```json
 {{
   "field_mapping": {{
     "ad_soyad": "input#name",
-    "kimlik_no": "input#identity",
+    "tckimlik": "input#identity",
     "dogum_tarihi": "input#birthDate",
     "plaka_no": "input#plateNo"
   }},
   "actions": ["click#DEVAM"]
 }}
-
-HTML alanları:
-{html_fields}
-
-JSON veri:
-{ruhsat_json}
+```
 """
+  prompt = f"{prompt_header}\n\nHTML alanları:\n{html_fields}\n\nJSON veri:\n{ruhsat_json}"
   response = openai.chat.completions.create(
     model=model,
     messages=[{"role": "user", "content": prompt}],

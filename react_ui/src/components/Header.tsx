@@ -2,7 +2,7 @@ import React, { RefObject } from "react";
 import { AllianzLogo } from "@/components/AllianzLogo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Zap, UploadCloud, Home, Code2 } from "lucide-react";
+import { ArrowRight, Zap, UploadCloud, Home, Code2, ChevronLeft, ChevronRight, RefreshCcw } from "lucide-react";
 import { SearchBar } from "@/components/SearchBar";
 import { DevModeToggle } from "@/components/DevModeToggle";
 
@@ -66,6 +66,51 @@ export const Header: React.FC<HeaderProps> = ({
   const onGo = () => { devLog('HD-1001', 'Go butonuna tıklandı'); handleGo(); };
   const onAutomation = () => { devLog('HD-1002', 'Otomasyon başlat butonuna tıklandı'); handleAutomation(); };
   const onUpload = () => { devLog('HD-1003', 'Upload butonuna tıklandı'); handleUploadClick(); };
+  // Back/Forward state
+  const [canBack, setCanBack] = React.useState(false);
+  const [canForward, setCanForward] = React.useState(false);
+  // Poll canGoBack/canGoForward on url change
+  React.useEffect(() => {
+    const el: any = document.getElementById('app-webview');
+    if (!el) return;
+    const update = () => {
+      try {
+        setCanBack(!!el.canGoBack && el.canGoBack());
+        setCanForward(!!el.canGoForward && el.canGoForward());
+      } catch {}
+    };
+    update();
+    const t = setInterval(update, 500);
+    return () => clearInterval(t);
+  }, [iframeUrl]);
+  const onBack = () => {
+    try {
+      const el: any = document.getElementById('app-webview');
+      if (el && el.canGoBack && el.canGoBack()) {
+        devLog('HD-NAV-BACK', 'Geri butonuna tıklandı');
+        el.goBack();
+      }
+    } catch {}
+  };
+  const onForward = () => {
+    try {
+      const el: any = document.getElementById('app-webview');
+      if (el && el.canGoForward && el.canGoForward()) {
+        devLog('HD-NAV-FWD', 'İleri butonuna tıklandı');
+        el.goForward();
+      }
+    } catch {}
+  };
+  const onRefresh = () => {
+    try {
+      const el: any = document.getElementById('app-webview');
+      if (el && el.reload) {
+        devLog('HD-NAV-REFRESH', 'Yenile butonuna tıklandı');
+        // Tercihen cache'i atlayarak yenile
+        if (el.reloadIgnoringCache) el.reloadIgnoringCache(); else el.reload();
+      }
+    } catch {}
+  };
   return (
   <header
     className={"w-full flex items-center justify-between px-10 py-4 bg-white/80 dark:bg-[#223A5E]/90 shadow-md rounded-b-3xl transition-colors border-b border-[#e6f0fa] dark:border-[#335C81]"}
@@ -116,39 +161,7 @@ export const Header: React.FC<HeaderProps> = ({
           <Button
             className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] active:scale-95 text-[#0057A0] shadow"
             style={{ fontFamily: fontStack, minWidth: 52, minHeight: 40, fontWeight: 700 }}
-            onClick={async () => {
-              if (onDevTestSt2) onDevTestSt2();
-              try {
-                const r = await fetch('http://localhost:5001/api/test-state-2', { method: 'POST' });
-                if (r.ok) {
-                  const data = await r.json();
-                  if (typeof window !== 'undefined') {
-                    if (!window.__DEV_LOGS) window.__DEV_LOGS = [];
-                    window.__DEV_LOGS.push({
-                      time: new Date().toISOString(),
-                      component: 'Header',
-                      state: 'event',
-                      code: 'HD-TS2-200',
-                      message: `Mapping kaydedildi: ${data.path}`
-                    });
-                  }
-                } else {
-                  const err = await r.json().catch(() => ({}));
-                  throw new Error(err.error || 'Test State 2 failed');
-                }
-              } catch (e) {
-                if (typeof window !== 'undefined') {
-                  if (!window.__DEV_LOGS) window.__DEV_LOGS = [];
-                  window.__DEV_LOGS.push({
-                    time: new Date().toISOString(),
-                    component: 'Header',
-                    state: 'error',
-                    code: 'HD-TS2-500',
-                    message: String(e)
-                  });
-                }
-              }
-            }}
+            onClick={() => { if (onDevTestSt2) onDevTestSt2(); }}
             aria-label="Test State 2"
           >
             Ts2
@@ -166,7 +179,37 @@ export const Header: React.FC<HeaderProps> = ({
         setSearchFocused={() => {}}
         compact={developerMode}
       />
-  <Button
+      {/* Back/Forward/Refresh buttons to the right of SearchBar, left of Go */}
+      <Button
+        className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] active:scale-95 text-[#0057A0] dark:bg-[#335C81] dark:hover:bg-[#223A5E] dark:text-[#E6F0FA] shadow"
+        style={{ fontFamily: fontStack, minWidth: 40, minHeight: 40 }}
+        onClick={onBack}
+        disabled={!canBack}
+        aria-label="Geri"
+        title="Geri"
+      >
+        <ChevronLeft size={20} />
+      </Button>
+      <Button
+        className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] active:scale-95 text-[#0057A0] dark:bg-[#335C81] dark:hover:bg-[#223A5E] dark:text-[#E6F0FA] shadow"
+        style={{ fontFamily: fontStack, minWidth: 40, minHeight: 40 }}
+        onClick={onForward}
+        disabled={!canForward}
+        aria-label="İleri"
+        title="İleri"
+      >
+        <ChevronRight size={20} />
+      </Button>
+      <Button
+        className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] active:scale-95 text-[#0057A0] dark:bg-[#335C81] dark:hover:bg-[#223A5E] dark:text-[#E6F0FA] shadow"
+        style={{ fontFamily: fontStack, minWidth: 40, minHeight: 40 }}
+        onClick={onRefresh}
+        aria-label="Yenile"
+        title="Yenile"
+      >
+        <RefreshCcw size={18} />
+      </Button>
+      <Button
         className="px-3 py-1 rounded-full bg-[#0057A0] hover:bg-[#003366] active:scale-95 text-white shadow transition-all flex items-center justify-center"
         style={{
           fontFamily: fontStack,
@@ -181,8 +224,8 @@ export const Header: React.FC<HeaderProps> = ({
       >
         <ArrowRight size={22} strokeWidth={2.2} className="transition-transform duration-150 group-active:scale-90" />
       </Button>
-  {/** vertical divider removed for cleaner look **/}
-  <Button
+      {/** vertical divider removed for cleaner look **/}
+      <Button
         className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] active:scale-95 text-[#0057A0] dark:bg-[#335C81] dark:hover:bg-[#223A5E] dark:text-[#E6F0FA] shadow transition-all flex items-center justify-center"
         style={{
           fontFamily: fontStack,
@@ -197,7 +240,7 @@ export const Header: React.FC<HeaderProps> = ({
       >
         <Zap size={22} strokeWidth={2.2} className={automation ? "animate-pulse" : ""} />
       </Button>
-  <Button
+      <Button
         className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] active:scale-95 text-[#0057A0] dark:bg-[#335C81] dark:hover:bg-[#223A5E] dark:text-[#E6F0FA] shadow transition-all flex items-center justify-center"
         style={{
           fontFamily: fontStack,

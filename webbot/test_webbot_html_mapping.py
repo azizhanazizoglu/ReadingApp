@@ -4,20 +4,29 @@
 import os
 import traceback
 import requests
+from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 DEFAULT_URL = "https://preview--screen-to-data.lovable.app/traffic-insurance"
 
-def readWebPage(url: str = None) -> str:
+def readWebPage(url: str = None, html: str | None = None) -> str:
     """
-    Verilen url'den (veya parametre verilmezse default url'den) HTML içeriğini indirir ve döndürür.
+    HTML doğrudan verildiyse onu döndür.
+    HTML verilmediyse ve URL varsa (sadece fallback olarak) requests ile indir.
+    Başka tarayıcı/headless/CDP kullanılmaz.
     """
-    if url is None:
-        url = DEFAULT_URL
-    response = requests.get(url)
-    response.raise_for_status()
-    return response.text
+    if html:
+        return html
+    if url:
+        resp = requests.get(url, timeout=20)
+        resp.raise_for_status()
+        return resp.text
+    # Son çare: default URL (debug amaçlı)
+    url = DEFAULT_URL
+    resp = requests.get(url, timeout=20)
+    resp.raise_for_status()
+    return resp.text
 
 from datetime import datetime
 try:

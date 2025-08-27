@@ -1,0 +1,10 @@
+{
+  "field_mapping": {
+    "plaka_no": "input[value='06 YK']",
+    "sasi_no": "input[placeholder='Şasi numarası giriniz']",
+    "tescil_tarihi": "input[placeholder='19.08.2025']"
+  },
+  "actions": [
+    "click#Devam"
+  ]
+}

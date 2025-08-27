@@ -1,13 +1,24 @@
 # Test Files and Paths
 
-- `license_llm/test_license_llm_extractor.py` → LLM extraction from JPEG
-- `license_llm/test_pageread_llm.py` → LLM mapping from JSON to HTML fields
-- `webbot/` (if applicable) → HTML retrieval tests
-- `memory/test_ocr_to_memory.py` → persistence integrity
-- `backend/test_flask_server.py` or root `test_flask_server.py` → API smoke
-- `run_all_tests.py` → orchestrated run
+Ana testler ve smoke senaryoları:
+- `tests/smokeTests/test_smoke_backend.py` → Backend health, upload, TS1, TS2 (LLM ve ağ stub’lu)
+- `license_llm/test_license_llm_extractor.py` → JPEG’ten LLM extraction (unit)
+- `license_llm/test_pageread_llm.py` → JSON→HTML mapping prompt/parse (unit)
+- `webbot/` → HTML edinme testleri (isteğe bağlı, ağ erişimi gerekebilir)
+- `memory/test_ocr_to_memory.py` → kalıcılık/test entegrasyonu
+- `run_all_tests.py` → orkestrasyon
 
-Artifacts:
-- `memory/TmpData/jpgDownload/*.jpg`
-- `memory/TmpData/jpg2json/*.json`
-- `memory/TmpData/json2mapping/*_mapping.json`
+Artefakt yolları (absolute olarak `PROJECT_ROOT` altına yazılır):
+- `memory/TmpData/jpgDownload/*.jpg` (Upload sonucu)
+- `memory/TmpData/jpg2json/*.json` (TS1: JPEG→JSON)
+- `memory/TmpData/json2mapping/<base>_mapping.json` (TS2: Mapping)
+- `memory/TmpData/webbot2html/page.html` (TS2: Webview DOM kaydı)
+- `memory/TmpData/webbot2html/form.html` (ilk <form>, varsa)
+- `memory/TmpData/webbot2html/page.json` (url, timestamp, length)
+- `memory/TmpData/webbot2html/form_meta.json` (inputs/selects/textareas/buttons sayıları)
+
+Koşum notları:
+- TS2 testinde LLM ve ağ çağrıları monkeypatch ile stub edilir; gerçek anahtar gerektirmez.
+- Tüm smoke testleri çalıştırmak için:
+	- Python: `python -m pytest -q tests\smokeTests`
+

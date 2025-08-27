@@ -100,3 +100,57 @@ jobs:
             ci_artifacts/*.md
             ci_artifacts/*.json
           if-no-files-found: ignore
+
+  live-llm:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.OPENAI_API_KEY != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run live LLM tests (no heuristics)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DISABLE_TS2_HEURISTIC: "1"
+        run: |
+          python -m pytest tests/liveTests -s -vv
+
+      - name: Add job summary (latest mapping)
+        run: |
+          python - << 'PY'
+          import os, json, glob
+          base = 'memory/TmpData/json2mapping'
+          paths = sorted(glob.glob(os.path.join(base, '*.json')), key=os.path.getmtime)
+          if paths:
+            latest = paths[-1]
+            with open(latest, encoding='utf-8') as f:
+              data = json.load(f)
+            print('Latest live mapping file:', latest)
+            print(json.dumps(data, ensure_ascii=False, indent=2))
+            with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as s:
+              s.write('## Live LLM Mapping Output\n')
+              s.write(f'- File: {latest}\n')
+              s.write('```json\n')
+              s.write(json.dumps(data, ensure_ascii=False, indent=2))
+              s.write('\n```\n')
+          else:
+            print('No mapping JSON found in', base)
+          PY
+
+      - name: Upload live mapping artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-json2mapping-${{ github.ref_name }}-${{ github.sha }}
+          path: |
+            memory/TmpData/json2mapping/*.json
+          if-no-files-found: ignore

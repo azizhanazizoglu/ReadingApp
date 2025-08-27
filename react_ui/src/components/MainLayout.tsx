@@ -59,6 +59,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   const [logPanelOpen, setLogPanelOpen] = useState(false);
   const [backendLogs, setBackendLogs] = useState<any[]>([]);
   const [backendStatus, setBackendStatus] = useState<string>("");
+  const [currentUrl, setCurrentUrl] = useState<string>("");
 
   // Backend loglarını çek
   useEffect(() => {
@@ -110,6 +111,14 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     const interval = setInterval(fetchLogs, 2000);
     return () => clearInterval(interval);
   }, []);
+  // Webview URL değiştiğinde arama kutusunu güncelle
+  useEffect(() => {
+    if (currentUrl && currentUrl !== address) {
+      try {
+        setAddress(currentUrl);
+      } catch {}
+    }
+  }, [currentUrl]);
   return (
     <div
       className={"h-screen w-screen flex flex-col items-center justify-between bg-gradient-to-br from-[#f8fafc] to-[#e6f0fa] dark:from-[#1a2233] dark:to-[#223a5e] transition-colors overflow-hidden"}
@@ -226,6 +235,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           fontStack={fontStack}
           handleIframeLoad={handleIframeLoad}
           result={result}
+          onUrlChange={(u) => setCurrentUrl(u)}
           style={{ minHeight: 520, height: 'calc(70vh + 80px)' }}
         />
         <div style={{ height: 38 }} />
