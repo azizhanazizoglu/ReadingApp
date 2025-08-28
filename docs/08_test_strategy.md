@@ -3,9 +3,9 @@
 This project uses a layered test strategy with traceability:
 
 ## Levels
-- Unit tests: core helpers and isolated logic
-- Integration tests: Ts1 (jpeg→llm→json), Ts2 (webbot→mapping)
-- End-to-end: upload → automation → mapping persisted → state/logs verified
+- Unit tests: core helpers and isolated logic (including webbot_filler plan/selector/script)
+- Integration tests: Ts1 (jpeg→llm→json), Ts2 (webbot→mapping), Ts3 (fill via backend script)
+- End-to-end: upload → automation → mapping persisted → TS3 fill → TS4 actions → state/logs verified
 
 ## Artifacts and Evidence
 - Structured logs available at `/api/logs` collected during runs
@@ -22,5 +22,6 @@ This project uses a layered test strategy with traceability:
 
 ## Acceptance Criteria
 - State transitions strictly follow Turkish states and end with `tamamlandı` on success
-- Mapping JSON contains required keys and is saved to `json2mapping`
+- Mapping JSON contains required keys and is saved to `json2mapping` (TS2 schema with `page_kind`, `actions`)
+- TS3 fills persist after navigation (Enter commit + blur dispatched)
 - `/api/logs` contains BE-2xxx/3xxx/4xxx infos and BE-9xxx on errors

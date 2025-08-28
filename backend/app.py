@@ -142,6 +142,7 @@ def ts3_generate_script():
         highlight = bool(options.get('highlight', True))
         simulate_typing = bool(options.get('simulate_typing', True))
         step_delay_ms = int(options.get('step_delay_ms', 0))
+        commit_enter = bool(options.get('commit_enter', True))
         overrides = body.get('values') or {}
         plan, resolved, logs = build_fill_plan(mapping, ruhsat_json, raw_text=raw, options={"use_dummy_when_empty": use_dummy})
         # Apply overrides if provided (direct strings to write by field key)
@@ -154,7 +155,7 @@ def ts3_generate_script():
                         logs.append(f"override {it.field} <- {str(overrides[it.field])[:60]}{'…' if len(str(overrides[it.field]))>60 else ''}")
                     except Exception:
                         logs.append(f"override {it.field}")
-        script = generate_injection_script(plan, highlight=highlight, simulate_typing=simulate_typing, step_delay_ms=step_delay_ms)
+        script = generate_injection_script(plan, highlight=highlight, simulate_typing=simulate_typing, step_delay_ms=step_delay_ms, commit_enter=commit_enter)
         return jsonify({
             "script": script,
             "plan": [it.__dict__ for it in plan],

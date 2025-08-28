@@ -20,6 +20,10 @@ Artefakt yolları (absolute olarak `PROJECT_ROOT` altına yazılır):
 TS3 notları:
 - TS3, yeni bir artefakt üretmez; `/api/mapping` ve `/api/state` ile çalışır.
 - Form doldurma, Electron webview içinde yürütülür ve görsel vurgular (Highlight) isteğe bağlıdır.
+- Kalıcılık için Enter komiti + blur uygulanır (backend injection script ve in-page filler eşleşir).
+
+TS4 notları:
+- TS2 `page_kind = final_activation` ise, `actions` içindeki CTA tıklanır (örn. `click#Poliçeyi Aktifleştir`).
 
 Koşum notları:
 - TS2 testinde LLM ve ağ çağrıları monkeypatch ile stub edilir; gerçek anahtar gerektirmez.

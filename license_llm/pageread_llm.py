@@ -4,13 +4,15 @@ import openai
 
 def map_json_to_html_fields(html_string: str, ruhsat_json: dict, model="gpt-4o"):
   """
-  Given an HTML form and a JSON object with data to fill, use the LLM to determine which JSON field should be filled into which input/select in the HTML, and which button(s) should be clicked. The LLM should analyze all clues (label, placeholder, id, name, type, etc.) and return a mapping as JSON.
-  Optimized: Only form fields are sent to the LLM for better accuracy.
+  TS2 (LLM-only): Analyze current page HTML and decide if it is a fillable form page or the final activation page.
+  If a form page, return a mapping of keys -> CSS selectors plus ordered actions.
+  If final, return empty mapping and final actions (e.g., click#Poliçeyi Aktifleştir).
+  Output MUST be code-fenced JSON matching the required schema.
   """
   import re
   from bs4 import BeautifulSoup
   openai.api_key = os.getenv("OPENAI_API_KEY")
-  # Önce <form>...</form> varsa onu kullan, yoksa tüm input/select/label alanlarını parser ile çıkar
+  # Önce <form>...</form> varsa onu kullan, yoksa input/select/label/button özetini çıkar
   form_match = re.search(r'<form[\s\S]*?</form>', html_string, re.IGNORECASE)
   if form_match:
     html_fields = form_match.group(0)
@@ -22,7 +24,7 @@ def map_json_to_html_fields(html_string: str, ruhsat_json: dict, model="gpt-4o")
       max_select_opts = int(os.getenv("MAX_SELECT_OPTIONS", "20"))
     except Exception:
       max_select_opts = 20
-  for tag in soup.find_all(["input", "select", "label", "textarea", "datalist", "button"]):
+    for tag in soup.find_all(["input", "select", "label", "textarea", "datalist", "button"]):
       # input/select/textarea için id, name, placeholder, type, value
       if tag.name in ["input", "select", "textarea"]:
         desc = f"<{tag.name}"
@@ -75,39 +77,38 @@ def map_json_to_html_fields(html_string: str, ruhsat_json: dict, model="gpt-4o")
           desc += ">...</button>"
         fields.append(desc)
   html_fields = '\n'.join(fields)
-  prompt_header = """
-Sen bir form eşleme yardımcısısın. Aşağıdaki HTML alanlarını (formun kendisi veya input/select/label özeti) ve doldurulacak Türkçe JSON verisini kullanarak, JSON anahtarlarını doğru input/select öğelerine eşle.
-
-Kurallar:
-- id, name, placeholder, label metinlerinden yararlan; semantik eşleşme yap.
-- Dil-agnostik çalış: Label/placeholder metinleri Türkçe/İngilizce/Fransızca vb. dillerde olabilir; aksan/diakritik ve yazım/çoğul/ek varyasyonlarını normalize ederek anlamına göre eşleştir (yalnızca kelime eşleşmesine takılma).
-- Eşanlamlıları anla ve normalle:
-  - plaka_no ≈ ["plaka", "plaka no", "plaka numarası", "plate", "plate no", "plate number"].
-  - sasi_no ≈ ["şasi", "şasi no", "şasi numarası", "vin", "chassis"].
-  - tescil_tarihi ≈ ["tescil tarihi", "kayıt tarihi", "registration date"].
-  - tckimlik ≈ ["tc", "tc kimlik", "kimlik no", "identity"].
-  - dogum_tarihi ≈ ["doğum tarihi", "birth date", "birthdate"].
-  - ad_soyad ≈ ["ad soyad", "ad/soyad", "isim", "name"].
-- Sadece HTML’de GERÇEKTEN bulunan alanlara mapping yap (yoksa ekleme).
-- Emin değilsen bir alanı eşleme; uydurma/hallucination yapma.
-- CSS seçicide öncelik: id (input#id) > name (input[name='...']).
-- Buton eylemleri için actions üret (örn. click#DEVAM, click#İLERİ, click#NEXT). HTML’de olmayan bir butonu yazma.
-- Çıktıyı sadece JSON olarak ver; açıklama yazma. JSON’u üçlü tırnak çitleri içinde (```json ... ```) döndür.
-
-Örnek format:
-```json
-{{
-  "field_mapping": {{
-    "ad_soyad": "input#name",
-    "tckimlik": "input#identity",
-    "dogum_tarihi": "input#birthDate",
-    "plaka_no": "input#plateNo"
-  }},
-  "actions": ["click#DEVAM"]
-}}
-```
-"""
-  prompt = f"{prompt_header}\n\nHTML alanları:\n{html_fields}\n\nJSON veri:\n{ruhsat_json}"
+  # URL-agnostic TS2 prompt: decide fill_form vs final_activation and produce strict JSON
+  prompt_header = (
+    "Görev/Task:\n"
+    "- Bu sayfanın HTML’ini analiz ederek şu kararı ver:\n"
+    "  1) Doldurulacak bir form sayfası mı?\n"
+    "  2) Nihai sayfa mı (yalnızca ‘Poliçeyi Aktifleştir’ benzeri CTA ile bitirme)?\n"
+    "- Yalnız DOM/HTML; URL’e güvenme. Değer üretme yok. ÇIKTI SADECE code-fenced JSON.\n\n"
+    "Anahtar Alanlar (anlam bazlı, lower_snake_case): plaka_no, tckimlik, dogum_tarihi, ad_soyad; opsiyonel: telefon, email, adres, motor_no, sasi_no, ruhsat_seri_no.\n"
+    "Eşanlam/Synonyms (örnek):\n"
+    "- plaka_no ≈ plaka, plaka no, araç plaka, plate, plate number, registration number\n"
+    "- tckimlik ≈ tc, tc kimlik, kimlik no, national id, identity number\n"
+    "- dogum_tarihi ≈ doğum tarihi, birth date, dob\n"
+    "- ad_soyad ≈ ad soyad, isim, full name, name\n\n"
+    "Final Sayfa Sinyalleri: ‘Poliçeyi Aktifleştir/Policeyi Aktiflestir’, ‘Poliçe(yi) üret/oluştur/yazdır’, ‘PDF’, ‘Teklifi Onayla’, ‘Satın Al’.\n"
+    "Form Sayfası: input/textarea/select alanları net şekilde mevcut.\n\n"
+    "Kurallar:\n"
+    "- Final ise: is_final_page=true, field_mapping={}, actions=['click#Poliçeyi Aktifleştir', 'click#Policeyi Aktiflestir', 'click#Poliçeyi üret', 'click#Poliçeyi yazdır'] (güvenilir metinlerle).\n"
+    "- Final değilse: is_final_page=false, field_mapping={key: tekil CSS selector}, actions=['click#DEVAM','click#İLERİ','click#Next'] (sayfadaki gerçek buton metinleriyle).\n"
+  "- CSS selector önceliği: #id > [name=\"...\"] > sade tekil selector; olmayan alanı yazma; uydurma yok.\n"
+    "- Yalnız JSON üret; açıklama yok.\n\n"
+    "Çıktı Şeması:\n"
+    "{\n"
+    "  \"version\": \"ts2.v3\",\n"
+    "  \"page_kind\": \"fill_form\" | \"final_activation\" | \"unknown\",\n"
+    "  \"is_final_page\": boolean,\n"
+    "  \"final_reason\": string,\n"
+    "  \"evidence\": string[],\n"
+    "  \"field_mapping\": { },\n"
+    "  \"actions\": string[]\n"
+    "}\n"
+  )
+  prompt = f"{prompt_header}\n\nHTML alanları:\n{html_fields}\n\nJSON veri (örnek amaçlı, değer uydurma yok):\n{ruhsat_json}"
   response = openai.chat.completions.create(
     model=model,
     messages=[{"role": "user", "content": prompt}],

@@ -1,13 +1,14 @@
 # TS3: Form Autofill and Developer Debugging
 
-TS3 fills the current page’s form inside the in-app browser without using any LLM. It runs entirely in the Electron webview by injecting a small script that uses the TS2 mapping plus TS1 data.
+TS3 fills the current page’s form inside the in-app browser without using any LLM. It runs primarily via a backend-generated injection script executed in the Electron webview (testable), or an in-page filler fallback. It uses the TS2 mapping plus TS1 data.
 
 ## What TS3 Does
 - Reads latest mapping from GET `/api/mapping` (produced by TS2)
 - Reads current state and TS1 data from GET `/api/state`
 - Resolves values for mapping keys from TS1 JSON (with synonyms) and, if needed, from raw free text (`rawresponse`) via regex
 - Injects a script into the Electron webview to fill inputs, selects, textareas, radios/checkboxes, and dates
-- Optionally simulates typing with keydown/keyup for masked/React-controlled inputs and visually highlights touched fields
+- Simulates typing with keydown/keyup for masked/React-controlled inputs and visually highlights touched fields
+- Commits values with Enter + blur to ensure persistence across navigation (controlled/masked inputs)
 - Optionally clicks mapped actions (e.g., Next/Devam)
 
 ## Data Resolution Pipeline
@@ -44,7 +45,7 @@ Available in Developer Mode in the React UI:
 - Simulate Typing (keydown/keyup) for masked/controlled inputs
 - Step Delay (ms) between fields
 
-These options are passed to TS3 and affect the injected script. Persistence is not implemented yet.
+These options are passed to TS3 and affect the injected script. Persistence implemented via Enter commit + blur.
 
 ## Logs and Troubleshooting
 Frontend (React) emits IDX-TS3-* logs:
@@ -69,11 +70,13 @@ If a field isn’t filled:
   - Mapping JSON: memory/TmpData/json2mapping/<base>_mapping.json
   - HTML artifacts from TS2 capture: memory/TmpData/webbot2html/
 - Endpoints used: GET `/api/mapping`, GET `/api/state`
+- Helper endpoints (optional diagnostics): POST `/api/ts3/plan`, `/api/ts3/analyze-selectors`, `/api/ts3/generate-script`
 
 ## Flow Recap
 1) TS1 (JPEG → JSON)
 2) TS2 (DOM capture → LLM mapping)
-3) TS3 (webview fill using TS2 + TS1; no LLM)
+3) TS3 (webview fill using TS2 + TS1; no LLM; commit Enter)
+4) TS4 (if final page, run actions like “Poliçeyi Aktifleştir”)
 
 ## Known Limitations and Next Steps
 - Shadow DOM and nested iframes aren’t handled yet

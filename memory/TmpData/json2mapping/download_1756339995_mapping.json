@@ -1,0 +1,18 @@
+{
+  "version": "ts2.v3",
+  "page_kind": "fill_form",
+  "is_final_page": false,
+  "final_reason": "",
+  "evidence": [
+    "input",
+    "select",
+    "button#Devam"
+  ],
+  "field_mapping": {
+    "plaka_no": "input[value='06 AK 8886']",
+    "sasi_no": "input:nth-of-type(4)"
+  },
+  "actions": [
+    "click#Devam"
+  ]
+}

@@ -204,7 +204,7 @@ def analyze_selectors(html: str, mapping: Dict[str, Any]) -> Dict[str, Dict[str,
 
 
 def generate_injection_script(plan: List[FillItem], highlight: bool = True, simulate_typing: bool = True,
-                              step_delay_ms: int = 0) -> str:
+                              step_delay_ms: int = 0, commit_enter: bool = True) -> str:
     """Create a minimal JS script that logs the plan and attempts fills by selector.
     This is primarily for debugging and parity tests.
     """
@@ -218,29 +218,58 @@ def generate_injection_script(plan: List[FillItem], highlight: bool = True, simu
     ]
     # keep script simple; real typing logic exists in frontend ts3Service
     return (
-        "(() => {\n"+
-        f"  const items = {entries!r};\n"+
-        f"  const highlight = {str(bool(highlight)).lower()};\n"+
-        f"  const simulateTyping = {str(bool(simulate_typing)).lower()};\n"+
-        f"  const step = {int(step_delay_ms)};\n"+
-        "  const delay = ms => new Promise(r => setTimeout(r, ms));\n"+
-        "  const logs = [];\n"+
-        "  const setVal = async (el, val) => {\n"+
-        "    try { el.focus(); } catch(e) {}\n"+
-        "    try { el.value = String(val==null?'':val); el.dispatchEvent(new Event('input', {bubbles:true})); el.dispatchEvent(new Event('change', {bubbles:true})); } catch(e) {}\n"+
-        "    try { el.blur(); } catch(e) {}\n"+
-        "  };\n"+
-        "  return (async () => {\n"+
-        "    let filled = 0;\n"+
-        "    for (const it of items) {\n"+
-        "      let el = null;\n"+
-        "      try { const els = document.querySelectorAll(String(it.selector)); logs.push('selector-check '+it.field+' -> '+it.selector+' (count='+els.length+')'); if (els.length>0) el = els[0]; } catch(e) { logs.push('selector-error '+it.field+' -> '+String(e)); }\n"+
-        "      if (!el) { logs.push('not-found '+it.field); continue; }\n"+
-        "      await setVal(el, it.value); filled++;\n"+
-        "      if (highlight) { try { el.scrollIntoView({behavior:'smooth', block:'center'}); el.style.outline='2px solid #22c55e'; setTimeout(()=>{ try{ el.style.outline=''; }catch(e){} }, Math.max(1200, step)); } catch(e) {} }\n"+
-        "      if (step>0) await delay(step);\n"+
-        "    }\n"+
-        "    return { ok: true, filled, logs };\n"+
-        "  })();\n"+
-        "})()"
+        "(() => {\n"
+        + f"  const items = {entries!r};\n"
+        + f"  const highlight = {str(bool(highlight)).lower()};\n"
+        + f"  const simulateTyping = {str(bool(simulate_typing)).lower()};\n"
+        + f"  const step = {int(step_delay_ms)};\n"
+        + f"  const commitEnter = {str(bool(commit_enter)).lower()};\n"
+        + "  const delay = ms => new Promise(r => setTimeout(r, ms));\n"
+        + "  const logs = [];\n"
+        + "  const setNativeValue = (el, value) => {\n"
+        + "    try {\n"
+        + "      const proto = el && el.tagName === 'INPUT' ? window.HTMLInputElement.prototype : (el && el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : null);\n"
+        + "      if (proto) { const desc = Object.getOwnPropertyDescriptor(proto, 'value'); if (desc && desc.set) { desc.set.call(el, value); return true; } }\n"
+        + "    } catch(e) {}\n"
+        + "    try { el.value = value; return true; } catch(e) { return false; }\n"
+        + "  };\n"
+        + "  const typeInto = async (el, text) => {\n"
+        + "    const s = String(text == null ? '' : text);\n"
+        + "    setNativeValue(el, ''); el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true }));\n"
+        + "    let acc = '';\n"
+        + "    for (const ch of s) {\n"
+        + "      acc += ch;\n"
+        + "      try { el.dispatchEvent(new KeyboardEvent('keydown', { key: ch, bubbles: true })); } catch(e) {}\n"
+        + "      setNativeValue(el, acc); el.dispatchEvent(new Event('input', { bubbles: true }));\n"
+        + "      try { el.dispatchEvent(new KeyboardEvent('keyup', { key: ch, bubbles: true })); } catch(e) {}\n"
+        + "      await delay(5);\n"
+        + "    }\n"
+        + "    el.dispatchEvent(new Event('change', { bubbles: true }));\n"
+        + "  };\n"
+        + "  const pressEnter = (el) => {\n"
+        + "    try { el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true })); } catch(e) {}\n"
+        + "    try { el.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true })); } catch(e) {}\n"
+        + "    try { el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true })); } catch(e) {}\n"
+        + "  };\n"
+        + "  const setVal = async (el, val) => {\n"
+        + "    if (!el) return;\n"
+        + "    try { el.focus(); } catch(e) {}\n"
+        + "    const v = String(val == null ? '' : val);\n"
+        + "    if (simulateTyping) { await typeInto(el, v); } else { setNativeValue(el, v); el.dispatchEvent(new Event('input', {bubbles:true})); el.dispatchEvent(new Event('change', {bubbles:true})); }\n"
+        + "    if (commitEnter) { pressEnter(el); }\n"
+        + "    try { el.dispatchEvent(new Event('blur', { bubbles: true })); } catch(e) {}\n"
+        + "  };\n"
+        + "  return (async () => {\n"
+        + "    let filled = 0;\n"
+        + "    for (const it of items) {\n"
+        + "      let el = null;\n"
+        + "      try { const els = document.querySelectorAll(String(it.selector)); logs.push('selector-check '+it.field+' -> '+it.selector+' (count='+els.length+')'); if (els.length>0) el = els[0]; } catch(e) { logs.push('selector-error '+it.field+' -> '+String(e)); }\n"
+        + "      if (!el) { logs.push('not-found '+it.field); continue; }\n"
+        + "      await setVal(el, it.value); filled++;\n"
+        + "      if (highlight) { try { el.scrollIntoView({behavior:'smooth', block:'center'}); const prev = el.style.outline; el.style.outline='2px solid #22c55e'; setTimeout(()=>{ try{ el.style.outline=prev; }catch(e){} }, Math.max(1200, step)); } catch(e) {} }\n"
+        + "      if (step>0) await delay(step);\n"
+        + "    }\n"
+        + "    return { ok: true, filled, logs };\n"
+        + "  })();\n"
+        + "})()"
     )

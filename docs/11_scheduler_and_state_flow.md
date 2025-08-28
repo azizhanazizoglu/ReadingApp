@@ -8,7 +8,8 @@ The scheduler coordinates jobs for Ts1 and Ts2. The state machine uses Turkish t
 ## Jobs
 
 Transitions follow: `başladı → devam ediyor (each job) → tamamlandı | hata`.
-Stateflow ajanı, JPEG -> LLM JSON (TS1) -> Web HTML (Electron webview DOM capture) -> LLM Mapping (TS2) -> Webview Form Fill (TS3) adımlarını sıralı olarak çalıştırır.
+Stateflow ajanı, JPEG -> LLM JSON (TS1) -> Web HTML (Electron webview DOM capture) -> LLM Mapping (TS2) -> Webview Form Fill (TS3) -> Next (TS4) adımlarını sıralı olarak çalıştırır.
+TS3 doldurma sırasında kontrollü/maskeli inputlarda Enter komiti ve blur uygulanır (kalıcılık için).
 
 ## Geçici Veri (TmpData) Temizlik Politikası
 

@@ -177,6 +177,12 @@ pnpm start
 ## Özellikler ve Güncellemeler
 Tüm .txt dokümanlar .md’ye taşındı. Detaylar ve derinlemesine anlatımlar için `docs/` klasörüne bakın.
 
+### Neler Yeni (2025-08-28)
+- TS2 şeması revize edildi: LLM-yalnız, kod bloklu (```json) sıkı JSON; alanlar: `version`, `page_kind` (fill_form|final_activation), `is_final_page`, `final_reason`, `evidence`, `field_mapping`, `actions`.
+- TS3 doldurma komitleri güçlendirildi: kontrollü/maskeli inputlar için Enter basma (commitEnter) ve blur ile kalıcılık garanti altına alındı (backend script ve in-page path).
+- TS3 yardımcı uçlar eklendi: `/api/ts3/plan`, `/api/ts3/analyze-selectors`, `/api/ts3/generate-script` (test edilebilir, log dostu).
+- TS4 orkestrasyonu (frontend): TS2 → TS3 art arda; final sayfadaysa “Poliçeyi Aktifleştir” vb. aksiyonları uygular.
+
 ### Neler Yeni (2025-08-25)
 - Yapılandırılmış backend loglama (level, code, component, message, time, extra); `/api/logs` ile FE panelde birleşik gösterim
 - Ts1 (JPG → LLM → JSON) ve Ts2 (Webbot → Mapping) uçtan uca akışlar; mapping çıktıları `memory/TmpData/json2mapping` altında kalıcı
@@ -230,6 +236,11 @@ Notlar ve troubleshooting için `docs/README.md` ve aşağıdaki Sorun Giderme b
 - GET `/api/mapping` → son mapping
 - GET `/api/logs` → yapılandırılmış loglar
 - GET `/health` → sağlık kontrolü
+
+Ek TS3 yardımcı uçlar (test edilebilir doldurma planı ve script üretimi):
+- POST `/api/ts3/plan` → mapping + TS1 verisi + raw ile çözümleyip plan ve resolved değerler döner
+- POST `/api/ts3/analyze-selectors` → seçici analizi ve adaylar
+- POST `/api/ts3/generate-script` → vurgulama/typing/commitEnter ayarlarıyla injection script üretir ve FE çalıştırır
 
 Tam sözleşmeler ve akışlar: `docs/12_llm_agent_integration.md`.
 

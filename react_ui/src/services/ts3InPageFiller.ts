@@ -4,6 +4,9 @@ export type FillOptions = {
   highlight: boolean;
   stepDelayMs: number;
   simulateTyping: boolean;
+  // Press Enter after filling inputs to commit values on masked/controlled fields.
+  // Defaults to true if undefined.
+  commitEnter?: boolean;
 };
 
 export async function runInPageFill(fieldMapping: Record<string, string>, dataResolved: Record<string, any>, opts: FillOptions, devLog?: (c: string, m: string) => void) {
@@ -17,6 +20,7 @@ export async function runInPageFill(fieldMapping: Record<string, string>, dataRe
       const highlight = ${JSON.stringify(opts.highlight)};
       const stepDelayMs = ${JSON.stringify(opts.stepDelayMs)};
       const simulateTyping = ${JSON.stringify(opts.simulateTyping)};
+  const commitEnter = ${JSON.stringify((opts as any).commitEnter ?? true)};
       const delay = (ms) => new Promise(r => setTimeout(r, ms));
       const norm = (s) => {
         if (s == null) return '';
@@ -126,6 +130,22 @@ export async function runInPageFill(fieldMapping: Record<string, string>, dataRe
           await delay(5);
         }
         el.dispatchEvent(new Event('change', { bubbles: true }));
+        if (commitEnter) {
+          try {
+            logs.push('commit-enter typing');
+            el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+            el.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+            el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+          } catch {}
+        }
+      };
+      const pressEnter = (el) => {
+        try {
+          logs.push('commit-enter direct');
+          el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+          el.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+          el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+        } catch {}
       };
       const setVal = (el, val) => {
         if (!el) return false;
@@ -159,22 +179,25 @@ export async function runInPageFill(fieldMapping: Record<string, string>, dataRe
             setNativeValue(el, String(desired));
             el.dispatchEvent(new Event('input', { bubbles: true }));
             el.dispatchEvent(new Event('change', { bubbles: true }));
+            if (commitEnter) { pressEnter(el); }
             el.blur();
             return true;
           }
-          if (simulateTyping) { return typeInto(el, val).then(() => { try { el.blur(); } catch {}; return true; }); }
+          if (simulateTyping) { return typeInto(el, val).then(() => { try { if (commitEnter) pressEnter(el); el.blur(); } catch {}; return true; }); }
           setNativeValue(el, String(val == null ? '' : val));
           el.dispatchEvent(new Event('input', { bubbles: true }));
           el.dispatchEvent(new Event('change', { bubbles: true }));
+          if (commitEnter) { pressEnter(el); }
           el.blur();
           return true;
         }
         if (tag === 'textarea') {
           el.focus();
-          if (simulateTyping) { return typeInto(el, val).then(() => { try { el.blur(); } catch {}; return true; }); }
+          if (simulateTyping) { return typeInto(el, val).then(() => { try { if (commitEnter) pressEnter(el); el.blur(); } catch {}; return true; }); }
           setNativeValue(el, String(val == null ? '' : val));
           el.dispatchEvent(new Event('input', { bubbles: true }));
           el.dispatchEvent(new Event('change', { bubbles: true }));
+          if (commitEnter) { pressEnter(el); }
           el.blur();
           return true;
         }
