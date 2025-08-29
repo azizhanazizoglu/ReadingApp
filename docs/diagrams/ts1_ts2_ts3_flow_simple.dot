@@ -1,0 +1,61 @@
+digraph TS_Flow_Simple {
+  rankdir=LR;
+  node [shape=box, style=rounded];
+  edge [color="#64748b"];
+
+  subgraph cluster_ui {
+    label="UI";
+    style=dashed;
+    UploadJPEG [label="Upload JPEG", shape=parallelogram];
+    Iframe [label="Iframe"];
+    BtnTS1 [label="Btn TS1", shape=ellipse];
+    BtnTS2 [label="Btn TS2", shape=ellipse];
+    BtnTS3 [label="Btn TS3", shape=ellipse];
+  }
+
+  subgraph cluster_backend {
+    label="Backend";
+    TS1 [label="TS1"];
+    subgraph cluster_ts2 {
+      label="TS2";
+      TS2   [label="TS2 handler"];
+      GateTS2 [label="AND", shape=circle];
+      TsW   [label="TsW"];
+      Ts2L  [label="Ts2L"];
+    }
+    TS3 [label="TS3"];
+  }
+
+  subgraph cluster_tmp {
+    label="Artifacts";
+    JPGDL [label="jpgDownload"];
+    J2J  [label="jpg2json"];
+    W2H  [label="webbot2html"];
+    J2M  [label="json2mapping"];
+  }
+
+  mem [label="memory", shape=box];
+
+  UploadJPEG -> JPGDL;
+  JPGDL -> TS1;
+  TS1 -> J2J;
+  TS1 -> mem;
+
+  Iframe -> TsW;
+  TsW -> W2H;
+  TsW -> mem;
+  mem -> Ts2L;
+  Ts2L -> J2M;
+  Ts2L -> mem;
+  TS2 -> GateTS2;
+  GateTS2 -> TsW;
+  TsW -> Ts2L;
+
+  mem -> TS3;
+  Iframe -> TS3;
+  TS3 -> Iframe [dir=both];
+
+  BtnTS1 -> TS1 [label="click"];
+  BtnTS2 -> TS2 [label="click"];
+  BtnTS3 -> TS3 [label="click"];
+}

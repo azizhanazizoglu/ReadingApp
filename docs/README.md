@@ -17,7 +17,6 @@ All documents are in Markdown. This index replaces old .txt files.
 - 11_scheduler_and_state_flow.md
 - 12_llm_agent_integration.md
 - 13_ts3_autofill_and_debugging.md
-- 13_ts4_orchestration.md
 - error_codes.md
 - FOLDER_STRUCTURE_AND_NAMING_CONVENTION.md
 - traceability_matrix.md
@@ -29,7 +28,6 @@ Additional:
 - TS2 schema now includes `page_kind`, `is_final_page`, `final_reason`, `evidence`, `actions`; strict code-fenced JSON required.
 - TS3 injection script commits values (Enter + blur) for persistence.
 - TS3 helper endpoints added: `/api/ts3/plan`, `/api/ts3/analyze-selectors`, `/api/ts3/generate-script`.
-- TS4 orchestration doc added; frontend orchestrator runs TS2 then TS3 and handles final activation.
 
 ## Recent Updates (2025-08-27)
 - TS2 akışı: Electron webview DOM → backend → HTML ve meta artefaktları diske kaydediliyor

@@ -1,18 +1,13 @@
 {
   "version": "ts2.v3",
-  "page_kind": "fill_form",
-  "is_final_page": false,
-  "final_reason": "",
+  "page_kind": "final_activation",
+  "is_final_page": true,
+  "final_reason": "Contains 'Poliçeyi Aktifleştir' button indicating final action.",
   "evidence": [
-    "input",
-    "select",
-    "button#Devam"
+    "button:Poliçeyi Aktifleştir"
   ],
-  "field_mapping": {
-    "plaka_no": "input[value='06 AK 8886']",
-    "sasi_no": "input:nth-of-type(4)"
-  },
+  "field_mapping": {},
   "actions": [
-    "click#Devam"
+    "click#Poliçeyi Aktifleştir"
   ]
 }

@@ -22,8 +22,8 @@ TS3 notları:
 - Form doldurma, Electron webview içinde yürütülür ve görsel vurgular (Highlight) isteğe bağlıdır.
 - Kalıcılık için Enter komiti + blur uygulanır (backend injection script ve in-page filler eşleşir).
 
-TS4 notları:
-- TS2 `page_kind = final_activation` ise, `actions` içindeki CTA tıklanır (örn. `click#Poliçeyi Aktifleştir`).
+Not:
+- TS2 `page_kind = final_activation` ise, TS3 içinde `actions` dizisindeki CTA tıklanabilir (örn. `click#Poliçeyi Aktifleştir`).
 
 Koşum notları:
 - TS2 testinde LLM ve ağ çağrıları monkeypatch ile stub edilir; gerçek anahtar gerektirmez.

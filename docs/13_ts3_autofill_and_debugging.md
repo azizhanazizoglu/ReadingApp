@@ -76,7 +76,7 @@ If a field isn’t filled:
 1) TS1 (JPEG → JSON)
 2) TS2 (DOM capture → LLM mapping)
 3) TS3 (webview fill using TS2 + TS1; no LLM; commit Enter)
-4) TS4 (if final page, run actions like “Poliçeyi Aktifleştir”)
+4) Final sayfaysa mapping içindeki actions çalıştırılabilir (örn. “Poliçeyi Aktifleştir”).
 
 ## Known Limitations and Next Steps
 - Shadow DOM and nested iframes aren’t handled yet

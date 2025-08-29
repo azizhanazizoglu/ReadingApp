@@ -5,7 +5,7 @@ This project uses a layered test strategy with traceability:
 ## Levels
 - Unit tests: core helpers and isolated logic (including webbot_filler plan/selector/script)
 - Integration tests: Ts1 (jpeg→llm→json), Ts2 (webbot→mapping), Ts3 (fill via backend script)
-- End-to-end: upload → automation → mapping persisted → TS3 fill → TS4 actions → state/logs verified
+- End-to-end: upload → automation → mapping persisted → TS3 fill → actions → state/logs verified
 
 ## Artifacts and Evidence
 - Structured logs available at `/api/logs` collected during runs

@@ -46,9 +46,8 @@
 - POST `/api/ts3/analyze-selectors`: Seçicileri ve aday alanları analiz eder (geliştirici modu için).
 - POST `/api/ts3/generate-script`: Highlight, simulateTyping, stepDelayMs, commitEnter parametreleriyle injection script üretir; FE bu scripti webview içinde çalıştırır.
 
-## TS4 Orchestrasyonu
-- Frontend `ts4Service` TS2 → TS3 akışını art arda tetikler.
-- TS2 sonucunda `page_kind = final_activation` ise, TS3 `actions` içinde final CTA’yı (örn. “Poliçeyi Aktifleştir”) tıklar.
+## Notlar (Akış)
+- TS2 sonucunda `page_kind = final_activation` ise, TS3 `actions` içinde final CTA’yı (örn. “Poliçeyi Aktifleştir”) tıklayabilir.
 
 ## Logging Model
 - Codes: `BE-xxxx` backend; FE codes: `HD-`, `IDX-`, `UA-`, `UAH-`

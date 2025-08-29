@@ -1,0 +1,93 @@
+digraph TS_Flow {
+  rankdir=LR;
+  labelloc=t;
+  label="ReadingApp: TS1 -> TS2 -> TS3 Akış Diyagramı";
+  fontname="Segoe UI";
+  fontsize=12;
+  
+  /* Daha fazla boşluk için global yerleşim ayarları */
+  graph [nodesep=0.9, ranksep=1.1];
+
+  node [shape=box, style="rounded,filled", fillcolor="#f8fafc", color="#94a3b8", fontname="Segoe UI", fontsize=11];
+  edge [color="#64748b", fontname="Segoe UI", fontsize=10];
+
+  subgraph cluster_client {
+    label="Kullanıcı / UI";
+    style="rounded,dashed";
+    color="#a78bfa";
+    UploadJPEG [label="JPEG Yükle\nPOST /api/upload", shape=box, fillcolor="#eef2ff"];
+  Iframe [label="Iframe: Hedef Sayfa\n(React/Electron Webview)", shape=box, fillcolor="#eef2ff"];
+  /* Kullanıcı tarafından tıklanan tetikleyici butonlar */
+  BtnGo  [label="Buton: Sayfayı Aç / Yenile\n(Webview navigate/reload)", shape=ellipse, fillcolor="#fef9c3", color="#f59e0b"];
+  BtnTS1 [label="Buton: TS1 Başlat\n(POST /api/start-automation)", shape=ellipse, fillcolor="#fef9c3", color="#f59e0b"];
+  BtnTS2 [label="Buton: TS2 Mapping\n(POST /api/test-state-2)", shape=ellipse, fillcolor="#fef9c3", color="#f59e0b"];
+  BtnTS3 [label="Buton: TS3 Otomatik Doldur\n(POST /api/ts3/generate-script)", shape=ellipse, fillcolor="#fef9c3", color="#f59e0b"];
+  }
+
+  subgraph cluster_backend {
+    label="Backend (Flask)";
+    style=rounded;
+    color="#22c55e";
+  TS1 [label="TS1: JPEG -> LLM -> JSON\nPOST /api/start-automation\n(run_ts1_extract)", fillcolor="#ecfeff"];
+  /* TS2 iki aşamalı yapıya ayrıldı: TsW (Webbot) ve Ts2L (Mapping) */
+    subgraph cluster_ts2 {
+      label="TS2: HTML + JSON → Mapping";
+      style="rounded,filled";
+      color="#22c55e";
+    fillcolor="#ecfeff";
+  TS2  [label="TS2: Endpoint (handler)\nPOST /api/test-state-2"];
+  GateTS2 [label="AND", shape=circle, fillcolor="#fde68a", style=filled, color="#f59e0b"];
+  TsW  [label="TsW: Webbot Capture\n(html/url -> artefaktlar)"];
+  Ts2L [label="Ts2L: Mapping (map_json_to_html_fields)\nhtml + ruhsat_json -> mapping"];
+      
+    }
+  TS3 [label="TS3: Form Doldurma (LLM yok)\nPOST /api/ts3/generate-script\n(+ in-page filler)", fillcolor="#ecfeff"];
+  }
+
+  subgraph cluster_tmp {
+    label="Artefaktlar (memory/TmpData)";
+    style=rounded;
+    color="#38bdf8";
+    JPGDL [label="jpgDownload/*.jpg", fillcolor="#f0f9ff"];
+    J2J  [label="jpg2json/<base>.json", fillcolor="#f0f9ff"];
+    W2H  [label="webbot2html/page.html\n+ form.html + meta.json", fillcolor="#f0f9ff"];
+    J2M  [label="json2mapping/<base>_mapping.json", fillcolor="#f0f9ff"];
+  }
+
+  mem [label="Bellek (memory_store)\nruhsat_json, html, mapping, latest_base", shape=box, fillcolor="#fff7ed", color="#fb923c"];
+
+  /* Yerleşim ipucu: UI ve Backend yan yana dursun (basitleştirildi) */
+
+  /* Akış Kenarları */
+  UploadJPEG -> JPGDL [label="kaydet"]; 
+  JPGDL -> TS1 [label="girdi"];
+  TS1 -> J2J  [label="çıktı (dosya)"];
+  TS1 -> mem  [label="ruhsat_json"];
+  /* Yakınlaştırma için görünmez kenar */
+  Iframe -> TS1 [style=invis, weight=100];
+
+  /* TS2 akışı: BtnTS2 -> TS2 -> TsW -> AND -> Ts2L */
+  Iframe -> TsW  [label="html veya url"];
+  TsW    -> W2H  [label="HTML artefaktları"];
+  TsW    -> mem  [label="html"];
+  mem    -> Ts2L [label="ruhsat_json + html"];
+  Ts2L   -> J2M  [label="mapping JSON"];
+  Ts2L   -> mem  [label="mapping"];
+  TS2    -> GateTS2  [label="auto enable"];
+  TsW    -> GateTS2  [label="auto trigger"];
+  GateTS2 -> Ts2L    [label="auto trigger"];
+
+  mem   -> TS3 [label="mapping + ruhsat_json"];
+  Iframe -> TS3 [label="webview context"];
+  TS3 -> Iframe [label="fill + actions", dir=both];
+
+  /* Kullanıcı butonları tetikleme kenarları */
+  BtnGo  -> Iframe [label="tıkla"];
+  BtnTS1 -> TS1    [label="tıkla"];
+  BtnTS2 -> TS2    [label="tıkla"];
+  BtnTS3 -> TS3    [label="tıkla"];
+
+  /* Notlar */
+  note1 [label="TS2 mapping JSON, code block [json] formatından parse edilir.", shape=note, fillcolor="#fff1f2", color="#fb7185"];
+  Ts2L -> note1 [style=dotted, arrowhead=none];
+}

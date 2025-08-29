@@ -181,7 +181,7 @@ Tüm .txt dokümanlar .md’ye taşındı. Detaylar ve derinlemesine anlatımlar
 - TS2 şeması revize edildi: LLM-yalnız, kod bloklu (```json) sıkı JSON; alanlar: `version`, `page_kind` (fill_form|final_activation), `is_final_page`, `final_reason`, `evidence`, `field_mapping`, `actions`.
 - TS3 doldurma komitleri güçlendirildi: kontrollü/maskeli inputlar için Enter basma (commitEnter) ve blur ile kalıcılık garanti altına alındı (backend script ve in-page path).
 - TS3 yardımcı uçlar eklendi: `/api/ts3/plan`, `/api/ts3/analyze-selectors`, `/api/ts3/generate-script` (test edilebilir, log dostu).
-- TS4 orkestrasyonu (frontend): TS2 → TS3 art arda; final sayfadaysa “Poliçeyi Aktifleştir” vb. aksiyonları uygular.
+ 
 
 ### Neler Yeni (2025-08-25)
 - Yapılandırılmış backend loglama (level, code, component, message, time, extra); `/api/logs` ile FE panelde birleşik gösterim
