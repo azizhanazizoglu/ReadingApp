@@ -1,0 +1,76 @@
+digraph TSX_Linear_Flow {
+  rankdir=LR;
+  labelloc=t;
+  label="ReadingApp: TsX Master (Linear Flow)";
+  fontname="Segoe UI";
+  fontsize=12;
+
+  /* Circle-like layout for loop readability */
+  graph [nodesep=1.0, ranksep=1.0, layout=circo, splines=true, overlap=false, concentrate=true];
+  node  [shape=box, style="rounded,filled", fillcolor="#ffffff", color="#94a3b8", fontname="Segoe UI", fontsize=11];
+  edge  [color="#64748b", fontname="Segoe UI", fontsize=10];
+
+  Start     [label="Start (User clicks Master TsX)\nFunctions:\n- backend: /api/tsx/master (handler)", fillcolor="#e2e8f0"];
+  Cleanup   [label="<<cleanup>>\nClean up InTsXHtml.json + webbot2html/*\nFunctions:\n- tsx.cleanup_artifacts()**", fillcolor="#f1f5f9"];
+  Capture1  [label="<<capture>>\nCapture HTML (TsW)\nFunctions:\n- webbot.test_webbot_html_mapping.readWebPage()\n- webbot.selenium_fetcher.fetch_html_with_selenium() (opt)", fillcolor="#dbeafe", color="#2563eb"];
+  Analyze   [label="<<analyze>>\nLLM Analyze Intent (TsX)\nFunctions:\n- tsx.analyze_intent()**", fillcolor="#ccfbf1", color="#14b8a6"];
+  MapDisc   [label="<<write>>\nWrite Discovery Mapping\n(InTsXHtml.json)\nFunctions:\n- tsx.write_discovery_mapping()**", fillcolor="#dcfce7", color="#16a34a"];
+  Navigate  [label="<<navigate>>\nNavigate/Click (TS3)\nFunctions:\n- backend.routes: /api/ts3/generate-script\n- react_ui: in-page filler", fillcolor="#ede9fe", color="#7c3aed"];
+  Capture2  [label="<<capture>>\nCapture HTML (TsW)\nFunctions:\n- webbot.test_webbot_html_mapping.readWebPage()\n- webbot.selenium_fetcher.fetch_html_with_selenium() (opt)", fillcolor="#dbeafe", color="#2563eb"];
+  Classify  [label="<<classify>>\nForm Page?\nFunctions:\n- tsx.classify_form_page()**", fillcolor="#ccfbf1", color="#14b8a6"];
+  DecideForm [label="Decision: Form?", shape=diamond, style=filled, fillcolor="#fef3c7", color="#f59e0b", fontcolor="#7c2d12"];
+  MapTS2    [label="<<map>>\nProduce Mapping (TS2/Ts2L)\nFunctions:\n- backend.app: POST /api/test-state-2\n- license_llm.pageread_llm.map_json_to_html_fields()", fillcolor="#dcfce7", color="#16a34a"];
+  Snapshot  [label="<<capture>>\nSnapshot prev_html (TsW)\nFunctions:\n- webbot.test_webbot_html_mapping.readWebPage()", fillcolor="#dbeafe", color="#2563eb"];
+  Fill      [label="<<fill>>\nFill & Actions (TS3)\nFunctions:\n- backend.routes: /api/ts3/generate-script\n- react_ui: in-page filler", fillcolor="#ede9fe", color="#7c3aed"];
+  Capture3  [label="<<capture>>\nCapture post_html (TsW)\nFunctions:\n- webbot.test_webbot_html_mapping.readWebPage()\n- webbot.selenium_fetcher.fetch_html_with_selenium() (opt)", fillcolor="#dbeafe", color="#2563eb"];
+  Diff      [label="<<diff>>\nHTML Diff (prev vs post)\nFunctions:\n- tsx.diff_html()**", fillcolor="#f1f5f9", color="#64748b"];
+  DecideChanged [label="Decision: Changed?", shape=diamond, style=filled, fillcolor="#fef3c7", color="#f59e0b", fontcolor="#7c2d12"];
+  DetectPDF [label="<<detect>>\nDetect PDF/Final\nFunctions:\n- tsx.detect_pdf()**", fillcolor="#fee2e2", color="#ef4444"];
+  DecidePDF [label="Decision: PDF ready?", shape=diamond, style=filled, fillcolor="#fef3c7", color="#f59e0b", fontcolor="#7c2d12"];
+  BackMain  [label="<<navigate>>\nBack to Main (TS3)\nFunctions:\n- backend.routes: /api/ts3/generate-script", fillcolor="#ede9fe", color="#7c3aed"];
+  FinalCap  [label="<<capture>>\nFinal Capture (TsW)\nFunctions:\n- webbot.test_webbot_html_mapping.readWebPage()", fillcolor="#dbeafe", color="#2563eb"];
+  End       [label="End", fillcolor="#e2e8f0"];
+
+  /* Linear flow with inputs/outputs on signals */
+  /* Control/data edges with subtle colors */
+  Start   -> Cleanup   [label="start TsX session", color="#0ea5e9"];
+  Cleanup -> Capture1  [label="in: — | out: cleared artifacts", color="#0ea5e9"];
+  Capture1-> Analyze   [label="in: url/html | out: memory.html + webbot2html/*", color="#10b981"];
+  Analyze -> MapDisc   [label="in: html + intent('Yeni Trafik' default) | out: discovery mapping", color="#0ea5e9"];
+  MapDisc -> Navigate  [label="in: selector(s) | out: navigation started", color="#0ea5e9"];
+  Navigate-> Capture2  [label="in: — | out: new page state", color="#0ea5e9"];
+  Capture2-> Classify  [label="in: html | out: page features", color="#10b981"];
+  Classify-> DecideForm[label="in: features | out: yes/no", color="#0ea5e9"];
+
+  DecideForm -> MapTS2 [label="yes: in: html + ruhsat_json | out: mapping (json2mapping/<base>_mapping.json)", color="#f59e0b"];
+  DecideForm -> Snapshot [label="no: skip mapping", color="#0ea5e9"];
+
+  MapTS2  -> Snapshot   [label="in: mapping saved | out: proceed", color="#10b981"];
+  Snapshot-> Fill       [label="in: html | out: prev_html saved", color="#0ea5e9"];
+  Fill    -> Capture3   [label="in: mapping + ruhsat_json | out: DOM filled", color="#0ea5e9"];
+  Capture3-> Diff       [label="in: post_html | out: change summary", color="#10b981"];
+  Diff    -> DecideChanged [label="in: prev vs post | out: yes/no", color="#0ea5e9"];
+
+  DecideChanged -> MapTS2  [label="yes: re-map (TS2)", color="#f59e0b"];
+  DecideChanged -> DetectPDF [label="no: continue", color="#0ea5e9"];
+
+  DetectPDF -> DecidePDF [label="in: html/url | out: yes/no", color="#0ea5e9"];
+  DecidePDF  -> End      [label="yes: finished", color="#0ea5e9"];
+  DecidePDF  -> BackMain [label="no: go to main", color="#0ea5e9"];
+  BackMain   -> FinalCap [label="in: — | out: main page", color="#0ea5e9"];
+  FinalCap   -> End      [label="in: html | out: idle", color="#10b981"];
+
+  /* Optional loop hint: go idle and ready for next run */
+  End -> Start [style=dashed, color="#94a3b8", label="ready", arrowhead=normal];
+
+  /* Center: Legend + Summary */
+  subgraph cluster_center {
+    label="Legend ve Süreç Özeti";
+    style="rounded,dotted";
+    color="#94a3b8";
+    Legend [label="Legend\nBlue: Capture (TsW)\nPurple: Navigate/Fill (TS3)\nGreen boxes: Write/Map\nTeal edges: Control flow\nGreen edges: Data flow\nAmber edges: Yes/decision path\nDiamonds: Decisions\n** = candidate/planned function", shape=note, color="#94a3b8", fontcolor="#334155", fillcolor="#f8fafc"];
+    Summary [label="Süreç Özeti\n1) Start → Cleanup\n2) Capture (TsW) → memory.html + webbot2html/*\n3) Analyze (LLM) → Discovery mapping\n4) Navigate (TS3) → New page\n5) Capture (TsW) → Classify (Form?)\n6) If Form: Map (TS2/Ts2L) → mapping.json\n7) Snapshot prev_html (TsW)\n8) Fill (TS3) → Capture post_html (TsW)\n9) Diff prev vs post (Changed?)\n10) If changed: Re-map (TS2) loop\n11) Detect PDF → If no: Back to Main\n12) Final Capture → End", shape=note, color="#94a3b8", fontcolor="#334155", fillcolor="#f8fafc"];
+  }
+
+  /* Removed extra dotted connections and function note nodes per request */
+}

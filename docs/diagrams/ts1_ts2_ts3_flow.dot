@@ -5,11 +5,11 @@ digraph TS_Flow {
   fontname="Segoe UI";
   fontsize=12;
   
-  /* Daha fazla boşluk için global yerleşim ayarları */
-  graph [nodesep=0.9, ranksep=1.1];
+  /* Daha fazla boşluk için global yerleşim ayarları (biraz büyütüldü) */
+  graph [nodesep=1.2, ranksep=1.3];
 
-  node [shape=box, style="rounded,filled", fillcolor="#f8fafc", color="#94a3b8", fontname="Segoe UI", fontsize=11];
-  edge [color="#64748b", fontname="Segoe UI", fontsize=10];
+  node [shape=box, style="rounded,filled", fillcolor="#f8fafc", color="#94a3b8", fontname="Segoe UI", fontsize=12];
+  edge [color="#64748b", fontname="Segoe UI", fontsize=11];
 
   subgraph cluster_client {
     label="Kullanıcı / UI";
@@ -28,33 +28,53 @@ digraph TS_Flow {
     label="Backend (Flask)";
     style=rounded;
     color="#22c55e";
-  TS1 [label="TS1: JPEG -> LLM -> JSON\nPOST /api/start-automation\n(run_ts1_extract)", fillcolor="#ecfeff"];
+  TS1 [label="TS1: JPEG -> LLM -> JSON\nPOST /api/start-automation\n(run_ts1_extract)\n- license_llm/license_llm_extractor.extract_vehicle_info_from_image()\n- license_llm/license_llm_agent.py\n- llm_agent/llm_ocr_extractor.py\nInputs: jpgDownload/*.jpg\nOutputs: ruhsat_json (object), jpg2json/<base>.json", fillcolor="#ecfeff"];
   /* TS2 iki aşamalı yapıya ayrıldı: TsW (Webbot) ve Ts2L (Mapping) */
     subgraph cluster_ts2 {
-      label="TS2: HTML + JSON → Mapping";
+      label="TS2: HTML + JSON -> Mapping";
       style="rounded,filled";
       color="#22c55e";
     fillcolor="#ecfeff";
-  TS2  [label="TS2: Endpoint (handler)\nPOST /api/test-state-2"];
+  TS2  [label="TS2: Endpoint (handler)\nPOST /api/test-state-2\nRole: TsW -> (AND) -> Ts2L akışını başlatır"];
   GateTS2 [label="AND", shape=circle, fillcolor="#fde68a", style=filled, color="#f59e0b"];
-  TsW  [label="TsW: Webbot Capture\n(html/url -> artefaktlar)"];
-  Ts2L [label="Ts2L: Mapping (map_json_to_html_fields)\nhtml + ruhsat_json -> mapping"];
+  TsW  [label="TsW: Webbot Capture\n(html/url -> artefaktlar)\n- webbot/test_webbot_html_mapping.readWebPage()\n- webbot/selenium_fetcher.fetch_html_with_selenium() [opt]\nInputs: Iframe HTML (body.html) veya URL\nOutputs: memory.html, webbot2html/page.html, form.html?, page.json, form_meta.json"];
+  Ts2L [label="Ts2L: Mapping (map_json_to_html_fields)\nhtml + ruhsat_json -> mapping\n- license_llm/pageread_llm.map_json_to_html_fields()\nInputs: html (memory) + ruhsat_json\nOutputs: mapping (object), json2mapping/<base>_mapping.json"];
       
     }
-  TS3 [label="TS3: Form Doldurma (LLM yok)\nPOST /api/ts3/generate-script\n(+ in-page filler)", fillcolor="#ecfeff"];
+  TS3 [label="TS3: Form Doldurma (LLM yok)\nPOST /api/ts3/generate-script\n(+ in-page filler)\n- backend/routes.py (/api/ts3)\n- react_ui in-page filler\nInputs: mapping + ruhsat_json + webview context\nOutputs: DOM / user-like actions", fillcolor="#ecfeff"];
   }
 
   subgraph cluster_tmp {
     label="Artefaktlar (memory/TmpData)";
     style=rounded;
-    color="#38bdf8";
-    JPGDL [label="jpgDownload/*.jpg", fillcolor="#f0f9ff"];
-    J2J  [label="jpg2json/<base>.json", fillcolor="#f0f9ff"];
-    W2H  [label="webbot2html/page.html\n+ form.html + meta.json", fillcolor="#f0f9ff"];
-    J2M  [label="json2mapping/<base>_mapping.json", fillcolor="#f0f9ff"];
+    color="#10b981";
+  /* Data & types: yeşil tonlar ve yeşil yazı rengi */
+  node [fontcolor="#065f46"];
+    JPGDL [label="jpgDownload/*.jpg\n(type: image/jpeg)", fillcolor="#ecfdf5", color="#10b981"];
+    J2J  [label="jpg2json/<base>.json\n(type: JSON object)", fillcolor="#ecfdf5", color="#10b981"];
+    W2H  [label="webbot2html/page.html\n+ form.html? + page.json + form_meta.json\n(types: HTML, JSON)", fillcolor="#ecfdf5", color="#10b981"];
+    J2M  [label="json2mapping/<base>_mapping.json\n(type: JSON object)", fillcolor="#ecfdf5", color="#10b981"];
   }
 
-  mem [label="Bellek (memory_store)\nruhsat_json, html, mapping, latest_base", shape=box, fillcolor="#fff7ed", color="#fb923c"];
+  /* Kompakt SW Bileşenleri: TS1/TS2/TS3 */
+  subgraph cluster_components {
+    label="Bilesenler (SW Components / Folder Structure)";
+    style="rounded,dotted";
+    color="#3b82f6";
+    fontname="Segoe UI";
+    fontsize=10;
+  /* Folder structure: mavi tonlar ve mavi yazı rengi */
+  node [fontcolor="#1d4ed8"];
+  TS1C [label="TS1 (Folders/Modules):\n- license_llm/ (license_llm_agent.py, license_llm_extractor.py)\n- llm_agent/llm_ocr_extractor.py", shape=note, fontsize=10, color="#2563eb", fillcolor="#e0f2fe"];
+  TS2C [label="TS2 (Folders/Modules):\n- webbot/test_webbot_html_mapping.py (TsW: readWebPage)\n- webbot/selenium_fetcher.py (opsiyonel: fetch_html_with_selenium)\n- license_llm/pageread_llm.py (Ts2L: map_json_to_html_fields)", shape=note, fontsize=10, color="#2563eb", fillcolor="#e0f2fe"];
+    TS3C [label="TS3 (Folders/Modules):\n- backend/stateflow_agent.py\n- backend/routes.py (/api/ts3)\n- react_ui (in-page filler)", shape=note, fontsize=10, color="#2563eb", fillcolor="#e0f2fe"];
+  }
+
+  /* Bilesenler arasi yuksek seviye akış (kucuk ve noktalı) */
+  TS1C -> TS2C [style=dotted, color="#94a3b8"];
+  TS2C -> TS3C [style=dotted, color="#94a3b8"];
+
+  mem [label="Bellek (memory_store)\n- ruhsat_json: object\n- html: string (current page)\n- mapping: object\n- latest_base: string", shape=box, fillcolor="#ecfdf5", color="#10b981", fontcolor="#065f46"];
 
   /* Yerleşim ipucu: UI ve Backend yan yana dursun (basitleştirildi) */
 
@@ -69,8 +89,9 @@ digraph TS_Flow {
   /* TS2 akışı: BtnTS2 -> TS2 -> TsW -> AND -> Ts2L */
   Iframe -> TsW  [label="html veya url"];
   TsW    -> W2H  [label="HTML artefaktları"];
-  TsW    -> mem  [label="html"];
-  mem    -> Ts2L [label="ruhsat_json + html"];
+  W2H    -> Ts2L [label="page.html + form.html (opsiyonel)", style=dashed];
+  TsW    -> mem  [label="html (raw/current)"];
+  mem    -> Ts2L [label="html (from TsW) + ruhsat_json"];
   Ts2L   -> J2M  [label="mapping JSON"];
   Ts2L   -> mem  [label="mapping"];
   TS2    -> GateTS2  [label="auto enable"];

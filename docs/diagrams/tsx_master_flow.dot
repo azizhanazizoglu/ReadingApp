@@ -1,0 +1,118 @@
+digraph TSX_Flow {
+  rankdir=LR;
+  labelloc=t;
+  label="ReadingApp: TsX (Master Mind) Stateflow";
+  fontname="Segoe UI";
+  fontsize=12;
+
+  graph [nodesep=1.1, ranksep=1.1];
+  node  [shape=box, style="rounded,filled", fillcolor="#f8fafc", color="#94a3b8", fontname="Segoe UI", fontsize=11];
+  edge  [color="#64748b", fontname="Segoe UI", fontsize=10];
+
+  /* UI */
+  subgraph cluster_ui {
+    label="Kullanıcı / UI";
+    style="rounded,dashed";
+    color="#a78bfa";
+    BtnTsX   [label="Buton: Master (TsX)\n(POST /api/tsx/master)", shape=ellipse, fillcolor="#fef9c3", color="#f59e0b"];
+    Webview  [label="Webview (Iframe)\nHedef Sayfa", shape=box, fillcolor="#eef2ff"];
+  }
+
+  /* TsX Orchestrator */
+  subgraph cluster_tsx {
+    label="TsX Orchestrator";
+    style="rounded,filled";
+    color="#06b6d4";
+    fillcolor="#ecfeff";
+    TsX       [label="TsX: Endpoint (handler)\nPOST /api/tsx/master", fillcolor="#ecfeff"];
+    Clean     [label="Cleanup\n- delete InTsXHtml.json\n- clear webbot2html/*", fillcolor="#e0f2fe"];
+    Analyze   [label="LLM Analyze (Intent/Discovery)\n- Yeni Trafik?\n- Ana Sayfa?", fillcolor="#e0f2fe"];
+    Classify  [label="LLM Classify Page\n- Form sayfası mı?", fillcolor="#e0f2fe"];
+    Diff      [label="HTML Diff\n(prev vs post)\n- form alanlarını yoksay", fillcolor="#e0f2fe"];
+    DetectPDF [label="Detect PDF/Final\n- bitti mi?", fillcolor="#e0f2fe"];
+    MapWrite  [label="Write Mapping (Discovery)\n- json2mapping/InTsXHtml.json", fillcolor="#e0f2fe"];
+  }
+
+  /* Backend Components */
+  subgraph cluster_backend {
+    label="Backend (Flask)";
+    style=rounded;
+    color="#22c55e";
+
+    subgraph cluster_ts2 {
+      label="TS2: HTML + JSON -> Mapping";
+      style="rounded,filled";
+      color="#22c55e";
+      fillcolor="#ecfeff";
+      TS2    [label="TS2: Endpoint (handler)\nPOST /api/test-state-2\nrole: Orchestrator (TsW -> Ts2L)"];
+      Gate   [label="AND", shape=circle, fillcolor="#fde68a", style=filled, color="#f59e0b"];
+      TsW    [label="TsW: Webbot Capture\n- readWebPage()\n(opt) selenium\nrole: Boundary/Adapter", fillcolor="#ecfeff"];
+      Ts2L   [label="Ts2L: LLM Mapping\n- map_json_to_html_fields()\nrole: Service (LLM)", fillcolor="#ecfeff"];
+    }
+
+    TS3    [label="TS3: Form Doldurma\nPOST /api/ts3/generate-script\n(in-page filler)\nrole: Actions/Automation", fillcolor="#ecfeff"];
+  }
+
+  /* Data and Memory */
+  subgraph cluster_data {
+    label="Data / Artifacts";
+    style=rounded;
+    color="#10b981";
+    W2H   [label="webbot2html/\n- page.html\n- form.html?\n- page.json\n- form_meta.json", fillcolor="#ecfdf5", color="#10b981", fontcolor="#065f46"];
+    J2M_x [label="json2mapping/InTsXHtml.json", fillcolor="#ecfdf5", color="#10b981", fontcolor="#065f46"];
+    J2M   [label="json2mapping/<base>_mapping.json", fillcolor="#ecfdf5", color="#10b981", fontcolor="#065f46"];
+    mem   [label="Bellek (memory_store)\n- html\n- prev_html\n- post_html\n- mapping\n- ruhsat_json\n- latest_base", fillcolor="#ecfdf5", color="#10b981", fontcolor="#065f46"];
+  }
+
+  /* Constrained ranks for nicer layout */
+  { rank=same; BtnTsX; Webview }
+  { rank=same; TsX; Analyze; Classify; Diff; DetectPDF; Clean; MapWrite }
+  { rank=same; TS2; TS3 }
+  { rank=same; W2H; J2M_x; J2M; mem }
+
+  /* Numbered Signals (S#) */
+  /* Control flow edges (teal) */
+  BtnTsX -> TsX      [label="[S1] start", color="#0ea5e9"];
+  TsX    -> Clean    [label="[S2] cleanup", color="#0ea5e9"];
+  TsX    -> TsW      [label="[S3] capture current page", color="#0ea5e9"];
+  TsX    -> Analyze  [label="[S4] LLM analyze (intent)", color="#0ea5e9"];
+  Analyze-> MapWrite [label="[S5] write discovery mapping", color="#0ea5e9"];
+
+  /* Data edges (green) */
+  TsW    -> W2H      [label="artefaktlar", color="#10b981"];
+  TsW    -> mem      [label="html", color="#10b981"];
+  MapWrite -> mem    [label="mapping (discovery)", color="#10b981"];
+  MapWrite -> J2M_x  [label="InTsXHtml.json", color="#10b981"];
+
+  TsX -> TS3         [label="[S6] navigate/click (use TS3)", color="#0ea5e9"];
+  TS3 -> Webview     [label="actions", dir=both, style=dotted, color="#a78bfa"];
+  TsX -> TsW         [label="[S7] recapture page", color="#0ea5e9"];
+
+  TsX -> Classify    [label="[S8] form page?", color="#0ea5e9"];
+  Classify -> TS2    [label="[S9] if form -> run TS2", color="#0ea5e9"];
+  /* TS2 auto triggers (amber) */
+  TS2  -> Gate       [label="auto enable", color="#f59e0b"];
+  TsW  -> Gate       [label="auto trigger", color="#f59e0b"];
+  Gate -> Ts2L       [label="auto trigger", color="#f59e0b"];
+  /* TS2 outputs (green) */
+  Ts2L -> J2M        [label="mapping JSON", color="#10b981"];
+  Ts2L -> mem        [label="mapping", color="#10b981"];
+
+  TsX  -> TsW        [label="[S11] snapshot prev_html", color="#0ea5e9"];
+  TsW  -> mem        [label="prev_html", color="#10b981"];
+  TsX  -> TS3        [label="[S12] fill/actions (TS3)", color="#0ea5e9"];
+  TsX  -> TsW        [label="[S13] capture post-fill", color="#0ea5e9"];
+  TsW  -> mem        [label="post_html", color="#10b981"];
+  TsX  -> Diff       [label="[S14] compare prev vs post", color="#0ea5e9"];
+  Diff -> TsX        [label="[S15] loop if changed", color="#0ea5e9"];
+
+  TsX  -> DetectPDF  [label="[S16] detect PDF", color="#0ea5e9"];
+  DetectPDF -> TS3   [label="[S17] back to main (TS3)", color="#0ea5e9"];
+  TS3 -> TsW         [label="[S18] final capture", color="#0ea5e9"];
+
+  /* Helpful notes */
+  note_scripts [label="Functions:\n- readWebPage() (TsW)\n- map_json_to_html_fields() (Ts2L)\n- TS3 filler/actions", shape=note, color="#1e3a8a", fontcolor="#1e3a8a", fillcolor="#e0e7ff"];
+  note_legend  [label="Legend:\n[S#] numbered step\nTeal edges = control flow\nGreen edges = data flow\nAmber edges = TS2 auto triggers\nPurple dashed = UI/Webview", shape=note, color="#7c3aed", fontcolor="#7c3aed", fillcolor="#ede9fe"];
+  TsX -> note_scripts [style=dotted, arrowhead=none, color="#1e3a8a"];
+  mem -> note_legend  [style=dotted, arrowhead=none, color="#7c3aed"];
+}

@@ -1,0 +1,97 @@
+@startuml
+title ReadingApp: TsX Master (UML Activity)
+
+skinparam defaultFontName "Segoe UI"
+skinparam activity {
+  BackgroundColor White
+  BorderColor #94a3b8
+  FontSize 12
+}
+skinparam note {
+  BorderColor #94a3b8
+  BackgroundColor #f8fafc
+  FontSize 11
+}
+
+' Partitions represent responsibility areas
+partition TsX {
+  start
+  note right
+  Entrypoint\nFunctions:\n  - backend: /api/tsx/master (handler)
+  end note
+  :<<cleanup>> Cleanup artifacts\nClean up InTsXHtml.json + webbot2html/*\nFunctions:\n- tsx.cleanup_artifacts()**;
+}
+
+partition TsW {
+  :<<capture>> Capture HTML (TsW)\nFunctions:\n- webbot.test_webbot_html_mapping.readWebPage()\n- webbot.selenium_fetcher.fetch_html_with_selenium() (opt);
+}
+
+partition TsX {
+  :<<analyze>> LLM Analyze Intent (TsX)\nFunctions:\n- tsx.analyze_intent()**;
+  :<<write>> Write Discovery Mapping (InTsXHtml.json)\nFunctions:\n- tsx.write_discovery_mapping()**;
+}
+
+partition TS3 {
+  :<<navigate>> Navigate/Click (TS3)\nFunctions:\n- backend.routes: /api/ts3/generate-script\n- react_ui: in-page filler;
+}
+
+partition TsW {
+  :<<capture>> Capture HTML (TsW)\nFunctions:\n- webbot.test_webbot_html_mapping.readWebPage()\n- webbot.selenium_fetcher.fetch_html_with_selenium() (opt);
+}
+
+partition TsX {
+  :<<classify>> Form Page?\nFunctions:\n- tsx.classify_form_page()**;
+}
+
+if (Form?) then (yes)
+  partition "TS2/Ts2L" {
+    :<<map>> Produce Mapping (TS2/Ts2L)\nFunctions:\n- backend.app: POST /api/test-state-2\n- license_llm.pageread_llm.map_json_to_html_fields();
+  }
+else (no)
+endif
+
+partition TsW {
+  :<<capture>> Snapshot prev_html (TsW)\nFunctions:\n- webbot.test_webbot_html_mapping.readWebPage();
+}
+
+partition TS3 {
+  :<<fill>> Fill & Actions (TS3)\nFunctions:\n- backend.routes: /api/ts3/generate-script\n- react_ui: in-page filler;
+}
+
+partition TsW {
+  :<<capture>> Capture post_html (TsW)\nFunctions:\n- webbot.test_webbot_html_mapping.readWebPage()\n- webbot.selenium_fetcher.fetch_html_with_selenium() (opt);
+}
+
+partition TsX {
+  :<<diff>> HTML Diff (prev vs post)\nFunctions:\n- tsx.diff_html()**;
+}
+
+if (Changed?) then (yes)
+  --> "<<map>> Produce Mapping (TS2/Ts2L)" : Re-map loop
+else (no)
+endif
+
+partition TsX {
+  :<<detect>> Detect PDF/Final\nFunctions:\n- tsx.detect_pdf()**;
+}
+
+if (PDF ready?) then (yes)
+  stop
+else (no)
+  partition TS3 {
+    :<<navigate>> Back to Main (TS3)\nFunctions:\n- backend.routes: /api/ts3/generate-script;
+  }
+  partition TsW {
+    :<<capture>> Final Capture (TsW)\nFunctions:\n- webbot.test_webbot_html_mapping.readWebPage();
+  }
+  stop
+endif
+
+legend right
+Legend
+- Partitions: TsX / TsW / TS3 / TS2-Ts2L sorumluluk alanları
+- <<capture>> / <<navigate>> / <<fill>> / <<map>> / <<diff>> / <<detect>> / <<write>> etiketleri işlem tipidir
+- ** = candidate/planned function
+endlegend
+
+@enduml
