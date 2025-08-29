@@ -1,0 +1,152 @@
+@startuml tsx_master_flow_state
+title ReadingApp: TsX Master (State Machine)
+
+skinparam defaultFontName "Segoe UI"
+skinparam state {
+  BackgroundColor White
+  BorderColor #94a3b8
+  FontSize 12
+}
+
+' Light color accents per stereotype (compatible syntax)
+skinparam state {
+  BackgroundColor<<capture>> #dbeafe
+  BorderColor<<capture>> #2563eb
+  BackgroundColor<<analyze>> #ccfbf1
+  BorderColor<<analyze>> #14b8a6
+  BackgroundColor<<write>> #dcfce7
+  BorderColor<<write>> #16a34a
+  BackgroundColor<<navigate>> #ede9fe
+  BorderColor<<navigate>> #7c3aed
+  BackgroundColor<<classify>> #ccfbf1
+  BorderColor<<classify>> #14b8a6
+  BackgroundColor<<map>> #dcfce7
+  BorderColor<<map>> #16a34a
+  BackgroundColor<<fill>> #ede9fe
+  BorderColor<<fill>> #7c3aed
+  BackgroundColor<<diff>> #f1f5f9
+  BorderColor<<diff>> #64748b
+  BackgroundColor<<detect>> #fee2e2
+  BorderColor<<detect>> #ef4444
+}
+
+[*] --> Idle
+
+state Idle {
+}
+
+Idle --> Cleaning : start TsX\n/api/tsx/master
+
+state TsW_Capture <<capture>> {
+}
+
+state TsX_Analyze <<analyze>> {
+}
+
+state Map_Discovery <<write>> {
+}
+
+state Navigate_TS3 <<navigate>> {
+}
+
+state Classify_Form <<classify>> {
+}
+
+state Map_TS2 <<map>> {
+}
+
+state Snapshot_Prev <<capture>> {
+}
+
+state Fill_TS3 <<fill>> {
+}
+
+state Capture_Post <<capture>> {
+}
+
+state Diff_HTML <<diff>> {
+}
+
+state Detect_PDF <<detect>> {
+}
+
+state Back_Main <<navigate>> {
+}
+
+Cleaning : Functions:\n- tsx.cleanup_artifacts()**
+Cleaning : Input: — (session start)
+Cleaning : Behavior: delete json2mapping/InTsXHtml.json and clear webbot2html/*
+Cleaning : Output: clean slate (no leftover artifacts)
+TsW_Capture : Functions:\n- webbot.test_webbot_html_mapping.readWebPage()\n- webbot.selenium_fetcher.fetch_html_with_selenium() (opt)
+TsW_Capture : Input: webview html or url
+TsW_Capture : Behavior: capture DOM and extract artifacts
+TsW_Capture : Output: memory.html + webbot2html/*
+TsX_Analyze : Functions:\n- tsx.analyze_intent()**
+TsX_Analyze : Input: html + intent
+TsX_Analyze : Behavior: LLM infers target button/route
+TsX_Analyze : Output: selector(s)/route
+Map_Discovery : Functions:\n- tsx.write_discovery_mapping()**
+Map_Discovery : Input: target from analysis
+Map_Discovery : Behavior: write minimal discovery mapping
+Map_Discovery : Output: memory.mapping + json2mapping/InTsXHtml.json
+Navigate_TS3 : Functions:\n- backend.routes: /api/ts3/generate-script\n- react_ui: in-page filler
+Navigate_TS3 : Input: selector(s)
+Navigate_TS3 : Behavior: click/navigate via TS3
+Navigate_TS3 : Output: new page state
+Classify_Form : Functions:\n- tsx.classify_form_page()**
+Classify_Form : Input: html
+Classify_Form : Behavior: decide if page is a fillable form
+Classify_Form : Output: isForm yes/no
+Map_TS2 : Functions:\n- backend.app: POST /api/test-state-2\n- license_llm.pageread_llm.map_json_to_html_fields()
+Map_TS2 : Input: html + ruhsat_json
+Map_TS2 : Behavior: map fields to inputs with semantics
+Map_TS2 : Output: mapping (memory) + json2mapping/<base>_mapping.json
+Snapshot_Prev : Functions:\n- webbot.test_webbot_html_mapping.readWebPage()
+Snapshot_Prev : Input: current html
+Snapshot_Prev : Behavior: store pre-fill snapshot
+Snapshot_Prev : Output: memory.prev_html
+Fill_TS3 : Functions:\n- backend.routes: /api/ts3/generate-script\n- react_ui: in-page filler
+Fill_TS3 : Input: mapping + ruhsat_json + context
+Fill_TS3 : Behavior: fill inputs and perform actions
+Fill_TS3 : Output: DOM updated/actions done
+Capture_Post : Functions:\n- webbot.test_webbot_html_mapping.readWebPage()\n- webbot.selenium_fetcher.fetch_html_with_selenium() (opt)
+Capture_Post : Input: page after fill
+Capture_Post : Behavior: capture DOM
+Capture_Post : Output: memory.post_html
+Diff_HTML : Functions:\n- tsx.diff_html()**
+Diff_HTML : Input: prev_html + post_html
+Diff_HTML : Behavior: compare (ignore field value-only changes)
+Diff_HTML : Output: changed yes/no
+Detect_PDF : Functions:\n- tsx.detect_pdf()**
+Detect_PDF : Input: html/url/state
+Detect_PDF : Behavior: detect PDF or final artifact
+Detect_PDF : Output: pdfReady yes/no
+Back_Main : Functions:\n- backend.routes: /api/ts3/generate-script
+Back_Main : Input: mapping/actions
+Back_Main : Behavior: navigate to main page
+Back_Main : Output: at main page
+
+Cleaning --> TsW_Capture : artifacts cleared
+TsW_Capture --> TsX_Analyze : html captured
+TsX_Analyze --> Map_Discovery : intent + mapping
+Map_Discovery --> Navigate_TS3 : selector(s)
+Navigate_TS3 --> TsW_Capture : new page
+TsW_Capture --> Classify_Form : html
+
+Classify_Form --> Map_TS2 : yes (form)
+Classify_Form --> Snapshot_Prev : no (skip mapping)
+
+Map_TS2 --> Snapshot_Prev : mapping saved
+Snapshot_Prev --> Fill_TS3 : prev_html saved
+Fill_TS3 --> Capture_Post : DOM filled
+Capture_Post --> Diff_HTML : post_html ready
+
+Diff_HTML --> Map_TS2 : changed? yes (re-map)
+Diff_HTML --> Detect_PDF : changed? no
+
+Detect_PDF --> [*] : pdf ready
+Detect_PDF --> Back_Main : not ready
+Back_Main --> TsW_Capture : main page
+
+
+@enduml

@@ -1,0 +1,54 @@
+@startuml ts1_ts2_ts3_flow_sequence
+Title ReadingApp: TS1 → TS2 → TS3 (Sequence)
+
+skinparam defaultFontName "Segoe UI"
+skinparam sequenceMessageAlign center
+skinparam sequence {
+  ActorBorderColor #64748b
+  LifeLineBorderColor #94a3b8
+  LifeLineBackgroundColor #ffffff
+  BoxBorderColor #94a3b8
+  ArrowColor #334155
+}
+
+actor User
+participant "UI/Webview" as UI
+participant "TS1 (Extractor)" as TS1
+participant "TS2 Handler" as TS2
+participant "TsW (Webbot)" as TsW
+participant "Ts2L (Mapper)" as Ts2L
+participant "TS3 (Filler)" as TS3
+database  "Memory/Artifacts" as MEM
+
+' TS1
+User -> UI: Upload JPEG
+UI -> TS1: POST /api/start-automation
+TS1 -> MEM: ruhsat_json
+TS1 -> MEM: jpg2json/<base>.json
+
+' TS2
+User -> TS2: Click BtnTS2\nPOST /api/test-state-2 (enable)
+TS2 -> TsW: Capture HTML (auto trigger)
+TsW -> MEM: memory.html\nwebbot2html/page.html + form.html? + meta
+MEM -> Ts2L: html + ruhsat_json
+Ts2L -> MEM: mapping\njson2mapping/<base>_mapping.json
+
+' TS3
+User -> TS3: Click BtnTS3\nPOST /api/ts3/generate-script
+MEM -> TS3: mapping + ruhsat_json
+UI  -> TS3: webview context
+TS3 -> UI: fill + actions
+
+' Gating (implicit sequence): TS2 enables Ts2L only after TsW capture
+note over TS2,Ts2L
+TS2 handler enables mapping step.
+TsW produces html, then Ts2L runs.
+end note
+
+legend right
+- Lifelines: UI, TS1, TS2, TsW, Ts2L, TS3, MEM
+- Inline endpoints and artifacts shown on messages
+- Colors match other diagrams
+endlegend
+
+@enduml

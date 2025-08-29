@@ -4,10 +4,12 @@ This document captures the TsX (Master Mind) feature: what it does, which compon
 
 ## Scope and Goals
 
-- Add a new user-facing button “Master (TsX)” that behaves like a conductor: it can trigger TS1, TS2, TS3 sequences like a user would, but with logic and LLM reasoning.
+- Add a new user-facing button “Master (TsX)” (symbol: TsX) that behaves like a conductor: it can trigger TS1, TS2, TS3 sequences like a user would, but with logic and LLM reasoning.
 - Default intent: “Yeni Trafik” (traffic insurance). TsX can ask the user for intent; if not provided, it assumes “Yeni Trafik”.
 - TsX uses LLM prompts (OpenAI) to analyze the current page HTML captured from the webview and decide where to go next, what to click, and when to fill forms.
 - TsX produces and/or consumes mapping JSON (saved to memory and to `memory/TmpData/json2mapping/`). For TsX-first analysis, the file should be named `InTsXHtml.json`.
+
+Note on signals: In all diagrams and logs, signals are numbered (S1, S2, …) and include a short explanation about data in/out to keep the order and data flow clear.
 
 ## Terminology
 
@@ -26,6 +28,12 @@ This document captures the TsX (Master Mind) feature: what it does, which compon
 - Browser/webview (Iframe) is loaded; TsW can read HTML from memory/body or, as fallback, by URL.
 - LLM provider: OpenAI via existing `license_llm/pageread_llm.py` prompts (extend with TsX prompts as needed).
 
+Additional assumptions captured from the user brief:
+- “Yeni Trafik” has Turkish synonyms; TsX should consider them. If none found, search for “Ana Sayfa” (also via synonyms) to recover.
+- Discovery mapping written by TsX includes an origin flag (e.g., `origin: "TsX"`) so later cycles can skip LLM if not needed.
+- TsX always snapshots pristine `prev_html` before any fill, and diffs should ignore value-only changes of form fields when deciding “changed”.
+- If `ruhsat_json` missing, TsX may prompt TS1 or use backend fallback but prefers TS1 beforehand for quality.
+
 ## UI Trigger and Contract
 
 - UI: Add a new button in “Kullanıcı / UI”: label “Master (TsX)”, symbol “TsX”.
@@ -43,6 +51,38 @@ This document captures the TsX (Master Mind) feature: what it does, which compon
 - TS3 Endpoint: `backend/routes.py` `/api/ts3/generate-script` (in-page filler/actions)
 - Memory and artifacts writer: `backend/app.py` (writes `webbot2html/page.html`, optional `form.html`, `page.json`, `form_meta.json`; writes `json2mapping/<base>_mapping.json`)
 
+## What “Map_Discovery” discovers (from the brief)
+
+Map_Discovery is a lightweight, LLM-guided discovery step that inspects the current page HTML and produces a minimal mapping that helps TS3 navigate. It does not build the full TS2 field mapping. It specifically aims to:
+
+- Locate primary navigation targets for the default user intent “Yeni Trafik” (traffic insurance) using Turkish synonyms; if not found, locate main page (“Ana Sayfa”) or synonyms.
+- Return a compact JSON object saved as `memory.mapping` and also persisted to `memory/TmpData/json2mapping/InTsXHtml.json`.
+- Suggested JSON shape for discovery mapping:
+
+  ```json
+  {
+    "origin": "TsX",               // marks TsX discovery output
+    "intent": "Yeni Trafik",       // or the provided user intent
+    "targets": [
+      {
+        "label": "Yeni Trafik",
+        "selector": "button[data-testid=yenitrafik]",
+        "action": "click",
+        "confidence": 0.92
+      }
+    ],
+    "fallback": {
+      "label": "Ana Sayfa",
+      "selector": "a[href='/']",
+      "action": "click"
+    },
+    "timestamp": "2025-08-29T00:00:00Z"
+  }
+  ```
+
+- TS3 can consume this discovery mapping to perform a single click/navigation to the intended screen.
+- After navigation, TsX re-captures HTML and re-evaluates whether the page is a form page; if yes, TsX triggers TS2 for full mapping.
+
 ## Numbered Signals (order of operations)
 
 Notation: [S#] Source → Target: action — data (inputs) ⇒ results (outputs)
@@ -51,7 +91,7 @@ Notation: [S#] Source → Target: action — data (inputs) ⇒ results (outputs)
 2. [S2] TsX → FS: cleanup — delete `json2mapping/InTsXHtml.json` if exists; clear `webbot2html/*` ⇒ clean slate
 3. [S3] TsX → TsW: capture current page — html/url (from webview or memory) ⇒ memory.html; artifacts `webbot2html/page.html`, `form.html?`, `page.json`, `form_meta.json`
 4. [S4] TsX → LLM: analyze HTML for intent — html + intent (default: "Yeni Trafik") + prompts ⇒ decision: target button/route (e.g., “Yeni Trafik”, or fallback “Ana Sayfa”)
-5. [S5] TsX → Disk/Memory: write mapping (discovery) — decision ⇒ memory.mapping, `json2mapping/InTsXHtml.json`
+5. [S5] TsX → Disk/Memory: write mapping (discovery) — decision ⇒ `memory.mapping` (discovery), `json2mapping/InTsXHtml.json` (JSON with selector(s), action, confidence, origin="TsX")
 6. [S6] TsX → Actions (TS3 recommended): navigate/click — target selector from mapping ⇒ page navigation started
 7. [S7] TsX → TsW: recapture page — html after navigation ⇒ memory.html updated; artifacts updated
 8. [S8] TsX → Classifier (LLM): is this a form page? — new html + prompts (reuse TS2-style cues) ⇒ boolean + rationale
@@ -112,3 +152,18 @@ Tips:
 ---
 
 If you want, I can add a compact legend and step-numbered overlay to the diagram afterwards; for now, this Markdown acts as the single source of truth for TsX behavior.
+
+## Appendix: User Brief (integrated)
+
+This section restates the provided requirements verbatim (lightly edited for clarity) so they live alongside the spec:
+
+- Add a new button named Master with symbol TsX under Kullanıcı/UI. This starts the TsX Master Mind flow.
+- TsX can call TS1, TS2, TS3 like a user (simulating clicks).
+- TsX has LLM prompts and connects to OpenAI. On click, the Master Mind starts.
+- When drawing signals, include small explanations and numbers so the order and data flow are clear.
+- On click, TsX first calls TsW and receives HTML artifacts from memory; then analyzes HTML and writes a discovery mapping JSON named `InTsXHtml.json` under `json2mapping/`.
+- Before starting, delete existing `InTsXHtml.json` and clean `webbot2html/*`.
+- TsX analyzes with prompts: default user intent is “Yeni Trafik” (traffic insurance); look for a button or synonyms; if not found, search for main page (Ana Sayfa) or synonyms. Discover where you are and navigate appropriately. Save findings as mapping to memory and temp, then awaken TsW to click it.
+- On the next page, analyze again; decide if it’s the Yeni Trafik policy creation form page (reuse TS2 prompts); if it is, awaken TS2. TsW runs, then auto-trigger Ts2L. After TS2 writes mapping JSON, TsX can skip LLM and trigger TsW to save pristine HTML before filling.
+- After snapshot, awaken TS3 to fill and act. Then awaken TsW to capture post HTML. Keep previous HTML to avoid overwrites. Compare prev/post without LLM; if changed significantly, trigger TS2 again and repeat filling.
+- Finally, when the website produces a PDF, TsX must detect it, end the process, and navigate back to main via TS3, ready for the next run.

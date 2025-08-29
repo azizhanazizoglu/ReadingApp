@@ -1,0 +1,73 @@
+@startuml tsx_master_flow_sequence
+title ReadingApp: TsX Master (Sequence)
+
+skinparam defaultFontName "Segoe UI"
+skinparam sequenceMessageAlign center
+skinparam sequence {
+  ActorBorderColor #64748b
+  LifeLineBorderColor #94a3b8
+  LifeLineBackgroundColor #ffffff
+  BoxBorderColor #94a3b8
+  ArrowColor #334155
+}
+
+actor User
+participant "Backend TsX" as TsX
+participant "TsW (Webbot)" as TsW
+participant "TS3 (Navigator/Filler)" as TS3
+participant "TS2/Ts2L (Mapper)" as TS2L
+database "Artifacts/Memory" as MEM
+
+User -> TsX: Click Master TsX\nPOST /api/tsx/master (handler)
+TsX -> TsX: cleanup_artifacts()**
+TsX -> TsW: Capture HTML\nreadWebPage() / selenium (opt)
+TsW --> MEM: memory.html + webbot2html/*
+MEM --> TsX: html
+TsX -> TsX: analyze_intent()**\nwrite_discovery_mapping()**
+TsX -> TS3: generate-script (navigate)
+TS3 --> TsX: navigation started
+TsX -> TsW: Capture HTML
+TsW --> TsX: html
+TsX -> TsX: classify_form_page()**
+
+alt Form page
+  TsX -> TS2L: POST /api/test-state-2\nmap_json_to_html_fields()
+  TS2L --> MEM: json2mapping/<base>_mapping.json
+  MEM --> TsX: mapping saved
+else Not a form
+  TsX -> TsX: skip mapping
+end
+
+TsX -> TsW: Snapshot prev_html
+TsW --> MEM: prev_html
+TsX -> TS3: Fill & Actions
+TS3 --> TsX: DOM filled
+TsX -> TsW: Capture post_html
+TsW --> MEM: post_html
+MEM --> TsX: post_html
+TsX -> TsX: diff_html()**
+
+alt Changed?
+  TsX -> TS2L: Re-map (TS2)
+  TS2L --> TsX: mapping updated
+else No change
+end
+
+TsX -> TsX: detect_pdf()**
+alt PDF ready
+  TsX --> User: Finished
+else Not ready
+  TsX -> TS3: Back to Main
+  TS3 --> TsX: main page
+  TsX -> TsW: Final Capture
+  TsW --> TsX: html
+  TsX --> User: End
+end
+
+legend right
+- Inline function names shown where applicable
+- ** = candidate/planned function
+- MEM represents memory/artifact writes like memory.html, prev/post_html, mapping.json
+endlegend
+
+@enduml

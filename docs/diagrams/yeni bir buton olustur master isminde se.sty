@@ -1,0 +1,53 @@
+yeni bir buton olustur master isminde sembolu de TsX. Bu TsX master mind fonksiyonu olucak. 
+
+
+TsX will can call Ts1 Ts2 Ts3 same as user (User clicks)
+
+TsX has LLM propt and connect to Open AI.
+When User clikc TsX button MM will be start.
+
+
+(when you draw signals please all give small explenation and number. So I understand which data going where in which order)
+TsX main Requirements
+When User clicks TsX button
+TsX will call first TsW and recieve the HTML artifacts from memory
+TsX will analyze html and give mappinJson (same in the temp folder json2mapping/) json file name should be named as InTsXHtml
+
+
+Create Tsx Internal Flow in empty are in the page
+When TsX triggered by user via clicking TsX button like TsX (will be in Kullanici/Ui)
+first InTsXHtml.json if exist will be deleted from json2mapping folder. (Old data deleted) also if exist needs clean the webbot2html folder
+TsX awokes first TsW and waits for the HTML from memory (TsW as you know also writes webbot2html)
+TsX analyze with some giving prompts
+    Propmtlar ve akis semasi (logic)
+        Tsx should take from the user what user wants. Default user wants "Yeni Trafik"
+        Yeni Trafik means trafiks sigortasi. TsX should investigate all the html and check for 
+        button with Yeni Trafik or synonumes. Most likely should be Same as here written
+        when TsX found this button. Should understand as AI okay I need to go this page and 
+        later fill the forms untill to get pdf from webside.
+        TsX if can not find any Yeni Trafik Button then needs to search for the main 
+        page button could be Ana Sayfa in turkish or synonims. 
+        So TsX needs to discover where he is in the webiste and try to first to find 
+        Yeni Trafik if not then try to finds main page. 
+        When TsX find MainPage or Yeni Police button it should savce as mapping file to memory 
+        and also temp folder. 
+        After he finds then awoke the TsW to clikck it. 
+        in the next page. TsX again activates and analyze the page. Try to 
+        understands if it is Yeni Trafik police olusturma sayfasi ve 
+        formlar bulunuyor (Ts2 nin proptlarindan ornek koy.) 
+        TsX bunun form oldugunu ve doldurulmasi gerektigini anlar. 
+        TsX ayni kullanicinin tiklmasiu gibi (direk sinyal ile bagla) 
+        Ts2zi awoke eder. Tekrar TsW ve daha sonra auto trigger ile 
+        Ts2L calisir. Ts2 bellege json dosyasini yazdiktan sonra, TsX LLM calistirmadan 
+        basit bir logicle mesla Ts2 json doszasi urettiyse (mesala jsona bir girdi daha 
+        ekleyewbilriz tsX tarafinda baslatildi gibi TsX bunu anlayip LLM calistirmadan 
+        TsW trigger eder. TsW herhangi bir degisiklik sayfada olmadan once sayfanin orjinal
+        doldurulmamis htmli memorye kayite eder. Kayit islemi bittikten sonra TsX Ts3`awoke eder.
+        Ts3 Awoke olur ayni kullanici tiklamis gibi hic bir farki olamadan azni sekilde 
+        calisir ve sayfada gerekli yerleri doldurur ve action varsa clikcler.
+        Islem bitince tekrar TsW aktif olur ve sayfanin htmlini memorye  kaydeder. Owerwirete olmamsi icin
+        Tsx her zaman onceki htmli kayitli olarak memoryde tutar. TsX bu sefer 
+        LLM kullanamdan (bunlarin her biri fonksiyon olucak) onceki ve sonraki htmlki karsilastirip sayfa formlar haric 
+        degismis olup olmadigina bakar. Sayfa degismisse Ts2 yi tekrar tetikler ayni prossesler islenip
+        Ts3 doldurur. En sonunda websitesi pdf uretir. Bu uretmeyi TsX anlamasi gerek ve islemi bitirir. 
+        Tekrar ana sayfaya yine Ts3 ile donerek. HAzir bir halde bekler

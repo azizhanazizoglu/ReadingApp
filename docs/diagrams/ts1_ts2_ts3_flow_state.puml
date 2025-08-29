@@ -1,0 +1,93 @@
+@startuml ts1_ts2_ts3_flow_state
+title ReadingApp: TS1 → TS2 → TS3 (State Machine)
+
+skinparam defaultFontName "Segoe UI"
+skinparam state {
+  BackgroundColor White
+  BorderColor #94a3b8
+  FontSize 12
+}
+
+[*] --> Idle
+
+state Idle {
+}
+
+' UI triggers (buttons)
+Idle --> Navigate_Webview : BtnGo (navigate/reload)
+Idle --> TS1_Processing : BtnTS1 (POST /api/start-automation)
+Idle --> TS2_Handler : BtnTS2 (POST /api/test-state-2)
+Idle --> TS3_Fill : BtnTS3 (POST /api/ts3/generate-script)
+
+state Navigate_Webview <<navigate>> {
+}
+
+state TS1_Processing <<extract>> {
+}
+
+TS1_Processing : TS1: JPEG -> LLM -> JSON\nEndpoint: /api/start-automation (run_ts1_extract)
+TS1_Processing : Functions:\n- license_llm.license_llm_extractor.extract_vehicle_info_from_image()\n- license_llm.license_llm_agent\n- llm_agent.llm_ocr_extractor
+TS1_Processing : Inputs: jpgDownload/*.jpg\nOutputs: ruhsat_json (memory), jpg2json/<base>.json
+TS1_Processing --> Idle : done
+
+' TS2 composite flow (TsW capture + gated Ts2L mapping)
+state TS2_Flow {
+  [*] --> TsW_Capture
+  state TsW_Capture <<capture>> {
+  }
+  state Ts2L_Map <<map>> {
+  }
+  state Gate_TS2 <<join>>
+
+  ' Webbot capture produces HTML and artifacts
+  TsW_Capture : TsW: Webbot Capture\nInputs: Iframe HTML (body.html) or URL
+  TsW_Capture : Functions:\n- webbot.test_webbot_html_mapping.readWebPage()\n- webbot.selenium_fetcher.fetch_html_with_selenium() (opt)
+  TsW_Capture : Outputs: memory.html, webbot2html/page.html, form.html?, page.json, form_meta.json
+
+  ' Mapping step consumes html + ruhsat_json
+  Ts2L_Map : Ts2L: Mapping (map_json_to_html_fields)\nConsumes: html (memory) + ruhsat_json
+  Ts2L_Map : Functions:\n- license_llm.pageread_llm.map_json_to_html_fields()
+  Ts2L_Map : Outputs: mapping (memory), json2mapping/<base>_mapping.json
+
+  ' Gating: Ts2L runs only after handler enabled AND capture done
+  TsW_Capture --> Gate_TS2 : auto trigger
+  Gate_TS2 --> Ts2L_Map : auto trigger
+}
+
+state TS2_Handler <<handler>> {
+}
+
+TS2_Handler : TS2: Endpoint (handler)\nPOST /api/test-state-2\nRole: enables Ts2L after TsW
+TS2_Handler --> Gate_TS2 : auto enable
+TS2_Handler --> Idle : done
+
+' TS3 filling
+state TS3_Fill <<fill>> {
+}
+
+TS3_Fill : TS3: Form Filling (no LLM)\nEndpoint: /api/ts3/generate-script
+TS3_Fill : Functions:\n- backend.routes (/api/ts3)\n- react_ui in-page filler
+TS3_Fill : Inputs: mapping + ruhsat_json + webview context\nOutputs: DOM / user-like actions
+TS3_Fill --> Idle : done
+
+' Notes for data stores / artifacts
+note right of TS1_Processing
+Artifacts/Memory
+- ruhsat_json (memory_store)
+- jpg2json/<base>.json
+end note
+
+note right of TsW_Capture
+Artifacts
+- webbot2html/page.html
+- form.html? + page.json + form_meta.json
+- memory.html (raw)
+end note
+
+note right of Ts2L_Map
+Artifacts/Memory
+- json2mapping/<base>_mapping.json
+- mapping (object in memory_store)
+end note
+
+@enduml
