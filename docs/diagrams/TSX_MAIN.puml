@@ -35,6 +35,47 @@ skinparam state {
 
 
 [*]--> TsX_Main : UserCommand == "Yeni Trafik"
+[*] -->ProcessData : UserData
+
+state ProcessData <<input>> {
+  ProcessData : Input: jpgDownload/*.jpg
+  ProcessData : Behavior: Ts1_Processing
+  ProcessData : Output: userDataJson, jpg2json/<base>,json
+
+  [*] --> DownloadJpg : Start
+
+  state DownloadJpg <<function>> {
+    DownloadJpg : Input: react_ui (upload button)
+    DownloadJpg : Behavior: saves file in to jpgDownload/*.jpg
+    DownloadJpg : Output: jpgDownload/*.jpg
+  }
+
+  DownloadJpg --> LLMProcessData : jpgDownload/*.jpg
+
+  state LLMProcessData <<function>> {
+    LLMProcessData : Input: usjpgDownload/*.jpg
+    LLMProcessData : Function: license_llm.license_llm_extractor.extract_vehicle_info_from_image()
+    LLMProcessData : Function: license_llm.license_llm_agent
+    LLMProcessData : Behavior: extract information from image and writes to Json file
+    LLMProcessData : Output: userDataProcessed (memory), jpg2json/<base>.json
+  }
+
+  state ErrorManagerProcessData <<function>> {
+    ErrorManagerProcessData : Input: userDataProcessed
+    ErrorManagerProcessData : Behavior: Checkif json file is empty or filled
+    ErrorManagerProcessData : Output: errorManagerProcessData
+  }
+
+  ErrorManagerProcessData --> [*] : completed userDataProcessed
+  ErrorManagerProcessData --> [*] : empty userDataProcessed
+
+  LLMProcessData --> ErrorManagerProcessData : userDataProcessed
+
+  
+
+}
+
+ProcessData --> TsXErrorManager : errorManagerProcessData
 
 state TsX_Main <<navigate>> {
 
@@ -162,7 +203,7 @@ state TsX_Main <<navigate>> {
   state HomePage <<view>> {
     HomePage : Input: pageHtml, UserCommand
     HomePage : Behavior: displays the Home Page
-    HomePage : Output: at HomePage
+    HomePage : Output: UserTaskPage
 
     [*] --> WriteMappingSideMenu :pageHtml
 
@@ -231,7 +272,7 @@ state TsX_Main <<navigate>> {
     state OpenUserTaskPage <<function>> {
       OpenUserTaskPage : Input: userTaskMappingsJson
       OpenUserTaskPage : Behavior: Navigates to User Task Page with mappings using Ts3 action
-      OpenUserTaskPage : Output: userTaskPage
+      OpenUserTaskPage : Output: userTaskPageHtml
     }
 
     OpenUserTaskPage --> CheckPageChangeToUserCommandPage : userTaskPageHtml
@@ -277,6 +318,15 @@ state TsX_Main <<navigate>> {
 
   HomePage --> TsXErrorManager : ErrorManagerSideMenu2UserTaskPage
   HomePage --> TsXErrorManager : errorManagerSideMenuPage
+  HomePage --> UserTaskPage : userTaskPageHtml
+
+  state UserTaskPage <<view>> {
+      UserTaskPage : Input: userTaskPageHtml
+      UserTaskPage : Behavior: processes userTaskPageHtml
+      UserTaskPage : Output: pdfReady
+
+      
+  }
 
   state TsXErrorManager <<error>> {
       TsXErrorManager : Input: errorContext
