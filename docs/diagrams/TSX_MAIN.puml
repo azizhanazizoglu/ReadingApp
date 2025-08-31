@@ -1,0 +1,296 @@
+@startuml
+title ReadingApp: TsX Master (State Machine)
+
+skinparam defaultFontName "Segoe UI"
+skinparam state {
+  BackgroundColor White
+  BorderColor #94a3b8
+  FontSize 12
+}
+
+skinparam state {
+  BackgroundColor<<capture>> #dbeafe
+  BorderColor<<capture>> #2563eb
+  BackgroundColor<<analyze>> #ccfbf1
+  BorderColor<<analyze>> #14b8a6
+  BackgroundColor<<write>> #dcfce7
+  BorderColor<<write>> #16a34a
+  BackgroundColor<<navigate>> #ede9fe
+  BorderColor<<navigate>> #7c3aed
+  BackgroundColor<<classify>> #ccfbf1
+  BorderColor<<classify>> #14b8a6
+  BackgroundColor<<map>> #dcfce7
+  BorderColor<<map>> #16a34a
+  BackgroundColor<<fill>> #ede9fe
+  BorderColor<<fill>> #7c3aed
+  BackgroundColor<<diff>> #f1f5f9
+  BorderColor<<diff>> #64748b
+  BackgroundColor<<detect>> #fee2e2
+  BorderColor<<detect>> #ef4444
+  BackgroundColor<<function>> #bbf7d0
+  BorderColor<<function>> #22c55e
+  BackgroundColor<<view>> #bae6fd
+  BorderColor<<view>> #0ea5e9
+}
+
+
+[*]--> TsX_Main : UserCommand == "Yeni Trafik"
+
+state TsX_Main <<navigate>> {
+
+  [*] --> CurrentPage : pageHtml
+  [*] --> HomePage : UserCommand
+
+  state CurrentPage <<input>> {
+    CurrentPage : Input: iframe 
+    CurrentPage : Behavior: extract iframe content (NoLLM)
+    CurrentPage : Output: pageHtml
+  }
+
+  CurrentPage --> FindHomePage : pageHtml
+
+  state FindHomePage <<navigate>> {
+    
+
+    
+
+    FindHomePage : Input: pageHtml
+    FindHomePage : Behavior: check side button menu is exist (NoLLM)
+    FindHomePage : Output: homePageHtml, errHomePage 
+      
+    
+
+
+    [*] --> CheckSideMenuButton : Start
+
+    state CheckSideMenuButton <<function>> {
+      CheckSideMenuButton : Input: pageHtml
+      CheckSideMenuButton : Behavior: check if side button menu is visible (NoLLM)
+      CheckSideMenuButton : Output: yes / no
+    }
+
+    CheckSideMenuButton --> [*] : yes
+    CheckSideMenuButton --> CheckHomePage : no
+
+    state CheckHomePage <<function>> {
+      CheckHomePage : Input: pageHtml
+      CheckHomePage : Behavior: check if HomePage button is visible (NoLLM)
+      CheckHomePage : Output: yes / no
+    }
+
+    CheckHomePage --> WriteMappingHomePage : yes 
+    CheckHomePage --> LLMCheckHomePage : no 
+
+    state WriteMappingHomePage <<function>> {
+      WriteMappingHomePage : Input: pageHtml
+      WriteMappingHomePage : Behavior: Writes mapping json file to go button "Home Page"
+      WriteMappingHomePage : There can be more than 1 Button "HomePage"
+      WriteMappingHomePage : homePageMappingsJson
+    }
+
+    WriteMappingHomePage --> TryAllHomePageMapping : homePageMappingsJson
+
+    state TryAllHomePageMapping <<function>> {
+      TryAllHomePageMapping : Input: pageHtml, homePageMappingsJson
+      TryAllHomePageMapping : Behavior: try all possible mappings until you reach "Home Page"
+      TryAllHomePageMapping : Output: at HomePage
+
+      [*] --> GoMappingHomePage : jsonSet
+
+      state GoMappingHomePage <<function>> {
+        GoMappingHomePage : Input: pageHtml, homePageMappingsJson, triesCounter
+        GoMappingHomePage : Behavior: try each mapping in homePageMappingsJson until triesCounter reaches 3
+        GoMappingHomePage : Becasue total can be 3 different json files
+        GoMappingHomePage : Output: newPageHtml
+      }
+
+      GoMappingHomePage --> CheckPageChangedHomePage 
+
+      state CheckPageChangedHomePage <<function>> {
+        CheckPageChangedHomePage : Input: pageHtml, newPageHtml
+        CheckPageChangedHomePage : Behavior: check if page has changed (NoLLM)
+        CheckPageChangedHomePage : Output: yes / no
+      }
+
+      CheckPageChangedHomePage --> ResetMemoryHomePage : yes
+      CheckPageChangedHomePage --> GoMappingHomePage : no : triesCounter++
+
+
+      state ResetMemoryHomePage <<function>> {
+        ResetMemoryHomePage : Input: pageHtml, newPageHtml
+        ResetMemoryHomePage : Behavior: pageHtml==newPageHtml
+        ResetMemoryHomePage : Output: pageHtml
+      }
+
+      GoMappingHomePage --> MaxAttemptReached : triesCounter==0
+      state MaxAttemptReached <<function>> {
+        MaxAttemptReached : Input: triesCounter
+        MaxAttemptReached : Behavior: triesCounter >= 3 LLM needs to check
+        MaxAttemptReached : Output: ErrorManagerFindHomePage
+      }
+
+      MaxAttemptReached --> [*] : ErrorManagerFindHomePage
+      ResetMemoryHomePage --> [*] : CheckSideMenuButton
+    }
+
+    TryAllHomePageMapping --> ErrorManagerFindHomePage : countFindHomePage
+    TryAllHomePageMapping --> CheckSideMenuButton :pageHtml
+
+    state ErrorManagerFindHomePage <<function>> {
+      ErrorManagerFindHomePage : Input: countFindHomePage
+      ErrorManagerFindHomePage : Behavior: counts countFindHomePage
+      ErrorManagerFindHomePage : If countFindHomePage >= 3 than gives ErrorManagerFindHomePage
+      ErrorManagerFindHomePage : It increments countFindHomePage
+      ErrorManagerFindHomePage : Output: errorResolved / errorUnresolved
+    }
+
+    ErrorManagerFindHomePage --> LLMCheckHomePage : countFindHomePage++
+    ErrorManagerFindHomePage --> [*] : ErrorManagerFindHomePage
+
+    state LLMCheckHomePage <<function>> {
+      LLMCheckHomePage : Input: pageHtml
+      LLMCheckHomePage : Behavior: LLM analyzes page content for HomePage elements
+      LLMCheckHomePage : Output: homePageMappingJson
+    }
+
+    LLMCheckHomePage -->TryAllHomePageMapping : homePageMappingJson
+  }
+
+  FindHomePage --> HomePage : pageHtml
+  FindHomePage --> TsXErrorManager : errorFindHomePage
+
+  state HomePage <<view>> {
+    HomePage : Input: pageHtml, UserCommand
+    HomePage : Behavior: displays the Home Page
+    HomePage : Output: at HomePage
+
+    [*] --> WriteMappingSideMenu :pageHtml
+
+    state WriteMappingSideMenu <<function>> {
+      WriteMappingSideMenu : Input: pageHtml
+      WriteMappingSideMenu : Behavior: Writes mapping json file to go button "Side Menu"
+      WriteMappingSideMenu : There is only one side menu button
+      WriteMappingSideMenu : sideMenuMappingsJson
+    }
+
+    WriteMappingSideMenu --> OpenSideMenu : sideMenuMappingsJson
+    state OpenSideMenu <<function>> {
+      OpenSideMenu : Input: pageHtml, sideMenuMappingsJson
+      OpenSideMenu : Behavior: Opens the side menu via Ts3 Action
+      OpenSideMenu : Saves new html from opened page as newPageHtml
+      OpenSideMenu : Output: newPageHtml
+    }
+
+    OpenSideMenu --> CheckPageChangeSideMenu : newPageHtml
+
+    state CheckPageChangeSideMenu <<function>> {
+      CheckPageChangeSideMenu : Input: pageHtml, newPageHtml
+      CheckPageChangeSideMenu : Behavior: check if page has changed (NoLLM)
+      CheckPageChangeSideMenu : Output: yes / no
+    }
+
+    CheckPageChangeSideMenu --> ErrorManagerSideMenuPage : no
+    CheckPageChangeSideMenu --> ResetMemoryHomeSideMenuPage : yes
+
+    ErrorManagerSideMenuPage --> LLMCheckSideMenu : countSideMenuPage++
+    ErrorManagerSideMenuPage --> [*] : ErrorManagerSideMenuPage
+
+    state LLMCheckSideMenu <<function>> {
+      LLMCheckSideMenu : Input: newPageHtml
+      LLMCheckSideMenu : Behavior: LLM analyzes pageHtml for Side Menu elements
+      LLMCheckSideMenu : Output: sideMenuMappingJson
+    }
+
+    LLMCheckSideMenu --> OpenSideMenu : sideMenuMappingJson
+    state ErrorManagerSideMenuPage <<error>> {
+      ErrorManagerSideMenuPage : Input: countSideMenuPage
+      ErrorManagerSideMenuPage : Behavior: counts countSideMenuPage
+      ErrorManagerSideMenuPage : If countSideMenuPage >= 3 than gives ErrorManagerSideMenuPage
+      ErrorManagerSideMenuPage : It increments countSideMenuPage
+      ErrorManagerSideMenuPage : Output: errorResolved / errorUnresolved
+    }
+
+    state ResetMemoryHomeSideMenuPage <<function>> {
+      ResetMemoryHomeSideMenuPage : Input: pageHtml,newPageHtml
+      ResetMemoryHomeSideMenuPage : Behavior: pageHtml == newPageHtml
+      ResetMemoryHomeSideMenuPage : countSideMenuPage = 0
+      ResetMemoryHomeSideMenuPage : Output: pageHtml
+    }
+
+    ResetMemoryHomeSideMenuPage --> WriteMappingUserTaskPage : pageHtml
+
+    state WriteMappingUserTaskPage <<function>> {
+      WriteMappingUserTaskPage : Input: pageHtml,UserCommand
+      WriteMappingUserTaskPage : Behavior: Writes mapping json file to go button "User Task"
+      WriteMappingUserTaskPage : There is only one user task button
+      WriteMappingUserTaskPage : Output : userTaskMappingsJson
+    }
+
+    WriteMappingUserTaskPage --> OpenUserTaskPage : userTaskMappingsJson
+    
+    state OpenUserTaskPage <<function>> {
+      OpenUserTaskPage : Input: userTaskMappingsJson
+      OpenUserTaskPage : Behavior: Navigates to User Task Page with mappings using Ts3 action
+      OpenUserTaskPage : Output: userTaskPage
+    }
+
+    OpenUserTaskPage --> CheckPageChangeToUserCommandPage : userTaskPageHtml
+
+    state CheckPageChangeToUserCommandPage <<function>> {
+      CheckPageChangeToUserCommandPage : Input: newPageHtml
+      CheckPageChangeToUserCommandPage : Behavior: checks if the page has changed (NoLLM)
+      CheckPageChangeToUserCommandPage : Output: yes / no
+    }
+
+    CheckPageChangeToUserCommandPage --> ErrorManagerSideMenu2UserTaskPage : no
+    CheckPageChangeToUserCommandPage --> ResetMemoryUserTaskPage : yes
+
+    state ErrorManagerSideMenu2UserTaskPage <<error>> {
+      ErrorManagerSideMenu2UserTaskPage : Input: countUserTaskPage
+      ErrorManagerSideMenu2UserTaskPage : Behavior: counts countUserTaskPage
+      ErrorManagerSideMenu2UserTaskPage : If countUserTaskPage >= 3 than gives ErrorManagerSideMenu2UserTaskPage
+      ErrorManagerSideMenu2UserTaskPage : It increments countUserTaskPage
+      ErrorManagerSideMenu2UserTaskPage : Output: errorResolved / errorUnresolved
+    }
+
+    ErrorManagerSideMenu2UserTaskPage --> [*] : ErrorManagerSideMenu2UserTaskPage
+    ErrorManagerSideMenu2UserTaskPage --> LLMCheckUserTaskPage : countUserTaskPage++
+    
+    state LLMCheckUserTaskPage <<function>> {
+      LLMCheckUserTaskPage : Input: userTaskPageHtml
+      LLMCheckUserTaskPage : Behavior: LLM analyzes userTaskPageHtml for User Task elements
+      LLMCheckUserTaskPage : Output: userTaskMappingJson
+    }
+
+    LLMCheckUserTaskPage --> OpenUserTaskPage : userTaskMappingJson
+
+
+    state ResetMemoryUserTaskPage <<function>> {
+    ResetMemoryUserTaskPage : Input: userTaskPageHtml
+    ResetMemoryUserTaskPage : Behavior: userTaskPageHtml == newUserTaskPageHtml
+    ResetMemoryUserTaskPage : countUserTaskPage = 0
+    ResetMemoryUserTaskPage : Output: userTaskPageHtml
+    }
+    ResetMemoryUserTaskPage --> [*] : userTaskPageHtml
+
+  }
+
+  HomePage --> TsXErrorManager : ErrorManagerSideMenu2UserTaskPage
+  HomePage --> TsXErrorManager : errorManagerSideMenuPage
+
+  state TsXErrorManager <<error>> {
+      TsXErrorManager : Input: errorContext
+      TsXErrorManager : Behavior: handles errors specific to TSX
+      TsXErrorManager : Output: errorResolved / errorUnresolved
+  }
+
+  
+
+  
+
+}
+
+
+
+
+@enduml
