@@ -79,7 +79,7 @@ ProcessData --> TsXErrorManager : errorManagerProcessData
 
 state TsX_Main <<navigate>> {
 
-  [*] --> CurrentPage : pageHtml
+  [*] --> CurrentPage : pageHtmlUserCommand
   [*] --> HomePage : UserCommand
 
   state CurrentPage <<input>> {
@@ -88,7 +88,7 @@ state TsX_Main <<navigate>> {
     CurrentPage : Output: pageHtml
   }
 
-  CurrentPage --> FindHomePage : pageHtml
+  CurrentPageSelector --> FindHomePage : pageHtml
 
   state FindHomePage <<navigate>> {
     
@@ -462,15 +462,39 @@ state TsX_Main <<navigate>> {
       state ErrorControllerUserTaskPage <<error>> {
           ErrorControllerUserTaskPage : Input: errorControllerUserTaskPage
           ErrorControllerUserTaskPage : Behavior: handles errors specific to the controller
-          ErrorControllerUserTaskPage : Output: errorResolved / errorUnresolved
+          ErrorControllerUserTaskPage : later could be improved to process more error logs
+          ErrorControllerUserTaskPage : Output: errorControllerUserTaskPage
       }
       ErrorControllerUserTaskPage --> [*] : errorControllerUserTaskPage
+
+      
+      UserTaskPage --> ResetUserTaskage : errorControllerUserTaskPage
+  }
+
+  UserTaskPage --> TsXErrorManager
+  UserTaskPage --> ResetUserTaskPage : userTaskPageHtml, countResetUserTaskPage
+
+  state ResetUserTaskPage <<function>> {
+      ResetUserTaskPage : Input: userTaskPageHtml,countResetUserTaskPage
+      ResetUserTaskPage : Behavior: If countResetUserTaskPage > 2 then errorResetUserTaskPage = true
+      ResetUserTaskPage : Output: userTaskPageHtml,errorResetUserTaskPage
+  }
+
+  ResetUserTaskPage --> CurrentPageSelector :userTaskPageHtml
+  CurrentPage --> CurrentPageSelector : pageHtmlUserCommand
+
+  state CurrentPageSelector <<function>> {
+      CurrentPageSelector : Input: countResetUserTaskPage,userTaskPageHtml,pageHtml
+      CurrentPageSelector : Behavior: 
+      CurrentPageSelector : Output: pageHtml
+  }
 
   state TsXErrorManager <<error>> {
       TsXErrorManager : Input: errorContext
       TsXErrorManager : Behavior: handles errors specific to TSX
       TsXErrorManager : Output: errorResolved / errorUnresolved
   }
+
 
   
 
