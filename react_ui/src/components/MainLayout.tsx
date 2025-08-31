@@ -75,6 +75,15 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   const [backendLogs, setBackendLogs] = useState<any[]>([]);
   const [backendStatus, setBackendStatus] = useState<string>("");
   const [currentUrl, setCurrentUrl] = useState<string>("");
+  const refreshBackendLogs = React.useCallback(async () => {
+    try {
+      const res = await fetch("http://localhost:5001/api/logs");
+      const data = await res.json();
+      setBackendLogs(data.logs || []);
+    } catch {
+      // ignore
+    }
+  }, []);
 
   // Backend loglarını çek
   useEffect(() => {
@@ -166,7 +175,29 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#B3C7E6] dark:border-[#335C81] bg-[#F8FAFC] dark:bg-[#223A5E]">
           <span className="font-bold text-lg text-[#0057A0] dark:text-[#E6F0FA]">Loglar (Developer)</span>
-          <button onClick={() => setLogPanelOpen(false)} className="text-[#0057A0] dark:text-[#E6F0FA] text-2xl font-bold">×</button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                // Clear FE logs
+                try {
+                  if (typeof window !== 'undefined') {
+                    (window as any).__DEV_LOGS = [];
+                  }
+                } catch {}
+                // Clear BE logs
+                try {
+                  await fetch('http://localhost:5001/api/logs/clear', { method: 'POST' });
+                } catch {}
+                // Refresh list
+                await refreshBackendLogs();
+              }}
+              className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] text-[#0057A0] dark:bg-[#335C81] dark:hover:bg-[#446E9B] dark:text-[#E6F0FA] text-sm font-semibold"
+              title="Logları temizle"
+            >
+              Temizle
+            </button>
+            <button onClick={() => setLogPanelOpen(false)} className="text-[#0057A0] dark:text-[#E6F0FA] text-2xl font-bold">×</button>
+          </div>
         </div>
         <div className="overflow-y-auto px-6 py-4" style={{ maxHeight: 'calc(100vh - 80px)' }}>
           {/* Hem frontend (window.__DEV_LOGS) hem backend loglarını göster */}
@@ -192,12 +223,17 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
               }
               const t = (log.time || '').toString();
               const hh = t.includes('T') ? t.split('T')[1].slice(0,8) : t.slice(11,19);
+              const isLLM = !!(log && log.extra && (log.extra.llm === true));
+              const boxBg = isLLM ? 'bg-[#E8F8EE] dark:bg-[#1F3A2E] border-[#7BD389] dark:border-[#2E7D50]' : 'bg-[#FFF7E6] dark:bg-[#665C3A] border-[#FFD580] dark:border-[#665C3A]';
+              const titleColor = isLLM ? 'text-[#1E824C] dark:text-[#7BD389]' : 'text-[#B38B00] dark:text-[#FFD580]';
+              const textColor = isLLM ? 'text-[#1E824C] dark:text-[#7BD389]' : 'text-[#B38B00] dark:text-[#FFD580]';
+              const extraColor = isLLM ? 'text-[#1E824C]/80 dark:text-[#7BD389]/80' : 'text-[#B38B00]/80 dark:text-[#FFD580]/80';
               return (
-                <li key={key} className="flex flex-col gap-1 p-2 rounded-lg bg-[#FFF7E6] dark:bg-[#665C3A] border border-[#FFD580] dark:border-[#665C3A]">
-                  <span className="text-xs text-[#B38B00] dark:text-[#FFD580]">{hh} | <b>{log.component}</b> | <b>{log.code}</b> | <b>{log.level}</b></span>
-                  <span className="text-sm font-medium text-[#B38B00] dark:text-[#FFD580]">{log.message}</span>
+                <li key={key} className={`flex flex-col gap-1 p-2 rounded-lg border ${boxBg}`}>
+                  <span className={`text-xs ${titleColor}`}>{hh} | <b>{log.component}</b> | <b>{log.code}</b> | <b>{log.level}</b></span>
+                  <span className={`text-sm font-medium ${textColor}`}>{log.message}</span>
                   {log.extra && (
-                    <span className="text-[11px] text-[#B38B00]/80 dark:text-[#FFD580]/80 break-all">{JSON.stringify(log.extra)}</span>
+                    <span className={`text-[11px] ${extraColor} break-all`}>{JSON.stringify(log.extra)}</span>
                   )}
                 </li>
               );

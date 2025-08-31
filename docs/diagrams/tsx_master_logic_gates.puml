@@ -1,0 +1,103 @@
+@startuml tsx_master_logic_gates
+' Activity/gate oriented logic schema
+
+skinparam defaultFontName "Segoe UI"
+skinparam activity {
+  BackgroundColor White
+  BorderColor #94a3b8
+}
+
+start
+: TsX_Main.start (Btn.TSX && Inputs.ready);
+note right
+  Entry point. Validates inputs (ruhsat_json or JPG→JSON).
+  Initializes counters: retry*, pageHops.
+end note
+: CurrentPage (Webview.ready || urlProvided);
+note right
+  Choose HTML source: live iframe or provided URL.
+  Produces candidate HTML for capture.
+end note
+if (capture OK?) then (yes)
+  :HtmlCaptureService.capture_outer_html() -> POST /api/test-state-2 {html};
+  note right
+    Capture current iframe outerHTML and persist artifacts.
+    Input: DOM from webview or provided URL.
+    Output: memory.html, webbot2html/page.html
+  end note
+else (no)
+  :ErrorManager.error_tick_and_decide('capture');
+  note right
+    Increments retry counter; decides retry vs abort.
+    Logs error context for traceability.
+  end note
+  if (retry < K) then (retry)
+    :Retry capture;
+    note right
+      Lightweight re-capture without state reset.
+    end note
+  else (abort)
+    stop
+  endif
+endif
+
+: WriteMappingUserData2Html AND (memory.html && ruhsat_json) -> FormMappingLLM.map_form_fields_llm();
+: FormMappingLLM emits mapping + actions + page_kind/is_final;
+: CheckMappingUserData2Html: MappingValidator.validate_mapping_selectors() via /api/ts3/analyze-selectors;
+note right
+  LLM maps JSON fields to form selectors and suggests next actions.
+  Validate by counting selector matches; require a minimum threshold.
+  Outputs: mapping.json, actions[], page_kind, is_final
+end note
+if (mapping valid?) then (yes)
+  : FillFormsAndAction: ScriptFiller.generate_and_execute_fill_script();
+  : CheckPageChangedUserTaskPage: DiffService.compute_html_diff(prev, post);
+  note right
+    Generate minimal JS plan to fill inputs and click actions.
+    After execution, check page change via hash/len/markers.
+  end note
+  if (page changed?) then (yes)
+    : HtmlCaptureService.capture_outer_html();
+  else (no)
+    if (retryFill < M) then (retry)
+      : ChangePromptSlightly: FormMappingLLMVariant.map_form_fields_llm_variant();
+      note right
+        Try a different prompt/strategy for mapping.
+        Bounded retries to avoid loops.
+      end note
+    else (abort)
+      stop
+    endif
+  endif
+else (no)
+  if (retryMapping < N) then (variant)
+    : ChangePromptSlightly: FormMappingLLMVariant.map_form_fields_llm_variant();
+    note right
+      Mapping invalid. Use alternate prompt/strategy.
+      Bounded retries; escalate to error when exhausted.
+    end note
+  else (abort)
+    stop
+  endif
+endif
+
+: CheckPdfReady? FinalDetector.detect_final_page();
+note right
+  Detect final page markers (e.g., pdf ready / Poliçeyi Aktifleştir).
+end note
+if (final?) then (yes)
+  : Finalizer.click_final_action();
+  note right
+    Click the final action (from mapping or detector) and finish.
+  end note
+  stop
+else (no)
+  : Feature FindHomePage: Navigator.navigator_open_menu_candidates() or Navigator.navigator_go_to_task_candidates(UserCommand);
+  : HtmlCaptureService.capture_outer_html() (loop);
+  note right
+    Navigation feature composes Navigator + Diff + Capture.
+    Tries multiple candidate actions until page changes.
+  end note
+endif
+
+@enduml

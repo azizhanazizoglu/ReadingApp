@@ -1,0 +1,97 @@
+@startuml TSX_MAIN_GPT
+title TSX_MAIN to Implementation Mapping (Functions & Components)
+
+skinparam defaultFontName "Segoe UI"
+skinparam component {
+  BackgroundColor #f8fafc
+  BorderColor #94a3b8
+}
+skinparam rectangle {
+  BackgroundColor #eef2ff
+  BorderColor #94a3b8
+}
+left to right direction
+
+component ORCH as "Entry: TsX Orchestrator\nrun_step(user_command, html, ruhsat_json, prev_html)"
+
+component CLASS as "Classification\nClassifyPage.classify(html) -> Classification(kind, is_final)"
+
+component FHP as "FindHomePage Feature\n- Navigator.open_menu_candidates(html)\n- Navigator.go_to_task_candidates(cmd, html)\n- DiffService.diff(prev, new) -> changed?\n- HtmlCaptureService.persist_html(html, name)\n- ErrorManager.error_tick_and_decide('homeNav')"
+
+component MAF as "MapAndFill Feature\n- map_form_fields_llm(html, ruhsat_json)  [adapter: license_llm.pageread_llm.map_json_to_html_fields]\n- MappingValidator.validate_mapping_selectors(html, mapping)  [adapter: /api/ts3/analyze-selectors]\n- ScriptFiller.generate_and_execute_fill_script(mapping)  [TS3 plan/script path]\n- DiffService.diff(prev, new)\n- FinalDetector.detect_final_page(html)\n- Finalizer.click_final_action(html)\n- ErrorManager.error_tick_and_decide(mapping)"
+
+ORCH --> CLASS : classify(html)
+CLASS --> ORCH : PageKind = {dashboard|home|menu|user_task|unknown}, is_final
+
+ORCH --> FHP : if PageKind in {dashboard,home,menu}
+FHP --> ORCH : FindResult(success, attempts) | state: navigated
+
+ORCH --> MAF : else (user_task|unknown)
+MAF --> ORCH : MapFillResult(mapping_valid, changed, is_final, attempts)
+note right of ORCH
+  state =
+    - "final" if CLASS.is_final
+    - "navigated" for FHP success/attempts
+    - "mapped" if MAF.mapping_valid
+    - "mapping_failed" otherwise
+end note
+
+legend right
+  Components
+  - HtmlCaptureService: writes to memory/TmpData/webbot2html/[*]
+  - MappingValidator: wraps TS3 selector analyzer
+  - ScriptFiller: bridges to TS3 script generator (dev-only in unit tests)
+  - ErrorManager: bounded retries for homeNav/mapping
+  - DiffService: structural HTML diff -> changed?
+endlegend
+
+' --- Feature Flows (same page; simplified as rectangles) ---
+package "FindHomePage Flow" as FHP_FLOW {
+  rectangle FHP_Start as "Start"
+  rectangle FHP_OpenMenu as "OpenMenu\nNavigator.open_menu_candidates(html)"
+  rectangle FHP_GoToTask as "GoToTask\nNavigator.go_to_task_candidates(cmd, html)"
+  rectangle FHP_CaptureDiff as "CaptureDiff\nHtmlCaptureService.persist_html(html,name)\nDiffService.diff(prev,new)"
+  rectangle FHP_DecideRetry as "DecideRetry\nErrorManager.error_tick_and_decide(homeNav)"
+  rectangle FHP_Success as "Success"
+  rectangle FHP_Abort as "Abort"
+
+  FHP_Start --> FHP_OpenMenu
+  FHP_OpenMenu --> FHP_GoToTask : menu visible
+  FHP_OpenMenu --> FHP_DecideRetry : menu not visible
+  FHP_GoToTask --> FHP_CaptureDiff
+  FHP_CaptureDiff --> FHP_Success : changed
+  FHP_CaptureDiff --> FHP_DecideRetry : unchanged
+  FHP_DecideRetry --> FHP_OpenMenu : attempts < MAX
+  FHP_DecideRetry --> FHP_Abort : attempts >= MAX
+}
+
+package "MapAndFill Flow" as MAF_FLOW {
+  rectangle MAF_Start as "Start"
+  rectangle MAF_MapLLM as "MapLLM\nmap_form_fields_llm(html, ruhsat_json)"
+  rectangle MAF_Validate as "Validate\nMappingValidator.validate_mapping_selectors(html,mapping)"
+  rectangle MAF_ScriptFill as "ScriptFill\nScriptFiller.generate_and_execute_fill_script(mapping)"
+  rectangle MAF_DetectFinal as "DetectFinal\nFinalDetector.detect_final_page(html)"
+  rectangle MAF_Finalize as "Finalize\nFinalizer.click_final_action(html)"
+  rectangle MAF_CaptureDiff as "CaptureDiff\nDiffService.diff(prev,new)"
+  rectangle MAF_DecideRetry as "DecideRetry\nErrorManager.error_tick_and_decide(mapping)"
+  rectangle MAF_Success as "Success"
+  rectangle MAF_Abort as "Abort"
+
+  MAF_Start --> MAF_MapLLM
+  MAF_MapLLM --> MAF_Validate
+  MAF_Validate --> MAF_ScriptFill : mapping valid
+  MAF_Validate --> MAF_DecideRetry : invalid
+  MAF_ScriptFill --> MAF_DetectFinal
+  MAF_DetectFinal --> MAF_Finalize : is_final
+  MAF_DetectFinal --> MAF_CaptureDiff : not final
+  MAF_CaptureDiff --> MAF_Success : changed
+  MAF_CaptureDiff --> MAF_DecideRetry : unchanged
+  MAF_Finalize --> MAF_Success
+  MAF_DecideRetry --> MAF_MapLLM : attempts < MAX
+  MAF_DecideRetry --> MAF_Abort : attempts >= MAX
+}
+
+FHP .. FHP_FLOW : flow
+MAF .. MAF_FLOW : flow
+
+@enduml

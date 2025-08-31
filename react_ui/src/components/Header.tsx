@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, Zap, UploadCloud, Home, Code2, ChevronLeft, ChevronRight, RefreshCcw } from "lucide-react";
 import { SearchBar } from "@/components/SearchBar";
 import { DevModeToggle } from "@/components/DevModeToggle";
+import { getDomAndUrlFromWebview } from "@/services/webviewDom";
+import { runActions } from "@/services/ts3ActionRunner";
 
 interface HeaderProps {
   appName: string;
@@ -71,6 +73,9 @@ export const Header: React.FC<HeaderProps> = ({
   // Back/Forward state
   const [canBack, setCanBack] = React.useState(false);
   const [canForward, setCanForward] = React.useState(false);
+  // TsX command (developer input)
+  const [tsxCmd, setTsxCmd] = React.useState<string>("Yeni Trafik");
+  const [forceLLM, setForceLLM] = React.useState<boolean>(false);
   // Poll canGoBack/canGoForward on url change
   React.useEffect(() => {
     const el: any = document.getElementById('app-webview');
@@ -135,6 +140,19 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Developer butonları - search bar solunda */}
     {developerMode && (
   <div className="flex items-center gap-2 mr-3 pr-0">
+          {/* TsX Command input (Dev) */}
+          <input
+            value={tsxCmd}
+            onChange={(e) => setTsxCmd(e.target.value)}
+            placeholder="Komut: Yeni Trafik"
+            className="px-2 py-1 text-sm rounded-md border border-[#B3C7E6] focus:outline-none focus:ring-2 focus:ring-[#0057A0] bg-white text-[#003366]"
+            style={{ minWidth: 140, height: 32 }}
+            aria-label="TsX Komutu"
+          />
+          <label className="flex items-center gap-2 text-xs text-[#003366]">
+            <input type="checkbox" checked={forceLLM} onChange={(e)=>setForceLLM(e.target.checked)} />
+            LLM
+          </label>
           <Button
             className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] active:scale-95 text-[#0057A0] dark:bg-[#335C81] dark:hover:bg-[#223A5E] dark:text-[#E6F0FA] shadow"
             style={{ fontFamily: fontStack, minWidth: 40, minHeight: 40 }}
@@ -145,6 +163,40 @@ export const Header: React.FC<HeaderProps> = ({
             aria-label="Ana Sayfa (Dev)"
           >
             <Home size={20} />
+          </Button>
+          <Button
+            className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] active:scale-95 text-[#0057A0] shadow"
+            style={{ fontFamily: fontStack, minWidth: 52, minHeight: 40, fontWeight: 700 }}
+            onClick={async () => {
+              // TsX Dev: capture HTML and call backend orchestrator step
+              try {
+                const { html } = await getDomAndUrlFromWebview((c, m) => devLog(c, m));
+                if (!html) { devLog('HD-TSX-NOHTML', 'Webview HTML alınamadı'); return; }
+                const r = await fetch('http://localhost:5001/api/tsx/dev-run', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ user_command: tsxCmd || 'Yeni Trafik', html, force_llm: !!forceLLM })
+                });
+                if (!r.ok) { devLog('HD-TSX-ERR', `HTTP ${r.status}`); return; }
+                const j = await r.json();
+                devLog('HD-TSX-OK', `state=${j?.state} details=${JSON.stringify(j?.details||{})}`);
+                // If backend suggests actions for navigation (e.g., click#Ana Sayfa), execute them now
+                const actions: string[] = (j?.details && Array.isArray(j.details.actions)) ? j.details.actions : [];
+                if (actions.length > 0) {
+                  try {
+                    const res = await runActions(actions, true, (c, m) => devLog(c, m));
+                    devLog('HD-TSX-ACT', `Executed ${actions.length} action(s): ${JSON.stringify(res)}`);
+                  } catch (e: any) {
+                    devLog('HD-TSX-ACT-ERR', String(e?.message || e));
+                  }
+                }
+              } catch (e: any) {
+                devLog('HD-TSX-FAIL', String(e?.message || e));
+              }
+            }}
+            aria-label="TsX Dev Run"
+          >
+            TsX
           </Button>
           <Button
             className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] active:scale-95 text-[#0057A0] shadow"

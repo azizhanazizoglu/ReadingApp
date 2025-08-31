@@ -1,0 +1,222 @@
+@startuml tsx_master_refined_state
+title TSX Master: Refined State Machine (Function-first, Gate-Driven)
+
+skinparam defaultFontName "Segoe UI"
+skinparam state {
+  BackgroundColor White
+  BorderColor #94a3b8
+  FontSize 12
+}
+skinparam state {
+  BackgroundColor<<capture>> #dbeafe
+  BorderColor<<capture>> #2563eb
+  BackgroundColor<<classify>> #ccfbf1
+  BorderColor<<classify>> #14b8a6
+  BackgroundColor<<map>> #dcfce7
+  BorderColor<<map>> #16a34a
+  BackgroundColor<<validate>> #f5f5f4
+  BorderColor<<validate>> #78716c
+  BackgroundColor<<fill>> #ede9fe
+  BorderColor<<fill>> #7c3aed
+  BackgroundColor<<diff>> #f1f5f9
+  BorderColor<<diff>> #64748b
+  BackgroundColor<<final>> #fee2e2
+  BorderColor<<final>> #ef4444
+  BackgroundColor<<error>> #fef08a
+}
+
+' Counters live in memory: retryNavigate, retryMapping, retryFill, pageHops, jsonSelect
+[*] --> EnsureInputs : G0: UserCommand && Inputs.ready
+
+note right of EnsureInputs
+  Precondition gate as in TSX_MAIN:ProcessData.
+  Select existing ruhsat JSON or extract from JPG if missing.
+  Fails fast when no inputs are available.
+end note
+
+state EnsureInputs <<validate>> {
+  [*] --> SelectJSON
+  state SelectJSON <<validate>> {
+    SelectJSON : Function: select_latest_or_merge_ruhsat_json()
+    SelectJSON : Input: jpg2json/*.json (0..N)
+    SelectJSON : Behavior: pick latest or merge; if none → Extractor
+    SelectJSON : Output: memory.ruhsat_json
+  }
+  state Extractor <<map>> {
+    Extractor : Function: extract_ruhsat_from_jpg()
+    Extractor : Input: jpgDownload/*.jpg
+    Extractor : Behavior: license_llm_extractor.extract_vehicle_info_from_image()
+    Extractor : Output: ruhsat_json
+  }
+  [*] --> SelectJSON
+  SelectJSON --> [*] : ok
+  SelectJSON --> Extractor : none
+  Extractor --> [*] : ok | fail→Error
+}
+EnsureInputs --> CaptureHTML : ok
+EnsureInputs --> ErrorManager : fail
+
+state CaptureHTML <<capture>> {
+  CaptureHTML : Function: capture_outer_html() + persist_html_artifacts()
+  CaptureHTML : Input: webview DOM
+  CaptureHTML : Behavior: capture outerHTML and POST /api/test-state-2 { html }
+  CaptureHTML : Output: memory.html + artifacts(webbot2html/*)
+}
+
+note right of CaptureHTML
+  Captures iframe HTML like TSX_MAIN:CaptureUserTaskPageHtml.
+  Persists artifacts for debugging and selector validation.
+end note
+
+CaptureHTML --> ClassifyPage
+
+state ClassifyPage <<classify>> {
+  ClassifyPage : Function: classify_page_markers()
+  ClassifyPage : Input: memory.html
+  ClassifyPage : Behavior: regex markers → {kind, is_final}; fallback to Ts2L schema
+  ClassifyPage : Output: page_kind
+}
+
+note right of ClassifyPage
+  Fast, non-LLM page kind detection; falls back to mapping flags.
+  Guides navigation (dashboard/home/task/final).
+end note
+
+ClassifyPage --> EnsureMenuOpen : page_kind==dashboard
+ClassifyPage --> NavigateToTask : page_kind==home|menu
+ClassifyPage --> MapOrFinal : page_kind==user_task | final
+
+state EnsureMenuOpen <<fill>> {
+  EnsureMenuOpen : Function: navigator_open_menu_candidates()
+  EnsureMenuOpen : Input: html, retryNavigate
+  EnsureMenuOpen : Behavior: emit actions[1..K] and click until change
+  EnsureMenuOpen : Output: new_html | give up
+}
+note right of EnsureMenuOpen
+  Mirrors TSX_MAIN:WriteMappingSideMenu/OpenSideMenu.
+  Deterministic-first; multiple candidates supported.
+end note
+EnsureMenuOpen --> DiffCheck : after action
+
+state NavigateToTask <<fill>> {
+  NavigateToTask : Function: navigator_go_to_task_candidates(userCommand)
+  NavigateToTask : Input: userCommand, html, retryNavigate
+  NavigateToTask : Behavior: emit actions[1..K]; stop on change
+  NavigateToTask : Output: new_html | give up
+}
+note right of NavigateToTask
+  Mirrors TSX_MAIN:WriteMappingUserTaskPage/OpenUserTaskPage.
+  Uses user command (e.g., Yeni Trafik) to find target.
+end note
+NavigateToTask --> DiffCheck
+
+state MapOrFinal {
+  [*] --> MaybeFinal
+  state MaybeFinal <<final>> {
+    MaybeFinal : Function: detect_final_page()
+    MaybeFinal : Input: html
+    MaybeFinal : Behavior: markers or mapping flags
+    MaybeFinal : Output: is_final?
+  }
+  note right of MaybeFinal
+    Mirrors TSX_MAIN:CheckPdfReady.
+    Detects final-stage markers (PDF/activation).
+  end note
+  MaybeFinal --> Finalize : is_final==true
+  MaybeFinal --> MapPage : is_final==false
+}
+note right of MapOrFinal
+  Branch like TSX_MAIN:CheckPdfReady.
+  If final page, click finalize; otherwise proceed to mapping/fill loop.
+end note
+
+state MapPage <<map>> {
+  MapPage : Function: map_form_fields_llm()
+  MapPage : Input: html, ruhsat_json
+  MapPage : Behavior: LLM → mapping (fields+actions)
+  MapPage : Output: mapping (json2mapping/<base>_mapping.json)
+}
+note right of MapPage
+  Mirrors TSX_MAIN:WriteMappingUserData2Html.
+  Produces mapping and action plan for filler.
+end note
+
+MapPage --> ValidateMapping
+state ValidateMapping <<validate>> {
+  ValidateMapping : Function: validate_mapping_selectors()
+  ValidateMapping : Input: mapping, html
+  ValidateMapping : Behavior: /api/ts3/analyze-selectors → counts
+  ValidateMapping : Output: mappingValid(≥X) / mappingInvalid
+}
+note right of ValidateMapping
+  Mirrors TSX_MAIN:CheckMappingUserData2Html.
+  Requires minimum selector hits before filling.
+end note
+ValidateMapping --> FillAndAct : mappingValid
+ValidateMapping --> ChangePromptVariant : mappingInvalid
+
+state ChangePromptVariant <<map>> {
+  ChangePromptVariant : Function: map_form_fields_llm_variant()
+  ChangePromptVariant : Input: html, ruhsat_json, retryMapping
+  ChangePromptVariant : Behavior: different prompt; bounded retries
+  ChangePromptVariant : Output: mapping | give up
+}
+note right of ChangePromptVariant
+  Mirrors TSX_MAIN:ChangePromptSlightly.
+  Bounded retries prevent infinite loops.
+end note
+ChangePromptVariant --> ValidateMapping : retryMapping < N
+ChangePromptVariant --> ErrorManager : retryMapping >= N
+
+state FillAndAct <<fill>> {
+  FillAndAct : Function: generate_and_execute_fill_script()
+  FillAndAct : Input: mapping, ruhsat_json
+  FillAndAct : Behavior: build script and execute in webview
+  FillAndAct : Output: new_html
+}
+note right of FillAndAct
+  Mirrors TSX_MAIN:FillFormsAndAction.
+  Uses mapping to fill inputs and click actions.
+end note
+FillAndAct --> DiffCheck
+
+state DiffCheck <<diff>> {
+  DiffCheck : Function: compute_html_diff()
+  DiffCheck : Input: prev_html, new_html, retryFill
+  DiffCheck : Behavior: hash/len/markers
+  DiffCheck : Output: changed / unchanged
+}
+note right of DiffCheck
+  Mirrors TSX_MAIN:CheckPageChangedUserTaskPage.
+  If unchanged, route to mapping variant or error.
+end note
+
+DiffCheck --> CaptureHTML : changed (continue loop)
+DiffCheck --> ChangePromptVariant : unchanged AND retryFill < M
+DiffCheck --> ErrorManager : unchanged AND retryFill >= M
+
+state Finalize <<final>> {
+  Finalize : Function: click_final_action()
+  Finalize : Input: html (final)
+  Finalize : Behavior: find final action via detector/mapping and click
+  Finalize : Output: done
+}
+note right of Finalize
+  Mirrors final click (e.g., “Poliçeyi Aktifleştir”).
+  Ends orchestration when action succeeds.
+end note
+
+state ErrorManager <<error>> {
+  ErrorManager : Function: error_tick_and_decide()
+  ErrorManager : Input: errorContext + counters
+  ErrorManager : Behavior: decide retry/abort; log + evidence
+  ErrorManager : Output: resolved? else abort
+}
+note right of ErrorManager
+  Centralized loop control and counters.
+  Records evidence for troubleshooting.
+end note
+ErrorManager --> CaptureHTML : resolved
+ErrorManager --> [*] : abort
+
+@enduml

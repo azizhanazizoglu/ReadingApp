@@ -43,6 +43,7 @@ from backend.stateflow_agent import stateflow_agent, run_ts1_extract
 from webbot.test_webbot_html_mapping import readWebPage
 from license_llm.pageread_llm import map_json_to_html_fields
 from webbot.webbot_filler import build_fill_plan, analyze_selectors, generate_injection_script
+from backend.features.tsx_orchestrator import TsxOrchestrator
 
 @app.route('/health', methods=['GET'])
 def health():
@@ -99,6 +100,16 @@ def get_mapping():
 def get_logs():
     return jsonify({'logs': backend_logs})
 
+@app.route('/api/logs/clear', methods=['POST'])
+def clear_logs():
+    try:
+        # Clear structured ring buffer
+        backend_logs.clear()
+        log_backend('[INFO] [BE-2199] Backend logs cleared by client', memory, code='BE-2199', component='Logging')
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
 @app.route('/api/ts3/plan', methods=['POST'])
 def ts3_plan():
     """Build a fill plan from mapping + ruhsat_json + optional rawresponse for diagnostics."""
@@ -115,6 +126,89 @@ def ts3_plan():
             "logs": logs,
         })
     except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/tsx/dev-run', methods=['POST'])
+def tsx_dev_run():
+    """Dev-only: run a single TsX orchestration step using current page HTML and LLM JSON.
+
+    Body: {
+      user_command?: string (default 'auto'),
+      html?: string (if absent, fallback to memory.html),
+      ruhsat_json?: object (fallback to memory or latest jpg2json),
+      prev_html?: string (optional, fallback to memory.html_prev)
+    }
+
+    Returns: { state: string, details: object }
+    """
+    try:
+        log_backend('[INFO] /api/tsx/dev-run çağrıldı', memory, code="BE-3101")
+        body = request.get_json(silent=True) or {}
+        user_command = body.get('user_command') or 'auto'
+        html = body.get('html') or memory.get('html') or ''
+        prev_html = body.get('prev_html') or memory.get('html_prev')
+        ruhsat_json = body.get('ruhsat_json') or memory.get('ruhsat_json')
+        force_llm = bool(body.get('force_llm') or False)
+
+        # Fallback: load last jpg2json if ruhsat_json absent
+        if not ruhsat_json:
+            try:
+                jpg2json_dir = os.path.join(PROJECT_ROOT, 'memory', 'TmpData', 'jpg2json')
+                if os.path.isdir(jpg2json_dir):
+                    json_files = [f for f in os.listdir(jpg2json_dir) if f.lower().endswith('.json')]
+                    if json_files:
+                        latest = max(json_files, key=lambda f: os.path.getmtime(os.path.join(jpg2json_dir, f)))
+                        with open(os.path.join(jpg2json_dir, latest), encoding='utf-8') as jf:
+                            import json as _json
+                            ruhsat_json = _json.load(jf)
+                            memory['ruhsat_json'] = ruhsat_json
+                            memory['latest_base'] = os.path.splitext(latest)[0]
+            except Exception:
+                pass
+
+        if not html:
+            return jsonify({"error": "HTML bulunamadı. Webview'den HTML gönderin veya /api/test-state-2 ile yükleyin."}), 400
+        if not ruhsat_json:
+            return jsonify({"error": "LLM JSON bulunamadı. TS1 çalıştırın veya body.ruhsat_json sağlayın."}), 400
+
+        # Adapter: LLM mapping function returning parsed JSON mapping
+        def _extract_json_block(text: str) -> str:
+            import re
+            pattern = r"```(?:json)?\s*([\s\S]*?)\s*```"
+            m = re.search(pattern, text.strip(), re.IGNORECASE)
+            return (m.group(1).strip() if m else text.strip())
+
+        def map_llm_adapter(html_str: str, ruhsat: dict) -> dict:
+            try:
+                raw_mapping = map_json_to_html_fields(html_str, ruhsat)
+                json_block = _extract_json_block(raw_mapping)
+                return json.loads(json_block)
+            except Exception:
+                # Return empty mapping shape on parse issues
+                return {"field_mapping": {}, "actions": []}
+
+        orch = TsxOrchestrator(
+            map_llm_adapter,
+            lambda h, m: analyze_selectors(h, m),
+            workspace_tmp=os.path.join(PROJECT_ROOT, 'memory', 'TmpData', 'webbot2html')
+        )
+        # Dev overrides
+        try:
+            orch.force_llm = force_llm
+            if force_llm:
+                # ensure static path won't simulate success so fallback is visible
+                setattr(orch.find_home, 'simulate_success', False)
+        except Exception:
+            pass
+
+        res = orch.run_step(user_command, html, ruhsat_json, prev_html=prev_html)
+        # Keep last html for diffing in next dev-run
+        memory['html'] = html
+        memory['html_prev'] = html
+        log_backend('[INFO] /api/tsx/dev-run tamamlandı', memory, code="BE-3102", extra={"state": res.state, "details": res.details})
+        return jsonify({"state": res.state, "details": res.details})
+    except Exception as e:
+        log_backend(f"[ERROR] /api/tsx/dev-run hata: {e}", memory, code="BE-9302")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/ts3/analyze-selectors', methods=['POST'])

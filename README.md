@@ -11,6 +11,7 @@ Bu README ana giriş noktasıdır. Tüm ayrıntılı dokümantasyon profesyonel 
 - [API Özeti ve Sözleşmeler](#api-summary-contracts)
 - [Test, Raporlama ve İzlenebilirlik](#tests-traceability)
 - [Smoke Tests (Hızlı Sağlık Kontrolü)](#smoke-tests)
+- [TsX Orchestrator ve Entegrasyon Testleri](#tsx-orchestrator-tests)
 - [Loglama, Hata Kodları ve Geçici Klasörler](#logging-error-tmp)
 - [Güvenlik ve Emniyet Odaklı Gelişim (V-Model)](#safety-vmodel)
 - [Sorun Giderme (Troubleshooting)](#troubleshooting)
@@ -120,6 +121,12 @@ Testler ve mapping akışları için örnek HTML’ler (ör. `traffic-insurance.
 - Test stratejisi ve dosya yolu standartları: `docs/08_test_strategy.md`, `docs/09_test_files_and_paths.md`
 - İzlenebilirlik matrisi: `docs/traceability_matrix.md`
 - Tüm testler ve PDF özet: `python run_all_tests.py`
+
+<a id="tsx-orchestrator-tests"></a>
+## TsX Orchestrator ve Entegrasyon Testleri
+- TsX dev endpoint: `POST /api/tsx/dev-run` (FE Dev Mode “TsX” butonu ile tetiklenir), çıktısı: `{ state, details }`.
+- Orchestrator kodu ve entegrasyon testleri için detaylı açıklama: `docs/17_tsx_orchestrator_and_tests.md`.
+- Canlı URL entegrasyon testleri (opsiyonel, manuel): `tests/integration/test_tsx_live_urls.py` — `RUN_LIVE_TESTS=1` ile çalışır.
 
 <a id="logging-errors"></a>
 ## 14) Loglama ve Hata Kodları
