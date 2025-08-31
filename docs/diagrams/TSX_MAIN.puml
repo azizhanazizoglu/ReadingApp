@@ -359,6 +359,7 @@ state TsX_Main <<navigate>> {
 
       WriteMappingUserData2Html --> CheckMappingUserData2Html : userTaskMatchFormsMappingJson, lastStep==false
       WriteMappingUserData2Html --> FillFormsAndAction : userTaskMatchFormsMappingJson, lastStep==true
+      
 
       state CheckMappingUserData2Html <<function>> {
           CheckMappingUserData2Html : Input: userTaskMatchFormsMappingJson, userTaskPageHtml
@@ -366,15 +367,28 @@ state TsX_Main <<navigate>> {
           CheckMappingUserData2Html : Output: mappingValid / mappingInvalid
       }
 
-      CheckMappingUserData2Html --> FillFormsAndAction :mappingValid, userTaskMatchFormsMappingJson
-      CheckMappingUserData2Html --> ErrorManagerMappingUserData2Html : mappingInvalid
+      CheckMappingUserData2Html --> FillFormsAndAction :mappingValid, userTaskMatchFormsMappingJson, countMappingUserData==0
+      CheckMappingUserData2Html --> ErrorManagerMappingUserData2Html :mappingInvalid, countMappingUserData
 
       state ErrorManagerMappingUserData2Html <<error>> {
-          ErrorManagerMappingUserData2Html : Input: userTaskMatchFormsMappingJson, userTaskPageHtml
-          ErrorManagerMappingUserData2Html : Behavior: handles errors in mapping userTaskMatchFormsMappingJson to userTaskPageHtml
-          ErrorManagerMappingUserData2Html : Output: errorResolved / errorUnresolved
+          ErrorManagerMappingUserData2Html : Input: countMappingUserData, errorLogWriteMappingUserData2Html, errorLogChangePromptSlightly
+          ErrorManagerMappingUserData2Html: If countMappingUserData>= 3 than gives error ErrorManagerMappingUserData2Html
+          ErrorManagerMappingUserData2Html :It increments countMappingUserData
+          ErrorManagerMappingUserData2Html : Output: errorManagerMappingUserData2Html,countMappingUserData
       }
 
+      ErrorManagerMappingUserData2Html --> ChangePromptSlightly : countMappingUserData++
+
+      state ChangePromptSlightly <<function>> {
+          ChangePromptSlightly : Input: userTaskMatchFormsMappingJson, memory.html
+          ChangePromptSlightly : Behavior: different prompt of WriteMappingUserData2Html
+          ChangePromptSlightly: same attributes as WriteMappingUserData2Html but in different technic could be
+          ChangePromptSlightly: it will implemented later. For now copy and paste WriteMappingUserData2Html (Ts2L_Map)
+          ChangePromptSlightly : Output: userTaskMatchFormsMappingJson
+      }
+
+      ChangePromptSlightly --> CheckMappingUserData2Html : userTaskMatchFormsMappingJson
+      
       state FillFormsAndAction <<function>> {
           FillFormsAndAction : Input: userTaskMatchFormsMappingJson, userTaskPageHtml
           FillFormsAndAction : Behavior: fills forms in the HTML using userTaskMatchFormsMappingJson
@@ -396,7 +410,9 @@ state TsX_Main <<navigate>> {
       CheckPageChangedUserTaskPage --> [*] : yes
 
       state ErrorManagerUserTaskPageNoChange <<error>> {
-          ErrorManagerUserTaskPageNoChange : Input: userTaskPageHtml
+          ErrorManagerUserTaskPageNoChange : Input: countMappingUserData
+          ErrorManagerUserTaskPageNoChange: If countMappingUserData>= 3 than gives error ErrorManagerUserTaskPageNoChange
+          ErrorManagerUserTaskPageNoChange :It increments countMappingUserData
           ErrorManagerUserTaskPageNoChange : Behavior: handles errors when no change is detected
           ErrorManagerUserTaskPageNoChange : Output: errorResolved / errorUnresolved
       }
