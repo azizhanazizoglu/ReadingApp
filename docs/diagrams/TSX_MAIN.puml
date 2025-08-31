@@ -283,19 +283,19 @@ state TsX_Main <<navigate>> {
       CheckPageChangeToUserCommandPage : Output: yes / no
     }
 
-    CheckPageChangeToUserCommandPage --> ErrorManagerSideMenu2UserTaskPage : no
+    CheckPageChangeToUserCommandPage --> ErrorManagerSideMenu2UserTaskPage : no, countSideMenu2UserTaskPage
     CheckPageChangeToUserCommandPage --> ResetMemoryUserTaskPage : yes
 
     state ErrorManagerSideMenu2UserTaskPage <<error>> {
-      ErrorManagerSideMenu2UserTaskPage : Input: countUserTaskPage
-      ErrorManagerSideMenu2UserTaskPage : Behavior: counts countUserTaskPage
-      ErrorManagerSideMenu2UserTaskPage : If countUserTaskPage >= 3 than gives ErrorManagerSideMenu2UserTaskPage
-      ErrorManagerSideMenu2UserTaskPage : It increments countUserTaskPage
+      ErrorManagerSideMenu2UserTaskPage : Input: countSideMenu2UserTaskPage
+      ErrorManagerSideMenu2UserTaskPage : Behavior: counts countSideMenu2UserTaskPage
+      ErrorManagerSideMenu2UserTaskPage : If countSideMenu2UserTaskPage >= 3 than gives ErrorManagerSideMenu2UserTaskPage
+      ErrorManagerSideMenu2UserTaskPage : It increments countSideMenu2UserTaskPage
       ErrorManagerSideMenu2UserTaskPage : Output: errorResolved / errorUnresolved
     }
 
     ErrorManagerSideMenu2UserTaskPage --> [*] : ErrorManagerSideMenu2UserTaskPage
-    ErrorManagerSideMenu2UserTaskPage --> LLMCheckUserTaskPage : countUserTaskPage++
+    ErrorManagerSideMenu2UserTaskPage --> LLMCheckUserTaskPage : countSideMenu2UserTaskPage++
     
     state LLMCheckUserTaskPage <<function>> {
       LLMCheckUserTaskPage : Input: userTaskPageHtml
@@ -309,7 +309,7 @@ state TsX_Main <<navigate>> {
     state ResetMemoryUserTaskPage <<function>> {
     ResetMemoryUserTaskPage : Input: userTaskPageHtml
     ResetMemoryUserTaskPage : Behavior: userTaskPageHtml == newUserTaskPageHtml
-    ResetMemoryUserTaskPage : countUserTaskPage = 0
+    ResetMemoryUserTaskPage : countSideMenu2UserTaskPage = 0
     ResetMemoryUserTaskPage : Output: userTaskPageHtml
     }
     ResetMemoryUserTaskPage --> [*] : userTaskPageHtml
@@ -329,11 +329,13 @@ state TsX_Main <<navigate>> {
       [*] --> CaptureUserTaskPageHtml : userTaskPageHtml
       [*] --> WriteMappingUserData2Html : userDataProcessed
 
-      state ErrorUserTaskPage <<error>> {
-          ErrorUserTaskPage : Input: userTaskPageHtml
-          ErrorUserTaskPage : Behavior: handles errors in userTaskPageHtml
-          ErrorUserTaskPage : Output: errorResolved / errorUnresolved
+      state ErrorUserTaskPageHtml <<error>> {
+          ErrorUserTaskPageHtml : Input: errorUserTaskPageHtml, errorLogUserTaskPageHtml
+          ErrorUserTaskPageHtml : Behavior: handles errors in userTaskPageHtml
+          ErrorUserTaskPageHtml : Output: errorResolved / errorUnresolved
       }
+
+      ErrorUserTaskPageHtml --> [*] : errorUserTaskPageHtml, errorLogUserTaskPageHtml
 
       state CaptureUserTaskPageHtml <<function>> {
           CaptureUserTaskPageHtml : Input: userTaskPageHtml
@@ -342,7 +344,7 @@ state TsX_Main <<navigate>> {
           CaptureUserTaskPageHtml : Output: memory.html,webbot2html/page.html, errorUserTaskPageHtml
       }
 
-      CaptureUserTaskPageHtml --> ErrorUserTaskPage : errorUserTaskPageHtml
+      CaptureUserTaskPageHtml --> ErrorUserTaskPageHtml : errorUserTaskPageHtml, errorLogUserTaskPageHtml
       CaptureUserTaskPageHtml --> WriteMappingUserData2Html : memory.html,webbot2html/page.html
 
       state WriteMappingUserData2Html <<function>> {
@@ -377,6 +379,12 @@ state TsX_Main <<navigate>> {
           ErrorManagerMappingUserData2Html : Output: errorManagerMappingUserData2Html,countMappingUserData
       }
 
+      note right of ErrorManagerMappingUserData2Html
+        Data received from WriteMappingUserData2Html:
+        - errorLogWriteMappingUserData2Html
+        - errorLogChangePromptSlightly
+      end note
+
       ErrorManagerMappingUserData2Html --> ChangePromptSlightly : countMappingUserData++
 
       state ChangePromptSlightly <<function>> {
@@ -406,18 +414,57 @@ state TsX_Main <<navigate>> {
           CheckPageChangedUserTaskPage : Output: pageChanged / pageUnchanged
       }
 
-      CheckPageChangedUserTaskPage --> ErrorManagerUserTaskPageNoChange : no
-      CheckPageChangedUserTaskPage --> [*] : yes
+      CheckPageChangedUserTaskPage --> ErrorManagerUserTaskPageNoChange : countChangedUserTaskPage
 
-      state ErrorManagerUserTaskPageNoChange <<error>> {
-          ErrorManagerUserTaskPageNoChange : Input: countMappingUserData
-          ErrorManagerUserTaskPageNoChange: If countMappingUserData>= 3 than gives error ErrorManagerUserTaskPageNoChange
-          ErrorManagerUserTaskPageNoChange :It increments countMappingUserData
-          ErrorManagerUserTaskPageNoChange : Behavior: handles errors when no change is detected
-          ErrorManagerUserTaskPageNoChange : Output: errorResolved / errorUnresolved
+      CheckPageChangedUserTaskPage --> ResetUrlUserTaskPage : pageUnchanged, countChangedUserTaskPage ==0
+      ResetUrlUserTaskPage --> CheckPdfReady : userTaskPageHtml
+
+      state ResetUrlUserTaskPage <<function>> {
+          ResetUrlUserTaskPage : Input: newUserTaskPageHtml
+          ResetUrlUserTaskPage : Behavior: userTaskPageHtml = newUserTaskPageHtml
+          ResetUrlUserTaskPage : Output: userTaskPageHtml
       }
 
-  }
+      state ErrorManagerUserTaskPageNoChange <<error>> {
+          ErrorManagerUserTaskPageNoChange : Input: countChangedUserTaskPage
+          ErrorManagerUserTaskPageNoChange: If countChangedUserTaskPage>= 3 than gives error ErrorManagerUserTaskPageNoChange
+          ErrorManagerUserTaskPageNoChange :It increments countChangedUserTaskPage
+          ErrorManagerUserTaskPageNoChange : Behavior: handles errors when no change is detected
+          ErrorManagerUserTaskPageNoChange : Output: errorManagerUserTaskPageNoChange / countChangedUserTaskPage
+      }
+      note left of ErrorManagerUserTaskPageNoChange
+        Data received from FillFormsAndAction:
+        - errorLogFillFormsAndAction
+      end note
+
+      ErrorManagerUserTaskPageNoChange --> ChangePromptSlightly
+
+      state CheckPdfReady <<function>> {
+          CheckPdfReady : Input: newUserTaskPageHtml
+          CheckPdfReady : Behavior: checks if the PDF is ready for download
+          CheckPdfReady : Output: pdfReady / pdfNotReady
+      }
+
+      CheckPdfReady --> [*] : pdfReady
+      CheckPdfReady --> ControllerUserTaskPage : pdfNotReady,countUserTaskPage
+
+      state ControllerUserTaskPage <<function>> {
+          ControllerUserTaskPage : Input: userTaskPageHtml
+          ControllerUserTaskPage : Behavior: controls the user task page
+          ControllerUserTaskPage : countUserTaskPage >= 5 (max could be 5 page)
+          ControllerUserTaskPage :if countUserTaskPage>5 then should errorControllerUserTaskPage == true
+          ControllerUserTaskPage :(after 5 page should be "police olustur")
+          ControllerUserTaskPage : Output: userTaskPageHtml
+      }
+      ControllerUserTaskPage --> WriteMappingUserData2Html : errorControllerUserTaskPage=false, countUserTaskPage++
+      ControllerUserTaskPage --> ErrorControllerUserTaskPage : errorControllerUserTaskPage=true
+
+      state ErrorControllerUserTaskPage <<error>> {
+          ErrorControllerUserTaskPage : Input: errorControllerUserTaskPage
+          ErrorControllerUserTaskPage : Behavior: handles errors specific to the controller
+          ErrorControllerUserTaskPage : Output: errorResolved / errorUnresolved
+      }
+      ErrorControllerUserTaskPage --> [*] : errorControllerUserTaskPage
 
   state TsXErrorManager <<error>> {
       TsXErrorManager : Input: errorContext
