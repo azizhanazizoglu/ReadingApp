@@ -350,17 +350,55 @@ state TsX_Main <<navigate>> {
           WriteMappingUserData2Html : Behavior: Check what information you have from userDataProcessed json file
           WriteMappingUserData2Html : match with the memory.html (forms spaces) and creates mapping file (Ts2L_Map)
           WriteMappingUserData2Html : It als finds action button after Ts3 fill all the forms need to go next page
+          WriteMappingUserData2Html : If there is no form to be filled, then it means you are in the last page
+          WriteMappingUserData2Html : then it should be in last stage and needs to map action to "policeyi olustur"
           WriteMappingUserData2Html : Function: license_llm.pageread_llm.map_json_to_html_fields()
-          WriteMappingUserData2Html : Output: userTaskMatchFormsMappingJson , json2mapping/<base>_mapping.json
+          WriteMappingUserData2Html : Output: userTaskMatchFormsMappingJson ,lastStep(boolean) , json2mapping/<base>_mapping.json 
           WriteMappingUserData2Html : Memory : mapping (object in memory_store)
       }
 
-      WriteMappingUserData2Html --> FillFormsAndAction : userTaskMatchFormsMappingJson
+      WriteMappingUserData2Html --> CheckMappingUserData2Html : userTaskMatchFormsMappingJson, lastStep==false
+      WriteMappingUserData2Html --> FillFormsAndAction : userTaskMatchFormsMappingJson, lastStep==true
+
+      state CheckMappingUserData2Html <<function>> {
+          CheckMappingUserData2Html : Input: userTaskMatchFormsMappingJson, userTaskPageHtml
+          CheckMappingUserData2Html : Behavior: checks if the userTaskMatchFormsMappingJson form parts are empty
+          CheckMappingUserData2Html : Output: mappingValid / mappingInvalid
+      }
+
+      CheckMappingUserData2Html --> FillFormsAndAction :mappingValid, userTaskMatchFormsMappingJson
+      CheckMappingUserData2Html --> ErrorManagerMappingUserData2Html : mappingInvalid
+
+      state ErrorManagerMappingUserData2Html <<error>> {
+          ErrorManagerMappingUserData2Html : Input: userTaskMatchFormsMappingJson, userTaskPageHtml
+          ErrorManagerMappingUserData2Html : Behavior: handles errors in mapping userTaskMatchFormsMappingJson to userTaskPageHtml
+          ErrorManagerMappingUserData2Html : Output: errorResolved / errorUnresolved
+      }
 
       state FillFormsAndAction <<function>> {
-          FillFormsAndAction : Input: userTaskMatchFormsMappingJson
+          FillFormsAndAction : Input: userTaskMatchFormsMappingJson, userTaskPageHtml
           FillFormsAndAction : Behavior: fills forms in the HTML using userTaskMatchFormsMappingJson
-          FillFormsAndAction : Output: filledFormsHtml
+          FillFormsAndAction : No LLM is needed. 
+          FillFormsAndAction : Function: react_ui in-page filler
+          FillFormsAndAction : Output: newUserTaskPageHtml
+          FillFormsAndAction : Endpoint: /api/ts3/generate-script
+      }
+
+      FillFormsAndAction --> CheckPageChangedUserTaskPage : newUserTaskPageHtml
+
+      state CheckPageChangedUserTaskPage <<function>> {
+          CheckPageChangedUserTaskPage : Input: newUserTaskPageHtml,userTaskPageHtml
+          CheckPageChangedUserTaskPage : Behavior: compare newUserTaskPageHtml with userTaskPageHtml
+          CheckPageChangedUserTaskPage : Output: pageChanged / pageUnchanged
+      }
+
+      CheckPageChangedUserTaskPage --> ErrorManagerUserTaskPageNoChange : no
+      CheckPageChangedUserTaskPage --> [*] : yes
+
+      state ErrorManagerUserTaskPageNoChange <<error>> {
+          ErrorManagerUserTaskPageNoChange : Input: userTaskPageHtml
+          ErrorManagerUserTaskPageNoChange : Behavior: handles errors when no change is detected
+          ErrorManagerUserTaskPageNoChange : Output: errorResolved / errorUnresolved
       }
 
   }
