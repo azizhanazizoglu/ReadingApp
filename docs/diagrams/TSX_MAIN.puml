@@ -319,13 +319,50 @@ state TsX_Main <<navigate>> {
   HomePage --> TsXErrorManager : ErrorManagerSideMenu2UserTaskPage
   HomePage --> TsXErrorManager : errorManagerSideMenuPage
   HomePage --> UserTaskPage : userTaskPageHtml
+  ProcessData --> UserTaskPage : userDataProcessed
 
   state UserTaskPage <<view>> {
       UserTaskPage : Input: userTaskPageHtml
       UserTaskPage : Behavior: processes userTaskPageHtml
       UserTaskPage : Output: pdfReady
 
-      
+      [*] --> CaptureUserTaskPageHtml : userTaskPageHtml
+      [*] --> WriteMappingUserData2Html : userDataProcessed
+
+      state ErrorUserTaskPage <<error>> {
+          ErrorUserTaskPage : Input: userTaskPageHtml
+          ErrorUserTaskPage : Behavior: handles errors in userTaskPageHtml
+          ErrorUserTaskPage : Output: errorResolved / errorUnresolved
+      }
+
+      state CaptureUserTaskPageHtml <<function>> {
+          CaptureUserTaskPageHtml : Input: userTaskPageHtml
+          CaptureUserTaskPageHtml : Behavior: captures HTML from userTaskPageHtml (TsW_Capture)
+          CaptureUserTaskPageHtml : Function: webbot.test_webbot_html_mapping.readWebPage()
+          CaptureUserTaskPageHtml : Output: memory.html,webbot2html/page.html, errorUserTaskPageHtml
+      }
+
+      CaptureUserTaskPageHtml --> ErrorUserTaskPage : errorUserTaskPageHtml
+      CaptureUserTaskPageHtml --> WriteMappingUserData2Html : memory.html,webbot2html/page.html
+
+      state WriteMappingUserData2Html <<function>> {
+          WriteMappingUserData2Html : Input: memory.html,userDataProcessed (oldname ruhsat_json)
+          WriteMappingUserData2Html : Behavior: Check what information you have from userDataProcessed json file
+          WriteMappingUserData2Html : match with the memory.html (forms spaces) and creates mapping file (Ts2L_Map)
+          WriteMappingUserData2Html : It als finds action button after Ts3 fill all the forms need to go next page
+          WriteMappingUserData2Html : Function: license_llm.pageread_llm.map_json_to_html_fields()
+          WriteMappingUserData2Html : Output: userTaskMatchFormsMappingJson , json2mapping/<base>_mapping.json
+          WriteMappingUserData2Html : Memory : mapping (object in memory_store)
+      }
+
+      WriteMappingUserData2Html --> FillFormsAndAction : userTaskMatchFormsMappingJson
+
+      state FillFormsAndAction <<function>> {
+          FillFormsAndAction : Input: userTaskMatchFormsMappingJson
+          FillFormsAndAction : Behavior: fills forms in the HTML using userTaskMatchFormsMappingJson
+          FillFormsAndAction : Output: filledFormsHtml
+      }
+
   }
 
   state TsXErrorManager <<error>> {
