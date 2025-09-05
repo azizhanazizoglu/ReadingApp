@@ -66,6 +66,9 @@ def test_tsx_orchestrator_live_pages(url: str, expect_state: str, tmp_path):
     assert isinstance(html, str) and len(html) > 100, "HTML empty from live URL"
 
     orch = TsxOrchestrator(_fake_llm_mapping, _fake_analyze_selectors, workspace_tmp=str(tmp_path))
+    # Force mapping path only when a mapped state is expected
+    if expect_state == "mapped":
+        orch.force_llm = True
     res = orch.run_step(
         user_command="Traffic Insurance",  # arbitrary; only used by navigator
         html=html,

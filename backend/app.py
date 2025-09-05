@@ -128,6 +128,14 @@ def ts3_plan():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/dev/last-llm-prompt', methods=['GET'])
+def dev_last_llm_prompt():
+    try:
+        data = memory.get('last_llm_prompt') if isinstance(memory, dict) else None
+        return jsonify({"last_llm_prompt": data})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/tsx/dev-run', methods=['POST'])
 def tsx_dev_run():
     """Dev-only: run a single TsX orchestration step using current page HTML and LLM JSON.
@@ -201,7 +209,8 @@ def tsx_dev_run():
         except Exception:
             pass
 
-        res = orch.run_step(user_command, html, ruhsat_json, prev_html=prev_html)
+        executed_action = body.get('executed_action')  # optional feedback from FE about which action was just clicked
+        res = orch.run_step(user_command, html, ruhsat_json, prev_html=prev_html, executed_action=executed_action)
         # Keep last html for diffing in next dev-run
         memory['html'] = html
         memory['html_prev'] = html

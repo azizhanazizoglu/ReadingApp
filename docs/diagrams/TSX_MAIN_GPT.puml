@@ -20,6 +20,7 @@ component FHP as "FindHomePage Feature\n- Navigator.open_menu_candidates(html)\n
 
 component MAF as "MapAndFill Feature\n- map_form_fields_llm(html, ruhsat_json)  [adapter: license_llm.pageread_llm.map_json_to_html_fields]\n- MappingValidator.validate_mapping_selectors(html, mapping)  [adapter: /api/ts3/analyze-selectors]\n- ScriptFiller.generate_and_execute_fill_script(mapping)  [TS3 plan/script path]\n- DiffService.diff(prev, new)\n- FinalDetector.detect_final_page(html)\n- Finalizer.click_final_action(html)\n- ErrorManager.error_tick_and_decide(mapping)"
 
+
 ORCH --> CLASS : classify(html)
 CLASS --> ORCH : PageKind = {dashboard|home|menu|user_task|unknown}, is_final
 
@@ -54,6 +55,7 @@ package "FindHomePage Flow" as FHP_FLOW {
   rectangle FHP_DecideRetry as "DecideRetry\nErrorManager.error_tick_and_decide(homeNav)"
   rectangle FHP_Success as "Success"
   rectangle FHP_Abort as "Abort"
+  rectangle FHP_LLM as "LLM Home Finder\nFindLLMHomePageButton.run(html, cmd)\noutputs llm_actions"
 
   FHP_Start --> FHP_OpenMenu
   FHP_OpenMenu --> FHP_GoToTask : menu visible
@@ -63,6 +65,8 @@ package "FindHomePage Flow" as FHP_FLOW {
   FHP_CaptureDiff --> FHP_DecideRetry : unchanged
   FHP_DecideRetry --> FHP_OpenMenu : attempts < MAX
   FHP_DecideRetry --> FHP_Abort : attempts >= MAX
+  FHP_Abort --> FHP_LLM : BE-270C (llm:true)
+  FHP_LLM ..> MAF : BE-3206 propose llm_actions (llm:true)
 }
 
 package "MapAndFill Flow" as MAF_FLOW {
@@ -93,5 +97,13 @@ package "MapAndFill Flow" as MAF_FLOW {
 
 FHP .. FHP_FLOW : flow
 MAF .. MAF_FLOW : flow
+
+note right of FHP_LLM
+  Logs (green, llm:true):
+  - BE-270C FindHomePage fallback
+  - BE-3206 LLM home candidates (llm_actions)
+  - BE-3208/3209 MapAndFill fallback
+  API details: { llm_used: true, llm_actions: [...] }
+end note
 
 @enduml

@@ -23,8 +23,8 @@ class FindHomePage:
         self.diff = diff
         self.capture = capture
         self.errors = errors or ErrorManager(ErrorState())
-        # Dev: allow toggling simulation of success so we can force fallback
-        self.simulate_success = True
+        # Dev: allow toggling simulation of success; default False so fallback can occur naturally
+        self.simulate_success = False
 
     def run(self, user_command: str, html_before: str, max_attempts: int = 3) -> FindResult:
         try:

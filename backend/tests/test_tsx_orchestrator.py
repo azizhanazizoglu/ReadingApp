@@ -20,6 +20,7 @@ def test_tsx_orchestrator_flows(tmp_path):
     res1 = orch.run_step("Yeni Trafik", "<html><body>Home</body></html>", {"plate": "06"})
     assert res1.state == "navigated" and res1.details["success"]
 
-    # Case 2: mapping/fill path (user_task)
+    # Case 2: mapping/fill path (user_task) when forced LLM mapping is enabled
+    orch.force_llm = True
     res2 = orch.run_step("Yeni Trafik", "<html><input id='plate'/><button id='submit'></button></html>", {"plate": "06"})
     assert res2.state in {"mapped", "mapping_failed"}

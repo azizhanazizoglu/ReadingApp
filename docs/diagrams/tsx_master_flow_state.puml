@@ -149,4 +149,51 @@ Detect_PDF --> Back_Main : not ready
 Back_Main --> TsW_Capture : main page
 
 
+' =========================
+' TsX Dev Orchestrator (Backend Real Flow)
+' =========================
+
+state "TsX Dev Orchestrator (Backend)" as TsX_Dev_Orch {
+  [*] --> ORCH_Start
+
+  state ORCH_Start <<capture>> {
+  }
+
+  state ORCH_Classify <<analyze>> {
+  }
+
+  state ORCH_FindHome <<navigate>> {
+  }
+
+  state ORCH_LLMHome <<navigate>> {
+  }
+
+  state ORCH_MapAndFill <<map>> {
+  }
+
+  state ORCH_Done <<detect>> {
+  }
+
+  ORCH_Start --> ORCH_Classify : /api/tsx/dev-run
+  ORCH_Classify --> ORCH_FindHome : always try static-first\n(BE-3204)
+  ORCH_FindHome --> ORCH_Done : static navigated\n(BE-2701)
+  ORCH_FindHome --> ORCH_LLMHome : static exhausted -> fallback\n(BE-270C, llm:true)
+  ORCH_LLMHome --> ORCH_MapAndFill : propose llm_actions\n(BE-3206, llm:true)
+  ORCH_MapAndFill --> ORCH_Done : mapping valid/finalized\n(BE-2802, llm:true)
+  ORCH_MapAndFill --> ORCH_MapAndFill : mapping retry\n(BE-2801, llm:true)
+
+  note right of ORCH_Start
+    Force LLM (dev): ORCH_Start -> ORCH_MapAndFill\n
+    BE-3207 (llm:true) bypasses static nav.
+  end note
+
+  note right of ORCH_LLMHome
+    Logs (green):
+    - BE-270C FindHomePage fallback
+    - BE-3206 LLM home candidates (llm_actions)
+    - BE-3208/3209 MapAndFill fallback
+    API details: { llm_used: true, llm_actions: [...] }
+  end note
+}
+
 @enduml

@@ -3,11 +3,11 @@
 This document describes the TsX orchestrator, how it maps to TSX_MAIN stateflow, and how to run live integration tests against preview pages.
 
 ## Orchestrator Overview
-- Entry: `backend/features/tsx_orchestrator.py` → `TsxOrchestrator.run_step(user_command, html, ruhsat_json, prev_html=None)` returns `StepResult { state, details }`.
-- Classification: `ClassifyPage.classify(html)` → `PageKind` and `is_final`.
-- Branches:
-  - Dashboard/Home/Menu → `FindHomePage.run(user_command, html)`
-  - User task / Unknown → `MapAndFill.run(html, ruhsat_json, prev_html)`
+ Entry: `backend/features/tsx_orchestrator.py` → `TsxOrchestrator.run_step(user_command, html, ruhsat_json, prev_html=None)` returns `StepResult { state, details }`.
+ Classification: `ClassifyPage.classify(html)` → `PageKind` and `is_final`.
+ Branches:
+  Dashboard/Home/Menu → `FindHomePage.run(user_command, html)`; if static fails, proposes LLM nav actions; after 3 failed LLM tries on same DOM or when no candidates, returns `state: nav_failed`.
+  Forced LLM mapping (dev only) → `MapAndFill.run(html, ruhsat_json, prev_html)` when `force_llm=True`.
 
 ## Feature: FindHomePage (side-menu checks + bounded retries)
 - Components:
@@ -49,14 +49,15 @@ python -m pytest tests/integration -q
 ```
 
 ## Developer Endpoint
-- `POST /api/tsx/dev-run` runs one orchestrator step from FE developer mode.
-- Body: `{ user_command?, html?, ruhsat_json?, prev_html? }`
-- Returns: `{ state, details }` and logs BE-31xx + component BE-25xx..29xx codes.
+ `POST /api/tsx/dev-run` runs one orchestrator step (TsX).
+ Body: `{ user_command?, html?, ruhsat_json?, prev_html?, force_llm? }`
+ Returns: `navigated` (optionally with `actions` for FE), or `nav_failed`. Mapping is only performed when `force_llm=True`.
 
 ## Side-Menu Not Open? LLM Fallback
-- Covered via `FindHomePage` retries (ErrorManager: `homeNav`). After attempts, feature aborts.
-- Mapping fallback path is handled in `MapAndFill` via LLM mapping retries (`mapping` counter) if classification sees a user task.
-- Future enhancement: inject LLM-assisted navigation for home discovery when pure deterministic steps fail.
+## LLM Navigation Fallback (TsX)
+- If static home navigation fails, backend proposes LLM-based clickable candidates.
+- Frontend executes one candidate, waits for webview to load, recaptures DOM, and re-calls `/api/tsx/dev-run` automatically (single TsX click) up to 3 tries per unchanged DOM.
+- If all LLM tries are exhausted or no candidates are found, backend returns `nav_failed` with `details.reason` and `tries`.
 
 ## Files and Artifacts
 - HTML snapshots: `memory/TmpData/webbot2html/*` (written by `HtmlCaptureService` or `/api/test-state-2`).

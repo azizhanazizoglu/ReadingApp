@@ -2,6 +2,14 @@
 import os
 import openai
 
+try:
+  # Lazy imports to avoid circular import failures at module import time
+  from backend.logging_utils import log_backend  # type: ignore
+  from backend.memory_store import memory  # type: ignore
+except Exception:
+  log_backend = None
+  memory = {}
+
 def map_json_to_html_fields(html_string: str, ruhsat_json: dict, model="gpt-4o"):
   """
   TS2 (LLM-only): Analyze current page HTML and decide if it is a fillable form page or the final activation page.
@@ -108,7 +116,77 @@ def map_json_to_html_fields(html_string: str, ruhsat_json: dict, model="gpt-4o")
     "  \"actions\": string[]\n"
     "}\n"
   )
-  prompt = f"{prompt_header}\n\nHTML alanları:\n{html_fields}\n\nJSON veri (örnek amaçlı, değer uydurma yok):\n{ruhsat_json}"
+  # Optional feedback: if previous actions failed to change the page, nudge the model to try alternatives
+  try:
+    from backend.memory_store import memory as _mem  # type: ignore
+  except Exception:
+    _mem = {}
+  feedback_note = ""
+  try:
+    hist_root = _mem.get('llm_nav_history') or {}
+    # Use last_page_hash saved by orchestrator
+    last_hash = _mem.get('last_page_hash')
+    h = hist_root.get(last_hash) if last_hash else None
+    failed_actions = (h or {}).get('failed') or []
+    tries = int((h or {}).get('tries', 0))
+    if failed_actions:
+      feedback_note = (
+        "\n\nPrevious suggestions did not navigate (no DOM change)."
+        " Consider alternative buttons or routes to reach the Home/Dashboard."
+        f" Avoid these candidates that were tried without effect: {failed_actions}."
+        f" Attempt: {tries+1} of 3."
+      )
+      # Optional log for visibility when feedback is applied
+      try:
+        if log_backend is not None:
+          log_backend(
+            "[INFO] [BE-2211] TS2-LLM Retry Feedback",
+            code="BE-2211",
+            component="TS2-LLM",
+            extra={"llm": True, "failed_count": len(failed_actions)}
+          )
+      except Exception:
+        pass
+  except Exception:
+    pass
+
+  prompt = f"{prompt_header}\n\nHTML alanları:\n{html_fields}\n\nJSON veri (örnek amaçlı, değer uydurma yok):\n{ruhsat_json}{feedback_note}"
+  # Optional dev logging: record prompt & metadata when enabled
+  try:
+    debug_llm = False
+    if isinstance(memory, dict):
+      debug_llm = bool(memory.get('debug_llm', False))
+    if os.getenv('DEBUG_LLM_PROMPT', '').strip() == '1':
+      debug_llm = True
+    if debug_llm and log_backend is not None:
+      preview = prompt[:1000]
+      # Store latest for retrieval
+      try:
+        memory['last_llm_prompt'] = {
+          'model': model,
+          'temperature': 0.1,
+          'max_tokens': 512,
+          'prompt': prompt,
+          'html_fields_len': len(html_fields) if isinstance(html_fields, str) else 0,
+        }
+      except Exception:
+        pass
+      log_backend(
+        "[INFO] [BE-2210] TS2-LLM Prompt",
+        code="BE-2210",
+        component="TS2-LLM",
+        extra={
+          'llm': True,
+          'model': model,
+          'temperature': 0.1,
+          'max_tokens': 512,
+          'prompt_len': len(prompt),
+          'prompt_preview': preview,
+        },
+      )
+  except Exception:
+    pass
+
   response = openai.chat.completions.create(
     model=model,
     messages=[{"role": "user", "content": prompt}],

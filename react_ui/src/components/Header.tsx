@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, Zap, UploadCloud, Home, Code2, ChevronLeft, ChevronRight, RefreshCcw } from "lucide-react";
 import { SearchBar } from "@/components/SearchBar";
 import { DevModeToggle } from "@/components/DevModeToggle";
-import { getDomAndUrlFromWebview } from "@/services/webviewDom";
+import { getDomAndUrlFromWebview, getWebview } from "@/services/webviewDom";
 import { runActions } from "@/services/ts3ActionRunner";
 
 interface HeaderProps {
@@ -118,6 +118,62 @@ export const Header: React.FC<HeaderProps> = ({
       }
     } catch {}
   };
+  // Wait for one did-stop-loading from webview (with timeout)
+  const waitForWebviewStop = (timeoutMs = 7000) => new Promise<void>((resolve) => {
+    try {
+      const el: any = getWebview();
+      if (!el || !el.addEventListener) { setTimeout(() => resolve(), 400); return; }
+      let done = false;
+      const onStop = () => { if (done) return; done = true; try { el.removeEventListener('did-stop-loading', onStop); } catch {} resolve(); };
+      try { el.addEventListener('did-stop-loading', onStop); } catch { setTimeout(() => resolve(), 400); return; }
+      setTimeout(() => { if (done) return; done = true; try { el.removeEventListener('did-stop-loading', onStop); } catch {} resolve(); }, timeoutMs);
+    } catch { setTimeout(() => resolve(), 400); }
+  });
+
+  // Run TsX loop: capture → backend → maybe click 1 action → wait → repeat (max few steps)
+  const runTsxLoop = async () => {
+    const MAX_STEPS = 6;
+    let lastExecuted: string | undefined = undefined;
+    for (let step = 1; step <= MAX_STEPS; step++) {
+      try {
+        const { html } = await getDomAndUrlFromWebview((c, m) => devLog(c, `[step ${step}] ${m}`));
+        if (!html) { devLog('HD-TSX-NOHTML', `[step ${step}] Webview HTML alınamadı`); break; }
+        const r = await fetch('http://localhost:5001/api/tsx/dev-run', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_command: tsxCmd || 'Yeni Trafik', html, force_llm: !!forceLLM, executed_action: lastExecuted })
+        });
+        if (!r.ok) { devLog('HD-TSX-ERR', `[step ${step}] HTTP ${r.status}`); break; }
+        const j = await r.json();
+        devLog('HD-TSX-OK', `[step ${step}] state=${j?.state} details=${JSON.stringify(j?.details||{})}`);
+        if (j?.state === 'nav_failed') {
+          devLog('HD-TSX-END', `[step ${step}] nav_failed reason=${j?.details?.reason||''} tries=${j?.details?.tries??''}`);
+          break;
+        }
+        const actions: string[] = (j?.details && Array.isArray(j.details.actions)) ? j.details.actions : [];
+    if (actions.length > 0) {
+          // Execute only the first candidate, then wait for navigation and loop
+          const first = [actions[0]];
+          try {
+            const res = await runActions(first, true, (c, m) => devLog(c, `[step ${step}] ${m}`));
+            devLog('HD-TSX-ACT', `[step ${step}] Executed 1 action: ${JSON.stringify(res)}`);
+      lastExecuted = first[0];
+          } catch (e: any) {
+            devLog('HD-TSX-ACT-ERR', `[step ${step}] ${String(e?.message || e)}`);
+      lastExecuted = first[0];
+          }
+          await waitForWebviewStop(8000);
+          // Continue loop to recapture and re-run
+          continue;
+        }
+        // No actions returned → assume we're at home or static success; end
+        devLog('HD-TSX-END', `[step ${step}] completed without actions`);
+        break;
+      } catch (e: any) {
+        devLog('HD-TSX-FAIL', `[step ${step}] ${String(e?.message || e)}`);
+        break;
+      }
+    }
+  };
   return (
   <header
     className={"w-full flex items-center justify-between px-10 py-4 bg-white/80 dark:bg-[#223A5E]/90 shadow-md rounded-b-3xl transition-colors border-b border-[#e6f0fa] dark:border-[#335C81]"}
@@ -167,33 +223,7 @@ export const Header: React.FC<HeaderProps> = ({
           <Button
             className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] active:scale-95 text-[#0057A0] shadow"
             style={{ fontFamily: fontStack, minWidth: 52, minHeight: 40, fontWeight: 700 }}
-            onClick={async () => {
-              // TsX Dev: capture HTML and call backend orchestrator step
-              try {
-                const { html } = await getDomAndUrlFromWebview((c, m) => devLog(c, m));
-                if (!html) { devLog('HD-TSX-NOHTML', 'Webview HTML alınamadı'); return; }
-                const r = await fetch('http://localhost:5001/api/tsx/dev-run', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ user_command: tsxCmd || 'Yeni Trafik', html, force_llm: !!forceLLM })
-                });
-                if (!r.ok) { devLog('HD-TSX-ERR', `HTTP ${r.status}`); return; }
-                const j = await r.json();
-                devLog('HD-TSX-OK', `state=${j?.state} details=${JSON.stringify(j?.details||{})}`);
-                // If backend suggests actions for navigation (e.g., click#Ana Sayfa), execute them now
-                const actions: string[] = (j?.details && Array.isArray(j.details.actions)) ? j.details.actions : [];
-                if (actions.length > 0) {
-                  try {
-                    const res = await runActions(actions, true, (c, m) => devLog(c, m));
-                    devLog('HD-TSX-ACT', `Executed ${actions.length} action(s): ${JSON.stringify(res)}`);
-                  } catch (e: any) {
-                    devLog('HD-TSX-ACT-ERR', String(e?.message || e));
-                  }
-                }
-              } catch (e: any) {
-                devLog('HD-TSX-FAIL', String(e?.message || e));
-              }
-            }}
+            onClick={runTsxLoop}
             aria-label="TsX Dev Run"
           >
             TsX
