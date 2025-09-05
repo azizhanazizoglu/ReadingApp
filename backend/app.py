@@ -37,7 +37,7 @@ def test_llm_extract():
 
 # Import modular components
 from backend.memory_store import memory
-from backend.logging_utils import log_backend, backend_logs
+from backend.logging_utils import log_backend, backend_logs, log_config
 from backend.file_upload import handle_file_upload
 from backend.stateflow_agent import stateflow_agent, run_ts1_extract
 from webbot.test_webbot_html_mapping import readWebPage
@@ -98,7 +98,11 @@ def get_mapping():
 
 @app.route('/api/logs', methods=['GET'])
 def get_logs():
-    return jsonify({'logs': backend_logs})
+    color = request.args.get('color')
+    if color:
+        flt = [l for l in backend_logs if l.get('color') == color]
+        return jsonify({'logs': flt, 'filtered': True, 'color': color})
+    return jsonify({'logs': backend_logs, 'filtered': False})
 
 @app.route('/api/logs/clear', methods=['POST'])
 def clear_logs():
@@ -109,6 +113,39 @@ def clear_logs():
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.route('/api/logs/config', methods=['GET', 'POST'])
+def logs_config():
+    """GET returns current log retention config.
+    POST JSON can update {'preserve_all': bool, 'max': int|null}.
+    When switching from preserve_all True to False, existing logs remain; future logs trim to max.
+    """
+    try:
+        if request.method == 'POST':
+            data = request.get_json(silent=True) or {}
+            if 'preserve_all' in data:
+                log_config['preserve_all'] = bool(data['preserve_all'])
+            if 'max' in data:
+                val = data['max']
+                if val is None:
+                    log_config['max'] = None
+                else:
+                    try:
+                        ival = int(val)
+                        if ival > 0:
+                            log_config['max'] = ival
+                    except Exception:
+                        pass
+            # If preserve_all just disabled, perform immediate trim if needed
+            if not log_config.get('preserve_all') and isinstance(log_config.get('max'), int):
+                mx = log_config['max']
+                if mx > 0 and len(backend_logs) > mx:
+                    # keep most recent mx entries
+                    del backend_logs[:-mx]
+            log_backend('[INFO] [BE-2198] Log config updated', memory, code='BE-2198', component='Logging', extra={'config': log_config})
+        return jsonify({'config': log_config, 'count': len(backend_logs)})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/ts3/plan', methods=['POST'])
 def ts3_plan():

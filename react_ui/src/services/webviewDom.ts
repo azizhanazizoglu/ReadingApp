@@ -18,3 +18,35 @@ export async function getDomAndUrlFromWebview(devLog?: (c: string, m: string) =>
     return {};
   }
 }
+
+export async function getScreenshotFromWebview(devLog?: (c: string, m: string) => void): Promise<string | undefined> {
+  const webview = getWebview();
+  if (!webview) return undefined;
+  try {
+    // Render current viewport into a canvas and return data URL
+    const script = `(() => {
+      try {
+        const w = document.documentElement.clientWidth || window.innerWidth || 1200;
+        const h = document.documentElement.clientHeight || window.innerHeight || 800;
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return null;
+        // html2canvas is not guaranteed; try drawWindow if available (some engines expose it)
+        if ((window as any).drawWindow) {
+          try { (window as any).drawWindow(window, 0, 0, w, h, 'white'); } catch {}
+        }
+        const dataUrl = canvas.toDataURL('image/png');
+        return dataUrl;
+      } catch(e) { return null; }
+    })();`;
+    const dataUrl = await webview.executeJavaScript(script, true);
+    if (typeof dataUrl === 'string' && dataUrl.startsWith('data:image/')) {
+      devLog?.('IDX-TS2-WV-SHOT', 'screenshot captured');
+      return dataUrl;
+    }
+  } catch (e: any) {
+    devLog?.('IDX-TS2-WV-SHOT-ERR', String(e));
+  }
+  return undefined;
+}

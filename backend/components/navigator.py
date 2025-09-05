@@ -37,6 +37,12 @@ class Navigator:
             lov = soup.select_one("button [data-lov-name='Menu']")
             if lov:
                 cands.insert(0, Action("Open side menu (lov)", selector="button:has([data-lov-name='Menu'])"))
+            # Specific Lovable preview menu button by data-lov-id (from provided HTML)
+            try:
+                if soup.select_one("[data-lov-id='src/pages/Dashboard.tsx:40:10']"):
+                    cands.insert(0, Action("Open side menu (lov-id)", selector="[data-lov-id='src/pages/Dashboard.tsx:40:10']"))
+            except Exception:
+                pass
         except Exception as e:
             log_backend("[WARN] [BE-2699] Nav HTML parse failed", code="BE-2699", component="Navigator", extra={"err": str(e)})
         log_backend(
@@ -61,6 +67,16 @@ class Navigator:
                 return " ".join((s or "").split()).strip().lower()
 
             target = _norm(label)
+            # Static Lovable preview: known menu item ids for Yeni Kasko (from provided HTML)
+            try:
+                # Only add Kasko static selectors when the user asked for it
+                if 'kasko' in target:
+                    if soup.select_one("[data-lov-id='src/pages/Dashboard.tsx:100:22']"):
+                        cands.insert(0, Action("Go to Yeni Kasko (lov-id span)", selector="[data-lov-id='src/pages/Dashboard.tsx:100:22']"))
+                    if soup.select_one("[data-lov-id='src/pages/Dashboard.tsx:98:20']"):
+                        cands.insert(0, Action("Go to Yeni Kasko (lov-id button)", selector="[data-lov-id='src/pages/Dashboard.tsx:98:20']"))
+            except Exception:
+                pass
             hit = None
             for tag in soup.select("a, button, [role='button']"):
                 txt = _norm(tag.get_text(" "))

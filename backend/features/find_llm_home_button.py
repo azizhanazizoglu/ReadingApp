@@ -32,7 +32,6 @@ class FindLLMHomePageButton:
             )
         except Exception:
             pass
-
         actions: List[str] = []
         try:
             from bs4 import BeautifulSoup as _BS
@@ -68,6 +67,51 @@ class FindLLMHomePageButton:
                 # Contains variations (e.g., "ana sayfaya dön")
                 if "ana sayfa" in label or "anasayfa" in label or "go home" in label or "back to home" in label:
                     nodes.append((raw_label, tag))
+
+            # Also look for common home anchors and logo links by href/id/class attributes
+            def add_css_action(sel: str) -> None:
+                try:
+                    actions.append(f"css#{sel}")
+                except Exception:
+                    pass
+
+            # Prepend menu toggle if present; helps when Home is in a collapsed menu
+            try:
+                if soup.select_one("button[aria-label='menu'], [aria-label='menu'], svg.lucide-menu"):
+                    actions.append("css#button[aria-label='menu']")
+                    actions.append("css#[aria-label='menu']")
+                    actions.append("css#svg.lucide-menu")
+            except Exception:
+                pass
+
+            # href-based home/dashboard links
+            try:
+                href_selectors = [
+                    "a[href='/']",
+                    "a[href^='/?']",
+                    "a[href*='home' i]",
+                    "a[href*='anasayfa' i]",
+                    "a[href*='dashboard' i]",
+                ]
+                for sel in href_selectors:
+                    if soup.select_one(sel):
+                        add_css_action(sel)
+            except Exception:
+                pass
+
+            # id/class hints
+            try:
+                id_class_selectors = [
+                    "a#home", "button#home", "[id*='home' i]",
+                    "a.home", "button.home", "[class*='home' i]",
+                    "header a", "nav a",
+                    "img[alt*='logo' i]", "a[title*='logo' i]",
+                ]
+                for sel in id_class_selectors:
+                    if soup.select_one(sel):
+                        add_css_action(sel)
+            except Exception:
+                pass
 
             # Deduplicate by normalized label while preserving order; prefer plain 'ana sayfa' first
             seen = set()
