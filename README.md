@@ -184,6 +184,13 @@ pnpm start
 ## Özellikler ve Güncellemeler
 Tüm .txt dokümanlar .md’ye taşındı. Detaylar ve derinlemesine anlatımlar için `docs/` klasörüne bakın.
 
+### Neler Yeni (2025-09-05)
+- TsX Dev akışı: statik-önce gezinme, başarısız olursa LLM fallback (deneme sayısı: 4). Aşamalar: home → task → filling → final.
+- Yeni endpoint: `POST /api/tsx/dev-run` — adım adım orkestrasyon; parametreler: `user_command`, `html`, `prev_html?`, `executed_action?`, `force_llm?`, `current_url?`, `hard_reset?`. Çıktı: `phase`, `mapping_ready`, `details`, adım debug dump’ları.
+- Yeni endpoint: `POST /api/mapping/dump` — güncel mapping JSON’u backend loglarına (ve `memory/TmpData/json2mapping` altına) yazdırır.
+- FE TsX döngüsü: `phase` filling veya `mapping_ready` olduğunda otomatik TS3 doldurma çalışır; sonrası final sayfa/PDF algısı için poll yapılır. “Final yoksa hata” politikası uygulanır.
+- Log görünürlüğü: mapping JSON (TS2/TSX) loglarda gösterilir; script doldurma planı ve eylem özetleri loglanır.
+
 ### Neler Yeni (2025-08-28)
 - TS2 şeması revize edildi: LLM-yalnız, kod bloklu (```json) sıkı JSON; alanlar: `version`, `page_kind` (fill_form|final_activation), `is_final_page`, `final_reason`, `evidence`, `field_mapping`, `actions`.
 - TS3 doldurma komitleri güçlendirildi: kontrollü/maskeli inputlar için Enter basma (commitEnter) ve blur ile kalıcılık garanti altına alındı (backend script ve in-page path).
@@ -239,8 +246,10 @@ Notlar ve troubleshooting için `docs/README.md` ve aşağıdaki Sorun Giderme b
 - POST `/api/upload` → JPEG yükle
 - POST `/api/start-automation` → Ts1 başlatır
 - POST `/api/test-state-2` → Ts2 (webbot + mapping) test
+- POST `/api/tsx/dev-run` → TsX geliştirme adımı (statik+LLM gezinme ve aşama yönetimi; `current_url`, `hard_reset` destekler)
 - GET `/api/state` → state
 - GET `/api/mapping` → son mapping
+- POST `/api/mapping/dump` → mevcut mapping’i loglara ve diske yaz
 - GET `/api/logs` → yapılandırılmış loglar
 - GET `/health` → sağlık kontrolü
 
@@ -278,7 +287,7 @@ TS2 Doğrulama kriterleri (acceptance):
 	- `tckimlik` → örn. `input#identity`
 	- `dogum_tarihi` → örn. `input#birthDate`
 	- `ad_soyad` → örn. `input#name`
-	- `plaka_no` → örn. `input#plate`
+	- `plaka_no` → örn. `input#plateNo`
 - Actions içinde `click#DEVAM` olmalı.
 
 Tek komut (Windows PowerShell) — tam JSON çıktısı terminale yazdırılır:
@@ -300,7 +309,7 @@ Full JSON:
 		"tckimlik": "input#identity",
 		"dogum_tarihi": "input#birthDate",
 		"ad_soyad": "input#name",
-		"plaka_no": "input#plate"
+		"plaka_no": "input#plateNo"
 	},
 	"actions": ["click#DEVAM"]
 }
