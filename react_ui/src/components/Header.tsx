@@ -7,6 +7,7 @@ import { SearchBar } from "@/components/SearchBar";
 import { DevModeToggle } from "@/components/DevModeToggle";
 import { getDomAndUrlFromWebview, getWebview } from "@/services/webviewDom";
 import { runActions } from "@/services/ts3ActionRunner";
+import { runTs3 } from "@/services/ts3Service";
 
 interface HeaderProps {
   appName: string;
@@ -136,11 +137,11 @@ export const Header: React.FC<HeaderProps> = ({
     let lastExecuted: string | undefined = undefined;
     for (let step = 1; step <= MAX_STEPS; step++) {
       try {
-        const { html } = await getDomAndUrlFromWebview((c, m) => devLog(c, `[step ${step}] ${m}`));
+        const { html, url } = await getDomAndUrlFromWebview((c, m) => devLog(c, `[step ${step}] ${m}`));
         if (!html) { devLog('HD-TSX-NOHTML', `[step ${step}] Webview HTML alınamadı`); break; }
         const r = await fetch('http://localhost:5001/api/tsx/dev-run', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_command: tsxCmd || 'Yeni Trafik', html, force_llm: !!forceLLM, executed_action: lastExecuted })
+          body: JSON.stringify({ user_command: tsxCmd || 'Yeni Trafik', html, force_llm: !!forceLLM, executed_action: lastExecuted, current_url: url, hard_reset: step === 1 })
         });
         if (!r.ok) { devLog('HD-TSX-ERR', `[step ${step}] HTTP ${r.status}`); break; }
         const j = await r.json();
@@ -149,17 +150,60 @@ export const Header: React.FC<HeaderProps> = ({
           devLog('HD-TSX-END', `[step ${step}] nav_failed reason=${j?.details?.reason||''} tries=${j?.details?.tries??''}`);
           break;
         }
+        // If we've reached filling phase or mapping is ready, trigger TS3 fill now and stop the loop
+        const details = j?.details || {};
+        const phase = details?.phase;
+        const mappingReady = !!details?.mapping_ready;
+        if (phase === 'filling' || mappingReady) {
+          try {
+            // Dump mapping JSON to backend logs for diagnostics
+            try {
+              await fetch('http://localhost:5001/api/mapping/dump', { method: 'POST' });
+            } catch {}
+            await runTs3('http://localhost:5001', (c, m) => devLog(c, `[TS3] ${m}`), { useBackendScript: true, highlight: true, simulateTyping: true, stepDelayMs: 0 });
+            // Wait one load-stop and poll backend to detect final PDF state
+            await waitForWebviewStop(8000);
+            let prevHtml: string | undefined;
+            let finalOk = false;
+            for (let i = 0; i < 5; i++) {
+              const { html: curHtml, url: curUrl } = await getDomAndUrlFromWebview((c, m) => devLog(c, `[TS3-POLL ${i+1}/5] ${m}`));
+              if (!curHtml) break;
+              try {
+                const rr = await fetch('http://localhost:5001/api/tsx/dev-run', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ user_command: tsxCmd || 'Yeni Trafik', html: curHtml, prev_html: prevHtml, current_url: curUrl })
+                });
+                const jj = await rr.json();
+                devLog('HD-TS3-POLL', `[${i+1}/5] state=${jj?.state} details=${JSON.stringify(jj?.details||{})}`);
+                const d = jj?.details || {};
+                if (jj?.state === 'final' || d?.phase === 'final' || d?.is_final === true) { finalOk = true; break; }
+              } catch {}
+              prevHtml = curHtml;
+              await waitForWebviewStop(1500);
+            }
+            if (!finalOk) {
+              throw new Error('Form doldurma tamamlanamadı veya PDF üretilmedi.');
+            }
+          } catch (e: any) {
+            devLog('HD-TS3-ERR', `[step ${step}] ${String(e?.message || e)}`);
+            // Mark TsX as failed since we couldn’t complete to PDF
+            devLog('HD-TSX-END', `[step ${step}] ERROR: form doldurulamadı veya final PDF bulunamadı`);
+            break;
+          }
+          devLog('HD-TSX-END', `[step ${step}] final PDF bulundu, süreç tamam`);
+          break;
+        }
         const actions: string[] = (j?.details && Array.isArray(j.details.actions)) ? j.details.actions : [];
-    if (actions.length > 0) {
+        if (actions.length > 0) {
           // Execute only the first candidate, then wait for navigation and loop
           const first = [actions[0]];
           try {
             const res = await runActions(first, true, (c, m) => devLog(c, `[step ${step}] ${m}`));
             devLog('HD-TSX-ACT', `[step ${step}] Executed 1 action: ${JSON.stringify(res)}`);
-      lastExecuted = first[0];
+            lastExecuted = first[0];
           } catch (e: any) {
             devLog('HD-TSX-ACT-ERR', `[step ${step}] ${String(e?.message || e)}`);
-      lastExecuted = first[0];
+            lastExecuted = first[0];
           }
           await waitForWebviewStop(8000);
           // Continue loop to recapture and re-run

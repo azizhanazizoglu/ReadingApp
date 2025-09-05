@@ -44,11 +44,22 @@ class ScriptFiller:
                             selector = selector.split("#", 1)[1]
                         actions_iter.append({"selector": selector})
 
+            # Build small previews
+            def _preview(lst, key="selector"):
+                out = []
+                for it in lst[:6]:
+                    try:
+                        sel = it.get(key) if isinstance(it, dict) else str(it)
+                        if isinstance(sel, str):
+                            out.append(sel[:120])
+                    except Exception:
+                        pass
+                return out
             log_backend(
                 "[INFO] [BE-2950] ScriptFiller: building fill script",
                 code="BE-2950",
                 component="ScriptFiller",
-                extra={"fields": len(fields_iter), "actions": len(actions_iter)}
+                extra={"fields": len(fields_iter), "actions": len(actions_iter), "fields_preview": _preview(fields_iter), "actions_preview": _preview(actions_iter)}
             )
         except Exception:
             pass

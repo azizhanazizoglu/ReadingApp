@@ -96,6 +96,19 @@ def get_state():
 def get_mapping():
     return jsonify({'mapping': memory.get('mapping')})
 
+@app.route('/api/mapping/dump', methods=['POST'])
+def dump_mapping_to_logs():
+    try:
+        mapping = memory.get('mapping')
+        if mapping is None:
+            log_backend("[INFO] [BE-3001MD] Mapping dump requested but none in memory", memory, code="BE-3001MD")
+            return jsonify({"ok": False, "message": "No mapping in memory"}), 404
+        # Log full mapping content (can be large)
+        log_backend("[INFO] [BE-3001MD] Mapping dump", memory, code="BE-3001MD", extra={"mapping": mapping})
+        return jsonify({"ok": True, "size": len(str(mapping))})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
 @app.route('/api/logs', methods=['GET'])
 def get_logs():
     color = request.args.get('color')
@@ -194,6 +207,8 @@ def tsx_dev_run():
         prev_html = body.get('prev_html') or memory.get('html_prev')
         ruhsat_json = body.get('ruhsat_json') or memory.get('ruhsat_json')
         force_llm = bool(body.get('force_llm') or False)
+        current_url = body.get('current_url') or None
+        hard_reset = bool(body.get('hard_reset') or False)
 
         # Fallback: load last jpg2json if ruhsat_json absent
         if not ruhsat_json:
@@ -246,8 +261,16 @@ def tsx_dev_run():
         except Exception:
             pass
 
+        # Optional hard reset when a new TsX session starts
+        try:
+            if hard_reset:
+                orch._hard_reset()
+                log_backend('[INFO] TsX hard reset requested by client', memory, code='BE-3212C')
+        except Exception:
+            pass
+
         executed_action = body.get('executed_action')  # optional feedback from FE about which action was just clicked
-        res = orch.run_step(user_command, html, ruhsat_json, prev_html=prev_html, executed_action=executed_action)
+        res = orch.run_step(user_command, html, ruhsat_json, prev_html=prev_html, executed_action=executed_action, current_url=current_url)
         # Keep last html for diffing in next dev-run
         memory['html'] = html
         memory['html_prev'] = html
@@ -442,6 +465,15 @@ def test_state_2():
             json_block = _extract_json_block(raw_mapping)
             mapping = json.loads(json_block)
             log_backend("[INFO] LLM mapping JSON parse OK.", memory, code="BE-3001B", extra={"len": len(json_block)})
+            try:
+                # Additional mapping content log for diagnostics
+                log_backend("[INFO] [BE-3001M] Mapping JSON content", memory, code="BE-3001M", extra={
+                    "has_field_mapping": isinstance(mapping, dict) and bool(mapping.get("field_mapping")),
+                    "has_actions": isinstance(mapping, dict) and bool(mapping.get("actions")),
+                    "mapping": mapping,
+                })
+            except Exception:
+                pass
         except Exception as _e:
             log_backend(f"[WARN] LLM mapping JSON parse FAILED: {_e}", memory, code="BE-3001C")
             mapping = {"field_mapping": {}, "actions": []}

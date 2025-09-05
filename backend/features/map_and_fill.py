@@ -9,6 +9,7 @@ from backend.components.diff_service import DiffService
 from backend.components.finalization import FinalDetector, Finalizer
 from backend.components.error_manager import ErrorManager, ErrorState
 from backend.logging_utils import log_backend
+from backend.memory_store import memory
 
 
 @dataclass
@@ -52,6 +53,20 @@ class MapAndFill:
         while attempts < max_map_attempts:
             attempts += 1
             mapping = self.map_llm(html, ruhsat_json)
+            # Log mapping JSON for diagnostics (may be large; include core parts)
+            try:
+                log_backend(
+                    "[INFO] [BE-2800M] MapAndFill mapping JSON",
+                    code="BE-2800M",
+                    component="MapAndFill",
+                    extra={
+                        "has_field_mapping": isinstance(mapping, dict) and bool(mapping.get("field_mapping")),
+                        "has_actions": isinstance(mapping, dict) and bool(mapping.get("actions")),
+                        "mapping": mapping,
+                    }
+                )
+            except Exception:
+                pass
             if not self.validator.validate_mapping_selectors(html, mapping):
                 if self.errors.error_tick_and_decide("mapping") == "abort":
                     log_backend(
@@ -62,7 +77,18 @@ class MapAndFill:
                     )
                     return MapFillResult(mapping_valid=False, changed=False, is_final=False, attempts=attempts)
                 continue
-            # Valid mapping, generate filler script (execution outside)
+            # Valid mapping, persist for TS3 and generate filler script (execution outside)
+            try:
+                memory['mapping'] = mapping
+                log_backend(
+                    "[INFO] [BE-2800S] Mapping persisted to memory",
+                    code="BE-2800S",
+                    component="MapAndFill",
+                    extra={"keys": len(mapping.get('field_mapping', {})) if isinstance(mapping, dict) else 0}
+                )
+            except Exception:
+                pass
+            # Generate a tiny script (diagnostic only; FE runs official TS3 filler)
             _script = self.filler.generate_and_execute_fill_script(mapping)
             # Simulate DOM change for unit tests
             new_html = html + "<!--filled-->"
