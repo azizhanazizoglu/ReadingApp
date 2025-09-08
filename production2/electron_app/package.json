@@ -1,0 +1,12 @@
+{
+  "name": "llm-automation-electron",
+  "version": "1.0.0",
+  "main": "main.js",
+  "description": "React tabanlı LLM otomasyon uygulaması için Electron wrapper.",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^30.0.0"
+  }
+}

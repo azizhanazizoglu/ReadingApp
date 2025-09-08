@@ -1,0 +1,21 @@
+{
+  "findHomePage": {
+    "map_home_page_stetic": {
+      "variants": [
+        "ana sayfa",
+        "anasayfa",
+        "ana-sayfa",
+        "ana_sayfa",
+        "home",
+        "homepage",
+        "home-page",
+        "home_page",
+        "main",
+        "start",
+        "dashboard",
+        "portal"
+      ],
+      "max_alternatives": 10
+    }
+  }
+}

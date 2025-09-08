@@ -1,0 +1,6 @@
+# Electron app için .gitignore
+node_modules/
+*.log
+dist/
+build/
+.env
