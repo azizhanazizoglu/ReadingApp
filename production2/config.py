@@ -47,6 +47,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 }
 
 _CACHED: Optional[Dict[str, Any]] = None
+_CACHED_MTIME: Optional[float] = None
 
 
 def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
@@ -60,8 +61,13 @@ def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any
 
 
 def load_config() -> Dict[str, Any]:
-    global _CACHED
-    if _CACHED is not None:
+    global _CACHED, _CACHED_MTIME
+    try:
+        mtime = _CFG_PATH.stat().st_mtime if _CFG_PATH.exists() else None
+    except Exception:
+        mtime = None
+    # Hot-reload when the file changes on disk
+    if _CACHED is not None and (_CACHED_MTIME is not None) and (mtime == _CACHED_MTIME):
         return _CACHED
     data: Dict[str, Any] = {}
     if _CFG_PATH.exists():
@@ -70,6 +76,7 @@ def load_config() -> Dict[str, Any]:
         except Exception:
             data = {}
     _CACHED = _deep_merge(DEFAULT_CONFIG, data)
+    _CACHED_MTIME = mtime
     return _CACHED
 
 

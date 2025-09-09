@@ -10,6 +10,7 @@ import json
 import sys
 import hashlib
 from dataclasses import asdict
+from urllib.parse import unquote as _unquote, quote as _quote
 
 # Make production2 importable to reach memory and config
 _this = _Path(__file__).resolve()
@@ -60,6 +61,22 @@ def map_home_page_static(html: Optional[str] = None, name: Optional[str] = None)
         txt = (tag.get_text(separator=" ", strip=True) or "").strip()
         if not txt:
             txt = (tag.get("aria-label") or tag.get("title") or tag.get("data-label") or "").strip()
+        if not txt:
+            # Try data-component-content (often URL-encoded JSON like {"text":"Ana Sayfa"})
+            try:
+                dcc = (tag.get("data-component-content") or "").strip()
+                if dcc:
+                    raw = _unquote(dcc)
+                    if raw.startswith("{") and raw.endswith("}"):
+                        try:
+                            j = json.loads(raw)
+                            t = (j.get("text") or "").strip()
+                            if t:
+                                txt = t
+                        except Exception:
+                            pass
+            except Exception:
+                pass
         return txt
 
     def score_for(text: str, tag_name: str) -> int:
@@ -94,6 +111,8 @@ def map_home_page_static(html: Optional[str] = None, name: Optional[str] = None)
         val = (tag.get("value") or "").strip()
         role = (tag.get("role") or "").strip()
         text = pick_text(tag)
+        dname = (tag.get("data-component-name") or "").strip()
+        dcc = (tag.get("data-component-content") or "").strip()
         if tid:
             sels["css"].append(f"#{tid}")
         if tname:
@@ -106,6 +125,15 @@ def map_home_page_static(html: Optional[str] = None, name: Optional[str] = None)
             sels["css"].append(f"a[href='{href}']")
         if val and t == "input":
             sels["css"].append(f"input[value='{val}']")
+        if dname:
+            sels["css"].append(f"{t}[data-component-name='{dname}']")
+        if dcc and text:
+            # try to generate a partial match selector using URL-encoded text
+            try:
+                enc = _quote(text, safe='')
+                sels["css"].append(f"{t}[data-component-content*='{enc}']")
+            except Exception:
+                pass
         if text:
             # pseudo locator; UI executor can interpret text:= contains
             sels["heuristic"].append(f"text:{text}")
