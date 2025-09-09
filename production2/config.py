@@ -26,6 +26,22 @@ DEFAULT_CONFIG: Dict[str, Any] = {
                 "main", "start", "dashboard", "portal",
             ],
             "max_alternatives": 10,
+        },
+        # LLM fallback defaults for findHomePage
+        "letLLMMap_findHomePage": {
+            "defaultPrompt": (
+                "You are an expert web UI analyzer. Task: From the given filtered HTML, "
+                "identify the most likely navigation control that returns the user to the Home page. "
+                "Consider these labels and variants: 'Ana Sayfa', 'Anasayfa', 'Home', 'Homepage', 'Dashboard', 'Main'. "
+                "Prefer visible navigation links, buttons, or icons with descriptive attributes (aria-label, title, data-*).\n\n"
+                "Output strict JSON only with this schema: {\n"
+                "  \"selectorType\": \"css|xpath|text\",\n"
+                "  \"selector\": \"<string>\",\n"
+                "  \"alternatives\": [\"<string>\", ...],\n"
+                "  \"rationale\": \"<short reason>\"\n"
+                "}. Do not include any prose outside of JSON."
+            ),
+            "maxAttempts": 3
         }
     }
 }
@@ -76,3 +92,19 @@ def get_find_homepage_variants() -> List[str]:
 
 def get_map_home_page_stetic(key: str, default: Any = None) -> Any:
     return get(f"findHomePage.map_home_page_stetic.{key}", default)
+
+
+def get_llm_prompt_find_home_page_default() -> str:
+    val = get("findHomePage.letLLMMap_findHomePage.defaultPrompt")
+    if isinstance(val, str) and val.strip():
+        return val
+    return DEFAULT_CONFIG["findHomePage"]["letLLMMap_findHomePage"]["defaultPrompt"]  # type: ignore[index]
+
+
+def get_llm_max_attempts_find_home_page() -> int:
+    val = get("findHomePage.letLLMMap_findHomePage.maxAttempts")
+    try:
+        ival = int(val) if val is not None else int(DEFAULT_CONFIG["findHomePage"]["letLLMMap_findHomePage"]["maxAttempts"])  # type: ignore[index]
+        return ival if ival > 0 else 3
+    except Exception:
+        return 3

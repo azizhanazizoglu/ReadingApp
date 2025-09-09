@@ -14,6 +14,7 @@ from Components.getHtml import get_save_Html
 from Features.findHomePage import FindHomePage
 from Components.getHtml import remember_raw_html
 from Components.detectWepPageChange import detect_web_page_change
+from logging_utils import log, get_log_records, clear_log_records
 
 
 class TsxRequest(BaseModel):
@@ -26,6 +27,16 @@ class TsxRequest(BaseModel):
     hard_reset: Optional[bool] = None
     ruhsat_json: Optional[Dict[str, Any]] = None
 
+
+# Load local .env if present (keep env decoupled from root)
+try:
+    from dotenv import load_dotenv  # type: ignore
+    _here = Path(__file__).resolve().parents[1]
+    _env = _here / ".env"
+    if _env.exists():
+        load_dotenv(dotenv_path=_env)
+except Exception:
+    pass
 
 app = FastAPI(title="Production2 Backend", version="0.0.1")
 
@@ -77,6 +88,9 @@ class HtmlCaptureRequest(BaseModel):
     prev_filtered_html: Optional[str] = None
     current_filtered_html: Optional[str] = None
     wait_ms: int = 0
+    # LLM fallback fields
+    llm_feedback: Optional[str] = None  # UI-provided feedback text about failed candidates/tries
+    llm_attempt_index: Optional[int] = None  # 0-based attempt count maintained by UI
 
 
 class HtmlSaveRequest(BaseModel):
@@ -90,10 +104,18 @@ def f1(req: HtmlCaptureRequest) -> Dict[str, Any]:
 
     UI sends { html, name? } here; calls FindHomePage.
     """
-    valid_ops = {"allPlanHomePageCandidates", "planCheckHtmlIfChanged"}
+    valid_ops = {"allPlanHomePageCandidates", "planCheckHtmlIfChanged", "planLetLLMMap"}
     if req.op not in valid_ops:
         raise HTTPException(status_code=422, detail=f"invalid op: {req.op}. expected one of {sorted(valid_ops)}")
-    return FindHomePage(
+    log("INFO", "F1-REQ", f"op={req.op}", component="F1", extra={
+        "name": req.name or "F1",
+        "html_len": len(req.html or ""),
+        "has_prev_html": bool(req.prev_html),
+        "has_current_html": bool(req.current_html),
+        "llm_attempt_index": req.llm_attempt_index,
+        "llm_feedback_len": len(req.llm_feedback or ""),
+    })
+    res = FindHomePage(
         req.html,
         name=req.name or "F1",
     debug=bool(req.debug) if req.debug is not None else False,
@@ -108,7 +130,13 @@ def f1(req: HtmlCaptureRequest) -> Dict[str, Any]:
         prev_filtered_html=req.prev_filtered_html,
         current_filtered_html=req.current_filtered_html,
         wait_ms=req.wait_ms,
+        # LLM planning
+        llm_feedback=req.llm_feedback,
+        llm_attempt_index=req.llm_attempt_index,
     )
+    keys = list(res.keys())
+    log("INFO", "F1-RES", f"keys={keys}", component="F1", extra={"op": req.op})
+    return res
 
 
 @app.post("/api/f2")
@@ -158,17 +186,22 @@ def capture_html(req: HtmlSaveRequest) -> Dict[str, Any]:
 
 @app.get("/api/logs")
 def get_logs() -> Dict[str, Any]:
-    """Minimal logs endpoint for legacy UI panels.
-
-    Returns { logs: [] } to match existing FE expectation.
-    """
-    return {"logs": []}
+    """Return accumulated backend logs for the UI log panel."""
+    try:
+        logs = get_log_records()
+        return {"logs": logs}
+    except Exception:
+        return {"logs": []}
 
 
 @app.post("/api/logs/clear")
 def clear_logs() -> Dict[str, Any]:
-    """No-op clear endpoint for legacy UI. Always OK for now."""
-    return {"ok": True}
+    """Clear accumulated backend logs."""
+    try:
+        clear_log_records()
+        return {"ok": True}
+    except Exception:
+        return {"ok": False}
 
 
 if __name__ == "__main__":

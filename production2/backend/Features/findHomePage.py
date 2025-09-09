@@ -16,7 +16,13 @@ from Components.getHtml import get_save_Html, get_Html, filter_Html
 from Components.mappingStatic import map_home_page_static
 from Components.fillPageFromMapping import fill_and_go
 from Components.detectWepPageChange import detect_web_page_change
+from Components.letLLMMap import def_let_llm_map
 import time
+from config import (  # type: ignore
+    get_llm_prompt_find_home_page_default,
+    get_llm_max_attempts_find_home_page,
+)
+from logging_utils import log
 
 # Ensure project root (production2) is importable for memory access
 _this = _Path(__file__).resolve()
@@ -31,7 +37,7 @@ def FindHomePage(
     html: str,
     name: Optional[str] = None,
     debug: bool = False,
-    # MANDATORY op: 'allPlanHomePageCandidates' | 'planCheckHtmlIfChanged'
+    # MANDATORY op: 'allPlanHomePageCandidates' | 'planCheckHtmlIfChanged' | 'planLetLLMMap'
     op: str = "allPlanHomePageCandidates",
     clean_tmp: bool = False,
     save_on_nochange: bool = False,
@@ -43,6 +49,9 @@ def FindHomePage(
     prev_filtered_html: Optional[str] = None,
     current_filtered_html: Optional[str] = None,
     wait_ms: int = 200,
+    # LLM planning
+    llm_feedback: Optional[str] = None,
+    llm_attempt_index: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Stateless: compute mapping from in-memory HTML; save to tmp only for debug.
 
@@ -56,6 +65,11 @@ def FindHomePage(
     raw_res = get_Html(html)
     f_res = filter_Html(raw_res.html)
     mapping = map_home_page_static(f_res.html, name="findHome_mapping")
+    try:
+        cnt_candidates = len(getattr(mapping, "candidates", []) or [])
+    except Exception:
+        cnt_candidates = 0
+    log("DEBUG", "F1-MAP", f"filtered_len={len(f_res.html or '')} candidates={cnt_candidates}", component="FindHomePage", extra={"op": op})
 
     # Optional: persist snapshots for debugging/inspection
     cap_raw: Optional[HtmlCaptureResult] = None
@@ -164,6 +178,7 @@ def FindHomePage(
             "before_hash": dres.before_hash,
             "after_hash": dres.after_hash,
         }
+        log("INFO", "F1-DET", f"changed={dres.changed} reason={dres.reason}", component="FindHomePage")
         # Optionally save detection snapshots with '-nochange' suffix
         if debug and (dres.changed or save_on_nochange):
             try:
@@ -177,10 +192,21 @@ def FindHomePage(
     # Shape the response based on op for clarity/decoupling.
     # - 'allPlanHomePageCandidates': return full list + traceability
     # - 'planCheckHtmlIfChanged': return only detection result
+    # - 'planLetLLMMap': return LLM mapping prompt/context for fallback planning
     op_l = (op or "").strip()
     if op_l == "planCheckHtmlIfChanged":
+        log("DEBUG", "F1-RET-DET", "returning detection only", component="FindHomePage")
         return {"ok": True, "checkHtmlIfChanged": changed_info}
+    if op_l == "planLetLLMMap":
+        log("INFO", "F1-LLM", f"building LLM prompt attempt={llm_attempt_index}", component="FindHomePage", extra={"fb_len": len((llm_feedback or '').strip())})
+        return def_let_llm_map(
+            filtered_html=f_res.html,
+            mapping=mapping,
+            llm_feedback=llm_feedback,
+            llm_attempt_index=llm_attempt_index,
+        )
     # Default to allPlanHomePageCandidates
+    log("DEBUG", "F1-RET-PLANS", f"plans={len(all_candidate_plans)}", component="FindHomePage")
     return {
         "ok": True,
         "allPlanHomePageCandidates": all_candidate_plans,

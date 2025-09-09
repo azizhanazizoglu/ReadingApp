@@ -76,6 +76,19 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   const [backendLogs, setBackendLogs] = useState<any[]>([]);
   const [backendStatus, setBackendStatus] = useState<string>("");
   const [currentUrl, setCurrentUrl] = useState<string>("");
+  // Mirror FE dev logs (window.__DEV_LOGS) into React state so UI updates immediately on clear/append
+  const [feLogs, setFeLogs] = useState<any[]>([]);
+  const refreshFrontendLogs = React.useCallback(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const arr = (window as any).__DEV_LOGS || [];
+        // Clone to break reference and trigger re-render when length/content changes
+        setFeLogs(Array.isArray(arr) ? [...arr] : []);
+      }
+    } catch {
+      setFeLogs([]);
+    }
+  }, []);
   const refreshBackendLogs = React.useCallback(async () => {
     try {
       const res = await fetch(`${BACKEND_URL}/api/logs`);
@@ -127,15 +140,21 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             setBackendStatus('');
           }
         } else setBackendStatus("");
+        // Also refresh the FE logs mirror
+        refreshFrontendLogs();
   } catch (e) {
         setBackendLogs(["[ERROR] Backend logları alınamadı."]);
         setBackendStatus("[ERROR] Backend logları alınamadı.");
       }
     };
     fetchLogs();
-    const interval = setInterval(fetchLogs, 2000);
+    const interval = setInterval(() => {
+      fetchLogs();
+      // In case FE logs changed without any backend update, ensure periodic refresh
+      refreshFrontendLogs();
+    }, 2000);
     return () => clearInterval(interval);
-  }, []);
+  }, [refreshFrontendLogs]);
   // Webview URL değiştiğinde arama kutusunu güncelle
   useEffect(() => {
     if (currentUrl && currentUrl !== address) {
@@ -177,7 +196,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#B3C7E6] dark:border-[#335C81] bg-[#F8FAFC] dark:bg-[#223A5E]">
           <span className="font-bold text-lg text-[#0057A0] dark:text-[#E6F0FA]">Loglar (Developer)</span>
           <div className="flex items-center gap-2">
-            <button
+      <button
               onClick={async () => {
                 // Clear FE logs
                 try {
@@ -185,12 +204,15 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                     (window as any).__DEV_LOGS = [];
                   }
                 } catch {}
+        // Immediately reflect in UI
+        setFeLogs([]);
                 // Clear BE logs
                 try {
                   await fetch(`${BACKEND_URL}/api/logs/clear`, { method: 'POST' });
                 } catch {}
                 // Refresh list
-                await refreshBackendLogs();
+        await refreshBackendLogs();
+        refreshFrontendLogs();
               }}
               className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] text-[#0057A0] dark:bg-[#335C81] dark:hover:bg-[#446E9B] dark:text-[#E6F0FA] text-sm font-semibold"
               title="Logları temizle"
@@ -204,8 +226,8 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           {/* Hem frontend (window.__DEV_LOGS) hem backend loglarını göster */}
           <ul className="space-y-3">
             {/* Frontend logları */}
-            {typeof window !== 'undefined' && window.__DEV_LOGS && window.__DEV_LOGS.length > 0 &&
-              window.__DEV_LOGS.slice(-30).reverse().map((log, i) => (
+            {feLogs && feLogs.length > 0 &&
+              feLogs.slice(-30).reverse().map((log, i) => (
                 <li key={"frontend-"+i} className="flex flex-col gap-1 p-2 rounded-lg bg-[#F8FAFC] dark:bg-[#335C81] border border-[#B3C7E6] dark:border-[#335C81]">
                   <span className="text-xs text-[#7B8FA1] dark:text-[#B3C7E6]">{log.time.split('T')[1].slice(0,8)} | <b>{log.component}</b> | <b>{log.code}</b></span>
                   <span className="text-sm font-medium text-[#0057A0] dark:text-[#E6F0FA]">{log.message || log.state}</span>

@@ -10,6 +10,7 @@ __pycache__/
 
 # Environment
 .env
+production2/.env
 
 # Test/Cache
 .cache/

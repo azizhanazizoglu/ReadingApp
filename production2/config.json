@@ -1,21 +1,12 @@
 {
   "findHomePage": {
     "map_home_page_stetic": {
-      "variants": [
-        "ana sayfa",
-        "anasayfa",
-        "ana-sayfa",
-        "ana_sayfa",
-        "home",
-        "homepage",
-        "home-page",
-        "home_page",
-        "main",
-        "start",
-        "dashboard",
-        "portal"
-      ],
+      "variants": ["manasayfa"],
       "max_alternatives": 10
+    },
+    "letLLMMap_findHomePage": {
+      "defaultPrompt": "You are an expert web UI analyzer. Task: From the given filtered HTML, identify the most likely navigation control that returns the user to the Home page. Consider these labels and variants: 'Ana Sayfa', 'Anasayfa', 'Home', 'Homepage', 'Dashboard', 'Main'. Prefer visible navigation links, buttons, or icons with descriptive attributes (aria-label, title, data-*).\n\nOutput strict JSON only with this schema: {\n  \"selectorType\": \"css|xpath|text\",\n  \"selector\": \"<string>\",\n  \"alternatives\": [\"<string>\", ...],\n  \"rationale\": \"<short reason>\"\n}. Do not include any prose outside of JSON.",
+      "maxAttempts": 3
     }
   }
 }
