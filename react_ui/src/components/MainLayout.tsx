@@ -4,6 +4,7 @@ import { BrowserView } from "@/components/BrowserView";
 import { CommandPanel } from "@/components/CommandPanel";
 import { Footer } from "@/components/Footer";
 import React, { useState, useEffect } from "react";
+import { BACKEND_URL } from "@/config";
 
 interface MainLayoutProps {
   appName: string;
@@ -77,7 +78,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   const [currentUrl, setCurrentUrl] = useState<string>("");
   const refreshBackendLogs = React.useCallback(async () => {
     try {
-      const res = await fetch("http://localhost:5001/api/logs");
+      const res = await fetch(`${BACKEND_URL}/api/logs`);
       const data = await res.json();
       setBackendLogs(data.logs || []);
     } catch {
@@ -89,7 +90,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   useEffect(() => {
     const fetchLogs = async () => {
       try {
-        const res = await fetch("http://localhost:5001/api/logs");
+  const res = await fetch(`${BACKEND_URL}/api/logs`);
         const data = await res.json();
         const logs = data.logs || [];
         setBackendLogs(logs);
@@ -186,7 +187,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                 } catch {}
                 // Clear BE logs
                 try {
-                  await fetch('http://localhost:5001/api/logs/clear', { method: 'POST' });
+                  await fetch(`${BACKEND_URL}/api/logs/clear`, { method: 'POST' });
                 } catch {}
                 // Refresh list
                 await refreshBackendLogs();

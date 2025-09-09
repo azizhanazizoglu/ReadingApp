@@ -9,6 +9,8 @@ import { getDomAndUrlFromWebview, getWebview } from "@/services/webviewDom";
 import { runActions } from "@/services/ts3ActionRunner";
 import { runTs3 } from "@/services/ts3Service";
 import { BACKEND_URL } from "@/config";
+import { runFindHomePageSF } from "@/stateflows/findHomePageSF";
+import { runMasterSF } from "@/stateflows/masterSF";
 
 interface HeaderProps {
   appName: string;
@@ -279,15 +281,16 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={async () => {
               try {
                 devLog('HD-F1', 'F1 clicked');
-                const { html } = await getDomAndUrlFromWebview((c, m) => devLog(c, m));
-                if (!html) { devLog('HD-F1-ERR', 'HTML alınamadı'); return; }
-                const res = await fetch(`${BACKEND_URL}/api/f1`, {
-                  method: 'POST', headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ html, name: 'F1' })
+                const result = await runFindHomePageSF({
+                  waitAfterClickMs: 800,
+                  name: 'F1',
+                  log: (m) => devLog('HD-F1-LOG', m),
                 });
-                if (!res.ok) { devLog('HD-F1-ERR', `HTTP ${res.status}`); return; }
-                const j = await res.json();
-                devLog('HD-F1-OK', `kaydedildi: ${j?.fingerprint || ''}`);
+                if (result.changed) {
+                  devLog('HD-F1-DONE', `changed via selector=${result.selector} index=${result.index}`);
+                } else {
+                  devLog('HD-F1-NOCHANGE', result.reason || 'no-change');
+                }
               } catch (e: any) {
                 devLog('HD-F1-ERR', String(e?.message || e));
               }
@@ -295,6 +298,22 @@ export const Header: React.FC<HeaderProps> = ({
             aria-label="F1"
           >
             F1
+          </Button>
+          <Button
+            className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] active:scale-95 text-[#0057A0] shadow"
+            style={{ fontFamily: fontStack, minWidth: 72, minHeight: 40, fontWeight: 700 }}
+            onClick={async () => {
+              try {
+                devLog('HD-MASTER', 'Master SF clicked');
+                const res = await runMasterSF(undefined, { log: (m) => devLog('HD-MASTER-LOG', m) });
+                devLog('HD-MASTER-DONE', `ok=${res.ok} stoppedAt=${(res as any).stoppedAt || null}`);
+              } catch (e: any) {
+                devLog('HD-MASTER-ERR', String(e?.message || e));
+              }
+            }}
+            aria-label="Master"
+          >
+            Master
           </Button>
           <Button
             className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] active:scale-95 text-[#0057A0] shadow"

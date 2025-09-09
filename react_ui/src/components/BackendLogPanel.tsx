@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { BACKEND_URL } from "@/config";
 
 export const BackendLogPanel: React.FC = () => {
   const [logs, setLogs] = useState<string[]>([]);
@@ -6,7 +7,7 @@ export const BackendLogPanel: React.FC = () => {
   useEffect(() => {
     const fetchLogs = async () => {
       try {
-        const res = await fetch("http://localhost:5001/api/logs");
+                const res = await fetch(`${BACKEND_URL}/api/logs`);
         const data = await res.json();
         setLogs(data.logs || []);
       } catch (e) {

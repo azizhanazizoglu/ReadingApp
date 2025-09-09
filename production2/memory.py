@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
+from dataclasses import dataclass
 
 
 class HtmlMemoryStore:
@@ -46,3 +47,126 @@ class Memory:
 
 # Global singleton registry
 memory = Memory()
+
+
+# =====================
+# Data dictionary types
+# =====================
+
+@dataclass
+class HtmlCaptureInput:
+    """Input to HTML capture/save component."""
+    html: str
+    name: Optional[str] = None
+
+
+@dataclass
+class HtmlCaptureResult:
+    """Result from HTML capture/save component."""
+    html_path: str
+    fingerprint: str
+    timestamp: str
+    name: str
+
+
+@dataclass
+class FilteredHtmlRequest:
+    """Request to produce mapping from filtered HTML."""
+    filtered_html: Optional[str] = None
+    name: Optional[str] = None
+
+
+@dataclass
+class RawHtmlResult:
+    """Normalized raw HTML string (post-capture, pre-filter)."""
+    html: str
+
+
+@dataclass
+class FilteredHtmlResult:
+    """Filtered HTML string retaining only interactive elements."""
+    html: str
+
+@dataclass
+class MappingCandidate:
+    """A single UI element candidate for an action (e.g., Home button)."""
+    type: str
+    text: str
+    attributes: Dict[str, Any]
+    selectors: Dict[str, List[str]]
+    score: int
+    action: str
+
+
+@dataclass
+class MappingMeta:
+    """Metadata for a mapping run/output."""
+    timestamp: str
+    source: str
+    variants: List[str]
+    html_fingerprint: Optional[str] = None
+
+
+@dataclass
+class MappingAction:
+    """Primary action and alternative selectors to try."""
+    primary_selector: Optional[str]
+    action: str
+    alternatives: List[str]
+
+
+@dataclass
+class MappingJson:
+    """Top-level mapping JSON structure returned to callers and saved to disk."""
+    meta: MappingMeta
+    mapping: MappingAction
+    candidates: List[MappingCandidate]
+
+
+@dataclass
+class MappingRequest:
+    """Request to generate a mapping (e.g., Home button) from filtered HTML."""
+    filtered_html: str
+    name: Optional[str] = None
+
+
+@dataclass
+class PageChangeRequest:
+    """Input to change-detection component."""
+    current_html: str
+    prev_html: Optional[str] = None
+    normalize_whitespace: bool = False
+
+
+@dataclass
+class PageChangeResult:
+    """Output from change-detection component."""
+    changed: bool
+    reason: str
+    before_hash: Optional[str] = None
+    after_hash: Optional[str] = None
+    details: Optional[Dict[str, Any]] = None
+
+
+@dataclass
+class FillAction:
+    """A single UI automation step derived from a mapping."""
+    kind: str  # e.g., "set_value" | "select_option" | "click"
+    selector: str
+    value: Optional[str] = None
+    option: Optional[str] = None
+
+
+@dataclass
+class FillPlan:
+    """Planned set of UI actions to apply on the page."""
+    actions: List[FillAction]
+    meta: Optional[Dict[str, Any]] = None
+
+
+@dataclass
+class RequestContext:
+    """Optional context carrier for per-task/session correlation, if needed."""
+    task_id: Optional[str] = None
+    session_id: Optional[str] = None
+    user_id: Optional[str] = None

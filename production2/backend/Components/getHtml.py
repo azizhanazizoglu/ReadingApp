@@ -19,10 +19,10 @@ class SaveHtmlResult:
     name: str
 
 
-"""Utilities for saving HTML and updating shared in-memory cache.
+"""Utilities for saving and filtering HTML.
 
-Note: General memory registry is defined in `production2/memory.py` as `memory`.
-This module exposes functions only.
+Data types are declared in production2/memory.py (data dictionary).
+This module stays stateless except for a small in-process HTML history used in dev.
 """
 
 # Ensure project root (production2) is importable when running via uvicorn/module
@@ -31,7 +31,7 @@ _root = _this.parents[2]  # production2
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
-from memory import memory  # type: ignore  # noqa: E402
+from memory import RawHtmlResult, FilteredHtmlResult, HtmlCaptureResult  # type: ignore  # noqa: E402
 
 
 def _project_root() -> Path:
@@ -51,16 +51,16 @@ def _fingerprint(html: str) -> str:
     return hashlib.sha256((html or "").encode("utf-8")).hexdigest()
 
 
-def get_Html(raw_html: Optional[str]) -> str:
+def get_Html(raw_html: Optional[str]) -> RawHtmlResult:
     """Return the HTML captured from the iframe (frontend sends it).
 
     For now, this is a simple normalizer/passthrough that ensures we always
     work with a string. If later we need to post-process (e.g., strip scripts,
     normalize whitespace), we can do it here without changing callers.
     """
-    return (raw_html or "").strip()
+    return RawHtmlResult(html=(raw_html or "").strip())
 
-def filter_Html(raw_html: Optional[str]) -> str:
+def filter_Html(raw_html: Optional[str]) -> FilteredHtmlResult:
     """Filter raw HTML and keep only interactive elements relevant for automation.
 
     Keeps a compact subset of the page:
@@ -71,14 +71,18 @@ def filter_Html(raw_html: Optional[str]) -> str:
     Removes styling and decorative content to reduce token usage.
     """
     if not raw_html:
-        return ""
+        return FilteredHtmlResult(html="")
 
     try:
         from bs4 import BeautifulSoup  # type: ignore
     except Exception:
-        # Fallback: naive regex extraction of most relevant controls
-        import re as _re
-        html = (raw_html or "").strip()
+        BeautifulSoup = None  # type: ignore
+
+    html = (raw_html or "").strip()
+
+    # If BeautifulSoup isn't available, use a compact regex fallback.
+    if BeautifulSoup is None:
+        import re as _re  # Fallback: naive regex extraction of relevant controls
         patterns = [
             r"<form[^>]*>.*?</form>",
             r"<button[^>]*>.*?</button>",
@@ -91,7 +95,7 @@ def filter_Html(raw_html: Optional[str]) -> str:
         for pat in patterns:
             found += _re.findall(pat, html, flags=_re.IGNORECASE | _re.DOTALL)
         if not found:
-            return "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Filtered</title></head><body><!-- no interactive elements --></body></html>"
+            return FilteredHtmlResult(html="<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Filtered</title></head><body><!-- no interactive elements --></body></html>")
         body = [
             "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Filtered</title></head><body>",
             "<!-- Compact interactive elements (regex fallback) -->",
@@ -102,9 +106,9 @@ def filter_Html(raw_html: Optional[str]) -> str:
             el = _re.sub(r"\s+(?:class|style)=['\"][^'\"]*['\"]", "", el, flags=_re.IGNORECASE)
             body.append(el)
         body.append("</body></html>")
-        return "\n".join(body)
+        return FilteredHtmlResult(html="\n".join(body))
 
-    soup = BeautifulSoup(raw_html or "", "html.parser")
+    soup = BeautifulSoup((raw_html or ""), "html.parser")
 
     # Remove known noise elements (e.g., builder badges/overlays)
     try:
@@ -261,76 +265,56 @@ def filter_Html(raw_html: Optional[str]) -> str:
         ratio = 0
     out_body.append(out.new_string(f"\n<!-- filtered: ~{ratio}% smaller -->\n"))
 
-    return str(out)
-def get_save_Html(html: str, name: Optional[str] = None) -> SaveHtmlResult:
-    """Dev helper: get HTML (from iframe), save to memory, then save to tmp/html as JSON.
+    return FilteredHtmlResult(html=str(out))
+def get_save_Html(
+    content: "str | RawHtmlResult | FilteredHtmlResult",
+    name: Optional[str] = None,
+    stage: Optional[str] = None,
+) -> HtmlCaptureResult:
+    """Save provided HTML to tmp/html as JSON (pure saver, no filtering).
 
-    Usage:
-    - Preferred in development and feature flows (e.g., FindHomePage) to both
-      update the in-memory cache and persist a copy under production2/tmp/html.
+    - content: HTML string or a dataclass with an 'html' field.
+    - name: optional base name; if omitted, a timestamp-based name is used.
+    - stage: optional label to prefix the filename (e.g., 'nonfiltered', 'filtered').
 
-    Notes:
-    - First cleans the tmp/html folder (files and subfolders) to keep only the latest capture.
-    - Also stores the HTML and metadata in an in-memory history for quick reuse.
-    - If name is not provided, a timestamp-based safe name will be generated.
-    - Saves as JSON format with html content and metadata.
+    Produces tmp/html/[stage_]name.json and returns metadata.
     """
-    # Keep a copy of raw for accurate diffs
-    raw_html = get_Html(html)
-    # Remember raw in memory (not on disk here)
-    memory.raw_html.remember(raw_html, {"note": "raw_capture"})
-    # Then filter for compact persistence and downstream steps
-    html = filter_Html(raw_html)
+    # Extract HTML string from various inputs
+    if isinstance(content, str):
+        html_str = content
+    elif isinstance(content, (RawHtmlResult, FilteredHtmlResult)):
+        html_str = content.html
+    else:
+        # Best-effort
+        html_str = str(content)
+
     ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%fZ")
     use_name = _safe_name(name or f"page_{ts}")
+    prefix = f"{stage}_" if stage else ""
 
     out_dir = _tmp_html_dir()
     out_dir.mkdir(parents=True, exist_ok=True)
-    # First step: clean all files (and subfolders) inside tmp/html
-    try:
-        for p in out_dir.iterdir():
-            try:
-                if p.is_file() or p.is_symlink():
-                    p.unlink()
-                elif p.is_dir():
-                    shutil.rmtree(p)
-            except Exception:
-                # Ignore per-entry cleanup errors so we don't block the save
-                pass
-    except Exception:
-        # Ignore overall cleanup errors
-        pass
 
-    fp = _fingerprint(html)
-    
-    # Save as JSON format
+    fp = _fingerprint(html_str)
+
     json_data = {
-        "html": html,
+        "html": html_str,
         "metadata": {
             "fingerprint": fp,
             "timestamp": ts,
             "name": use_name,
-            "captured_at": datetime.utcnow().isoformat() + "Z"
-        }
+            "stage": stage or "default",
+            "captured_at": datetime.utcnow().isoformat() + "Z",
+        },
     }
-    
-    out_path = out_dir / f"{use_name}.json"
+
+    out_path = out_dir / f"{prefix}{use_name}.json"
     out_path.write_text(json.dumps(json_data, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    result = SaveHtmlResult(html_path=out_path, fingerprint=fp, timestamp=ts, name=use_name)
-    # Also remember in memory for quick access by features without touching disk again
-    memory.html.remember(
-        html,
-        {
-            "path": str(result.html_path),
-            "fingerprint": result.fingerprint,
-            "timestamp": result.timestamp,
-            "name": result.name,
-        },
-    )
+    result = HtmlCaptureResult(html_path=str(out_path), fingerprint=fp, timestamp=ts, name=use_name)
     return result
 
 
-def remember_raw_html(html: str, meta: Optional[Dict[str, Any]] = None) -> None:
-    """Remember raw HTML only (without saving to disk)."""
-    memory.raw_html.remember(get_Html(html), meta or {})
+def remember_raw_html(html: str, meta: Optional[Dict[str, Any]] = None) -> RawHtmlResult:
+    """Normalize raw HTML only (stateless; no storage)."""
+    return get_Html(html)

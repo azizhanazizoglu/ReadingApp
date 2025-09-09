@@ -1,4 +1,5 @@
 import React, { RefObject } from "react";
+import { BACKEND_URL } from "@/config";
 import { AllianzLogo } from "@/components/AllianzLogo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
@@ -139,7 +140,7 @@ export const Header: React.FC<HeaderProps> = ({
       try {
         const { html, url } = await getDomAndUrlFromWebview((c, m) => devLog(c, `[step ${step}] ${m}`));
         if (!html) { devLog('HD-TSX-NOHTML', `[step ${step}] Webview HTML alınamadı`); break; }
-        const r = await fetch('http://localhost:5001/api/tsx/dev-run', {
+  const r = await fetch(`${BACKEND_URL}/api/tsx/dev-run`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ user_command: tsxCmd || 'Yeni Trafik', html, force_llm: !!forceLLM, executed_action: lastExecuted, current_url: url, hard_reset: step === 1 })
         });
@@ -158,9 +159,9 @@ export const Header: React.FC<HeaderProps> = ({
           try {
             // Dump mapping JSON to backend logs for diagnostics
             try {
-              await fetch('http://localhost:5001/api/mapping/dump', { method: 'POST' });
+              await fetch(`${BACKEND_URL}/api/mapping/dump`, { method: 'POST' });
             } catch {}
-            await runTs3('http://localhost:5001', (c, m) => devLog(c, `[TS3] ${m}`), { useBackendScript: true, highlight: true, simulateTyping: true, stepDelayMs: 0 });
+            await runTs3(BACKEND_URL, (c, m) => devLog(c, `[TS3] ${m}`), { useBackendScript: true, highlight: true, simulateTyping: true, stepDelayMs: 0 });
             // Wait one load-stop and poll backend to detect final PDF state
             await waitForWebviewStop(8000);
             let prevHtml: string | undefined;
@@ -169,7 +170,7 @@ export const Header: React.FC<HeaderProps> = ({
               const { html: curHtml, url: curUrl } = await getDomAndUrlFromWebview((c, m) => devLog(c, `[TS3-POLL ${i+1}/5] ${m}`));
               if (!curHtml) break;
               try {
-                const rr = await fetch('http://localhost:5001/api/tsx/dev-run', {
+                const rr = await fetch(`${BACKEND_URL}/api/tsx/dev-run`, {
                   method: 'POST', headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ user_command: tsxCmd || 'Yeni Trafik', html: curHtml, prev_html: prevHtml, current_url: curUrl })
                 });
@@ -278,7 +279,7 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={async () => {
               if (onDevTestSt1) onDevTestSt1();
               try {
-                const r = await fetch('http://localhost:5001/api/start-automation', { method: 'POST' });
+                const r = await fetch(`${BACKEND_URL}/api/start-automation`, { method: 'POST' });
                 if (!r.ok) throw new Error('Start automation failed');
               } catch {}
             }}

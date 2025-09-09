@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 from typing import Any, Dict, Optional, List
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pathlib import Path
@@ -61,6 +61,25 @@ def tsx_dev_run(req: TsxRequest) -> Dict[str, Any]:
     }
 
 class HtmlCaptureRequest(BaseModel):
+    # Operation mode (MANDATORY): 'allPlanHomePageCandidates' | 'planCheckHtmlIfChanged'
+    op: str
+    html: str
+    name: Optional[str] = None
+    # Debug/diagnostics
+    debug: Optional[bool] = None
+    clean_tmp: Optional[bool] = None
+    save_on_nochange: Optional[bool] = None
+    save_label: Optional[str] = None
+    # Prefer raw HTML inputs from UI; backend will filter internally when needed.
+    prev_html: Optional[str] = None
+    current_html: Optional[str] = None
+    # Back-compat: UI used to send already-filtered HTML; still accepted.
+    prev_filtered_html: Optional[str] = None
+    current_filtered_html: Optional[str] = None
+    wait_ms: int = 0
+
+
+class HtmlSaveRequest(BaseModel):
     html: str
     name: Optional[str] = None
 
@@ -71,7 +90,25 @@ def f1(req: HtmlCaptureRequest) -> Dict[str, Any]:
 
     UI sends { html, name? } here; calls FindHomePage.
     """
-    return FindHomePage(req.html, name=req.name or "F1")
+    valid_ops = {"allPlanHomePageCandidates", "planCheckHtmlIfChanged"}
+    if req.op not in valid_ops:
+        raise HTTPException(status_code=422, detail=f"invalid op: {req.op}. expected one of {sorted(valid_ops)}")
+    return FindHomePage(
+        req.html,
+        name=req.name or "F1",
+    debug=bool(req.debug) if req.debug is not None else False,
+        op=req.op,
+    clean_tmp=bool(req.clean_tmp) if req.clean_tmp is not None else False,
+    save_on_nochange=bool(req.save_on_nochange) if req.save_on_nochange is not None else False,
+    save_label=req.save_label,
+    # Raw HTMLs (preferred)
+    prev_html=req.prev_html,
+    current_html=req.current_html,
+    # Filtered HTMLs (legacy)
+        prev_filtered_html=req.prev_filtered_html,
+        current_filtered_html=req.current_filtered_html,
+        wait_ms=req.wait_ms,
+    )
 
 
 @app.post("/api/f2")
@@ -102,7 +139,7 @@ def f3() -> Dict[str, Any]:
 
 
 @app.post("/api/html/capture")
-def capture_html(req: HtmlCaptureRequest) -> Dict[str, Any]:
+def capture_html(req: HtmlSaveRequest) -> Dict[str, Any]:
     """POST: GUI'den gelen iframe HTML'ini isteğe bağlı (on-demand) yakala.
 
     - F1 tuşuna basınca (veya manuel) UI bu endpoint'e { html, name } gönderir.

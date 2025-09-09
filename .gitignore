@@ -18,3 +18,11 @@ __pycache__/
 
 # Test reports (PDF)
 tdsp/test_reports/*.pdf
+
+# Production2 (backend/UI/Electron) artifacts
+/production2/backend/.venv/
+/production2/tmp/
+/production2/react_gui/dist/
+/production2/react_ui/dist/
+/production2/react_ui/.vite/
+/production2/react_ui/coverage/

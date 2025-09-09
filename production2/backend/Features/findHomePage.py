@@ -6,13 +6,17 @@ Later, expand with Navigator/Diff/LLM orchestration.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, List
-from datetime import datetime
+from typing import Any, Dict, Optional
 from pathlib import Path as _Path
+from dataclasses import asdict
 import json
 import sys
 
-from Components.getHtml import get_save_Html
+from Components.getHtml import get_save_Html, get_Html, filter_Html
+from Components.mappingStatic import map_home_page_static
+from Components.fillPageFromMapping import fill_and_go
+from Components.detectWepPageChange import detect_web_page_change
+import time
 
 # Ensure project root (production2) is importable for memory access
 _this = _Path(__file__).resolve()
@@ -20,246 +24,188 @@ _root = _this.parents[2]
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
-from memory import memory  # type: ignore
-from config import get_find_homepage_variants, get_map_home_page_stetic  # type: ignore
+from memory import HtmlCaptureResult  # type: ignore
 
-def map_home_page_static(html: Optional[str] = None, name: Optional[str] = None) -> Dict[str, Any]:
-    """Scan filtered HTML for 'Home' button variants and save a mapping JSON.
 
-    - Inputs:
-      - html: filtered HTML; if None, uses memory.html.get_last_html()
-      - name: optional base name for the mapping file
-    - Output file: production2/tmp/jsonMappings/<name>.json
-    - Returns: { ok, path, count, variants, html_fingerprint? }
+def FindHomePage(
+    html: str,
+    name: Optional[str] = None,
+    debug: bool = False,
+    # MANDATORY op: 'allPlanHomePageCandidates' | 'planCheckHtmlIfChanged'
+    op: str = "allPlanHomePageCandidates",
+    clean_tmp: bool = False,
+    save_on_nochange: bool = False,
+    save_label: Optional[str] = None,
+    # Preferred from UI: raw HTMLs; backend will filter for detection
+    prev_html: Optional[str] = None,
+    current_html: Optional[str] = None,
+    # Back-compat: already-filtered HTMLs (legacy callers)
+    prev_filtered_html: Optional[str] = None,
+    current_filtered_html: Optional[str] = None,
+    wait_ms: int = 200,
+) -> Dict[str, Any]:
+    """Stateless: compute mapping from in-memory HTML; save to tmp only for debug.
+
+    Flow:
+    - Normalize raw HTML -> filter in-memory -> build mapping (no disk dependency)
+    - Additionally save filtered snapshot under tmp/html for debugging (optional)
     """
-    variants: List[str] = get_find_homepage_variants()
+    # In-memory processing (stateless)
+    # Planning: compute mapping and ordered candidate selectors from CURRENT page
+    # (UI will use these to try clicks in order until a change is detected.)
+    raw_res = get_Html(html)
+    f_res = filter_Html(raw_res.html)
+    mapping = map_home_page_static(f_res.html, name="findHome_mapping")
 
-    def canon(s: str) -> str:
-        return (s or "").casefold().replace(" ", "").replace("-", "").replace("_", "")
+    # Optional: persist snapshots for debugging/inspection
+    cap_raw: Optional[HtmlCaptureResult] = None
+    cap_filtered: Optional[HtmlCaptureResult] = None
+    if debug:
+        try:
+            # Optionally clean tmp folder for fresh session
+            if clean_tmp:
+                # Attempt to clear tmp dir under Components.getHtml default path; ignore errors
+                tmp_dir = _root / "tmp" / "html"
+                if tmp_dir.exists():
+                    for p in tmp_dir.glob("*"):
+                        try:
+                            if p.is_file() or p.is_symlink():
+                                p.unlink(missing_ok=True)  # type: ignore[arg-type]
+                            elif p.is_dir():
+                                # Shallow remove (no recursion expected), else skip
+                                for c in p.glob("*"):
+                                    try:
+                                        if c.is_file() or c.is_symlink():
+                                            c.unlink(missing_ok=True)  # type: ignore[arg-type]
+                                    except Exception:
+                                        pass
+                                try:
+                                    p.rmdir()
+                                except Exception:
+                                    pass
+                        except Exception:
+                            pass
+                else:
+                    try:
+                        tmp_dir.mkdir(parents=True, exist_ok=True)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        # Save initial snapshots with a friendly label when provided
+        cap_raw = get_save_Html(html, stage="nonfiltered", name=(save_label or name))
+        cap_filtered = get_save_Html(f_res, stage="filtered", name=(save_label or name))
+        # Optional debug prints
+        print(f"[FindHomePage] saved nonfiltered -> {cap_raw.html_path}")
+        print(f"[FindHomePage] saved filtered    -> {cap_filtered.html_path}")
 
-    wanted = {canon(v) for v in variants}
-
-    # Source HTML (filtered)
-    filtered_html = html or memory.html.get_last_html()
-    if not filtered_html:
-        return {"ok": False, "error": "no_filtered_html"}
-
-    # Try BeautifulSoup; fallback to regex if unavailable
-    soup = None
+    # Build an ordered list of selectors exactly as delivered:
+    # 1) primary selector (if any)
+    # 2) all alternatives from mapping in given order
+    # 3) for each candidate: all css selectors in order, then all heuristic selectors in order
+    candidate_selectors_in_order: list[str] = []
     try:
-        from bs4 import BeautifulSoup  # type: ignore
-        soup = BeautifulSoup(filtered_html, "html.parser")
-    except Exception:
-        soup = None
-
-    candidates: List[Dict[str, Any]] = []
-
-    def pick_text(tag) -> str:
-        if tag is None:
-            return ""
-        if getattr(tag, "name", "") == "input":
-            return (tag.get("value") or tag.get("aria-label") or tag.get("title") or tag.get("data-label") or "").strip()
-        # buttons/links: use visible text first
-        txt = (tag.get_text(separator=" ", strip=True) or "").strip()
-        if not txt:
-            txt = (tag.get("aria-label") or tag.get("title") or tag.get("data-label") or "").strip()
-        return txt
-
-    def score_for(text: str, tag_name: str) -> int:
-        c = canon(text)
-        if not c:
-            return 0
-        base = 0
-        # prioritize tag types
-        if tag_name == "button":
-            base += 3
-        elif tag_name == "a":
-            base += 2
-        elif tag_name == "input":
-            base += 1
-        # exact match highest
-        if c in wanted:
-            return base + 5
-        # contains match
-        if any(w in c for w in wanted):
-            return base + 3
-        return 0
-
-    def selectors_for(tag) -> Dict[str, List[str]]:
-        sels: Dict[str, List[str]] = {"css": [], "heuristic": []}
-        if tag is None:
-            return sels
-        t = getattr(tag, "name", "") or "*"
-        tid = (tag.get("id") or "").strip()
-        tname = (tag.get("name") or "").strip()
-        aria = (tag.get("aria-label") or "").strip()
-        href = (tag.get("href") or "").strip()
-        val = (tag.get("value") or "").strip()
-        role = (tag.get("role") or "").strip()
-        text = pick_text(tag)
-        if tid:
-            sels["css"].append(f"#{tid}")
-        if tname:
-            sels["css"].append(f"{t}[name='{tname}']")
-        if aria:
-            sels["css"].append(f"{t}[aria-label='{aria}']")
-        if role == "button":
-            sels["css"].append(f"{t}[role='button']")
-        if href and t == "a":
-            sels["css"].append(f"a[href='{href}']")
-        if val and t == "input":
-            sels["css"].append(f"input[value='{val}']")
-        if text:
-            # pseudo locator; UI executor can interpret text:= contains
-            sels["heuristic"].append(f"text:{text}")
-        return sels
-
-    if soup is not None:
-        # consider buttons, anchors, inputs of type=button/submit
-        elems = []
-        elems += list(soup.find_all("button"))
-        elems += list(soup.find_all("a"))
-        elems += list(soup.find_all("input"))
-        for el in elems:
-            tname = getattr(el, "name", "")
-            if tname == "input":
-                itype = (el.get("type") or "").lower()
-                if itype not in ("button", "submit", "image"):
-                    continue
-            text = pick_text(el)
-            s = score_for(text, tname)
-            if s <= 0:
-                continue
-            attrs = {k: v for k, v in (el.attrs or {}).items() if k in {"id", "name", "type", "href", "aria-label", "title", "value", "role"}}
-            candidates.append({
-                "type": tname or "*",
-                "text": text,
-                "attributes": attrs,
-                "selectors": selectors_for(el),
-                "score": s,
-                "action": "click",
-            })
-    else:
-        # regex fallback: search for tags containing home-like words
-        import re as _re
-        html_src = filtered_html
-        pat = _re.compile(r"<(button|a)[^>]*>(.*?)</\1>|<input[^>]*>", _re.IGNORECASE | _re.DOTALL)
-        for m in pat.finditer(html_src):
-            tag = (m.group(1) or "input").lower()
-            inner = m.group(2) or ""
-            # extract attrs simple
-            tag_src = m.group(0)
-            text = _re.sub(r"<[^>]+>", " ", inner)
-            text = _re.sub(r"\s+", " ", text).strip()
-            # attrs
-            attrs = {}
-            for key in ["id", "name", "type", "href", "aria-label", "title", "value", "role"]:
-                mm = _re.search(fr"{key}=['\"]([^'\"]+)['\"]", tag_src, _re.IGNORECASE)
-                if mm:
-                    attrs[key] = mm.group(1)
-            # attempt text from attrs if empty
-            if not text:
-                text = attrs.get("value") or attrs.get("aria-label") or attrs.get("title") or ""
-            s = score_for(text, tag)
-            if s <= 0:
-                continue
-            # minimal selectors
-            css = []
-            if attrs.get("id"):
-                css.append(f"#{attrs['id']}")
-            if attrs.get("name"):
-                css.append(f"{tag}[name='{attrs['name']}']")
-            if attrs.get("aria-label"):
-                css.append(f"{tag}[aria-label='{attrs['aria-label']}']")
-            selectors = {"css": css, "heuristic": [f"text:{text}"] if text else []}
-            candidates.append({
-                "type": tag,
-                "text": text,
-                "attributes": attrs,
-                "selectors": selectors,
-                "score": s,
-                "action": "click",
-            })
-
-    # prioritize candidates by score desc, then by specificity (id present)
-    def has_id(c):
-        return 1 if c.get("attributes", {}).get("id") else 0
-    candidates.sort(key=lambda c: (c.get("score", 0), has_id(c)), reverse=True)
-
-    # Prepare output dir and filename
-    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%fZ")
-    base = name or "home_buttons"
-    out_dir = _root / "tmp" / "jsonMappings"
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    # Clean directory (like get_save_Html does for tmp/html)
-    try:
-        for p in out_dir.iterdir():
-            try:
-                if p.is_file() or p.is_symlink():
-                    p.unlink()
-                elif p.is_dir():
-                    import shutil as _sh
-                    _sh.rmtree(p)
-            except Exception:
-                pass
+        primary = (mapping.mapping.primary_selector or "").strip()
+        if primary:
+            candidate_selectors_in_order.append(primary)
+        # alternatives
+        alts = getattr(mapping.mapping, "alternatives", []) or []
+        candidate_selectors_in_order.extend([s for s in alts if isinstance(s, str)])
     except Exception:
         pass
 
-    # try to attach last filtered html fingerprint
-    html_hist = memory.html.get_history()
-    html_fp = html_hist[-1].get("fingerprint") if html_hist else None
+    try:
+        for cand in getattr(mapping, "candidates", []) or []:
+            sels = getattr(cand, "selectors", {}) or {}
+            css_list = sels.get("css") or []
+            heur_list = sels.get("heuristic") or []
+            candidate_selectors_in_order.extend([s for s in css_list if isinstance(s, str)])
+            candidate_selectors_in_order.extend([s for s in heur_list if isinstance(s, str)])
+    except Exception:
+        pass
 
-    max_alt = int(get_map_home_page_stetic("max_alternatives", 10) or 10)
+    # Build plans for all selectors in order (UI tries sequentially until page changes)
+    all_candidate_plans: list[Dict[str, Any]] = []
+    for sel in candidate_selectors_in_order:
+        p = fill_and_go(mapping={}, action_button_selector=sel)
+        # Ensure actions are present (ordered) in the plan dict
+        plan_dict = asdict(p)
+        all_candidate_plans.append({"selector": sel, "plan": plan_dict})
 
-    data = {
-        "meta": {
-            "timestamp": ts,
-            "source": "map_home_page_static",
-            "variants": variants,
-            "html_fingerprint": html_fp,
-        },
-        "mapping": {
-            "primary_selector": (candidates[0]["selectors"]["css"][0] if candidates and candidates[0]["selectors"]["css"] else (candidates[0]["selectors"]["heuristic"][0] if candidates and candidates[0]["selectors"]["heuristic"] else None)),
-            "action": "click",
-            "alternatives": [
-                *(candidates[0]["selectors"].get("css", []) if candidates else []),
-                *(candidates[0]["selectors"].get("heuristic", []) if candidates else []),
-            ][:max_alt],
-        },
-        "candidates": candidates,
-    }
+    # Detection: Only when UI provides prev/current snapshots.
+    # UI sends RAW HTMLs (preferred); backend filters both via filter_Html and compares.
+    # Frontend never filters.
+    changed_info: Dict[str, Any] | None = None
+    # Normalize detection inputs
+    det_prev_filtered: Optional[str] = None
+    det_curr_filtered: Optional[str] = None
+    if prev_html is not None and current_html is not None:
+        # Filter the raw inputs internally
+        try:
+            det_prev_filtered = filter_Html(prev_html).html
+            det_curr_filtered = filter_Html(current_html).html
+        except Exception:
+            det_prev_filtered = prev_html
+            det_curr_filtered = current_html
+    elif prev_filtered_html is not None and current_filtered_html is not None:
+        det_prev_filtered = prev_filtered_html
+        det_curr_filtered = current_filtered_html
 
-    out_path = out_dir / f"{base}_{ts}.json"
-    out_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-
+    if det_prev_filtered is not None and det_curr_filtered is not None:
+        if wait_ms and wait_ms > 0:
+            time.sleep(max(0, wait_ms) / 1000.0)
+        dres = detect_web_page_change(
+            current_raw_html=det_curr_filtered,
+            prev_raw_html=det_prev_filtered,
+        )
+        changed_info = {
+            "changed": dres.changed,
+            "reason": dres.reason,
+            "before_hash": dres.before_hash,
+            "after_hash": dres.after_hash,
+        }
+        # Optionally save detection snapshots with '-nochange' suffix
+        if debug and (dres.changed or save_on_nochange):
+            try:
+                lbl = (save_label or name or "F1").strip()
+                lbl = lbl or "F1"
+                suffix = "" if dres.changed else "_nochange"
+                get_save_Html(det_prev_filtered, stage=f"det-prev{suffix}", name=lbl)
+                get_save_Html(det_curr_filtered, stage=f"det-curr{suffix}", name=lbl)
+            except Exception:
+                pass
+    # Shape the response based on op for clarity/decoupling.
+    # - 'allPlanHomePageCandidates': return full list + traceability
+    # - 'planCheckHtmlIfChanged': return only detection result
+    op_l = (op or "").strip()
+    if op_l == "planCheckHtmlIfChanged":
+        return {"ok": True, "checkHtmlIfChanged": changed_info}
+    # Default to allPlanHomePageCandidates
     return {
         "ok": True,
-        "path": str(out_path),
-        "count": len(candidates),
-        "variants": variants,
-        "html_fingerprint": html_fp,
-    }
-
-def FindHomePage(html: str, name: Optional[str] = None) -> Dict[str, Any]:
-    """Step 1) Save HTML, Step 2) (placeholder) next actions.
-
-    - Calls get_save_Html to normalize, store in memory, and persist under tmp/html.
-    - Returns capture metadata for debugging/logging.
-    - Later we'll add navigation/diff/LLM steps after capture.
-    """
-    # Step 1: Save HTML (normalize -> memory -> tmp/html)
-    res = get_save_Html(html, name=name or "findHome_capture")
-
-    # Step 2: Placeholder for next actions (e.g., check for home markers, navigate, etc.)
-    # TODO: implement next step logic here
-
-    return {
-        "ok": True,
-        "path": str(res.html_path),
-        "fingerprint": res.fingerprint,
-        "timestamp": res.timestamp,
-        "name": res.name,
+        "allPlanHomePageCandidates": all_candidate_plans,
+        "createCandidates": {
+            "selectorsInOrder": candidate_selectors_in_order,
+            "mapping": asdict(mapping),
+        },
+    "capture": (
+            {
+                "nonfiltered": {
+                    "path": str(cap_raw.html_path),
+                    "fingerprint": cap_raw.fingerprint,
+                    "timestamp": cap_raw.timestamp,
+                    "name": cap_raw.name,
+                },
+                "filtered": {
+                    "path": str(cap_filtered.html_path),
+                    "fingerprint": cap_filtered.fingerprint,
+                    "timestamp": cap_filtered.timestamp,
+                    "name": cap_filtered.name,
+                },
+            }
+            if cap_raw and cap_filtered
+            else None
+        ),
     }
 
 

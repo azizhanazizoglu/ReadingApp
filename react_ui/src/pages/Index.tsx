@@ -11,7 +11,7 @@ import { MainLayout } from "@/components/MainLayout";
 // Developer panel artık Header içinde toggle ile gösteriliyor
 
 // Varsayılan backend adresi (gerekirse .env ile değiştirilebilir)
-const BACKEND_URL = "http://localhost:5001";
+import { BACKEND_URL } from "@/config";
 // Tüm status mesajları (Türkçe)
 const statusMessages = [
   "Hazır",

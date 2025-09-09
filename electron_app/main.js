@@ -1,6 +1,7 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
 const url = require('url');
+const fs = require('fs');
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -15,9 +16,13 @@ function createWindow() {
     },
   });
   // SPA için file:// protokolüyle yükle
+  const prod2Index = path.join(__dirname, '../production2/react_gui/dist/index.html');
+  const legacyIndex = path.join(__dirname, '../react_ui/dist/index.html');
+  const entry = fs.existsSync(prod2Index) ? prod2Index : legacyIndex;
+  console.log('[Electron] Loading UI from:', entry);
   win.loadURL(
     url.format({
-      pathname: path.join(__dirname, '../react_ui/dist/index.html'),
+      pathname: entry,
       protocol: 'file:',
       slashes: true,
     })
