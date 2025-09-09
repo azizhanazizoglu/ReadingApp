@@ -18,6 +18,8 @@ from config import (  # type: ignore
     get_llm_max_attempts_find_home_page,
 )
 from logging_utils import log
+from Components.fillPageFromMapping import fill_and_go  # type: ignore
+import re as _re
 
 
 def def_let_llm_map(
@@ -88,6 +90,9 @@ def def_let_llm_map(
     feedback_path = prompts_dir / f"feedback_attempt{attempt}_{ts}.txt"
     filtered_path = prompts_dir / f"filtered_attempt{attempt}_{ts}.html"
     meta_path = prompts_dir / f"meta_attempt{attempt}_{ts}.json"
+    # Will be populated only if an LLM call is made
+    llm_raw_path = prompts_dir / f"llm_response_attempt{attempt}_{ts}.txt"
+    llm_parsed_path = prompts_dir / f"llm_parsed_attempt{attempt}_{ts}.json"
     try:
         default_path.write_text(default_prompt, encoding="utf-8")
     except Exception:
@@ -136,6 +141,7 @@ def def_let_llm_map(
 
     # Optionally call OpenAI if key exists
     llm_suggestion: Optional[Dict[str, Any]] = None
+    llm_candidates: list[Dict[str, Any]] = []
     key = os.getenv("OPENAI_API_KEY")
     model = os.getenv("LLM_MODEL", "gpt-4o")
     if key:
@@ -171,12 +177,57 @@ def def_let_llm_map(
                     max_tokens=256,
                 ).choices[0].message.content.strip()
 
+            # Try to parse JSON strictly; if it fails, attempt to strip code fences or extract a JSON object.
             parsed: Optional[Dict[str, Any]] = None
+            raw_content = content
+            def _try_parse_json(txt: str) -> Optional[Dict[str, Any]]:
+                try:
+                    import json as _json
+                    val = _json.loads(txt)
+                    return val if isinstance(val, dict) else None
+                except Exception:
+                    return None
+
+            parsed = _try_parse_json(raw_content)
+            cleaned = False
+            if parsed is None:
+                # Remove fenced blocks like ```json ... ``` or ``` ... ```
+                m = _re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", raw_content, flags=_re.IGNORECASE)
+                if m:
+                    extracted = m.group(1).strip()
+                    parsed = _try_parse_json(extracted)
+                    if parsed is not None:
+                        cleaned = True
+                        raw_content = extracted
+            if parsed is None:
+                # As a last resort, extract substring between the first '{' and the last '}'
+                try:
+                    start = raw_content.find('{')
+                    end = raw_content.rfind('}')
+                    if start != -1 and end != -1 and end > start:
+                        sub = raw_content[start:end+1]
+                        tmp = _try_parse_json(sub)
+                        if tmp is not None:
+                            parsed = tmp
+                            cleaned = True
+                            raw_content = sub
+                except Exception:
+                    pass
+            if cleaned:
+                log("INFO", "LLM-CLEAN", "stripped fences/extras to parse JSON", component="letLLMMap", extra={"llm": True})
+            content_to_save = raw_content
+            # Persist raw and parsed responses for analysis
             try:
-                import json as _json
-                parsed = _json.loads(content)
+                if content_to_save:
+                    llm_raw_path.write_text(content_to_save, encoding="utf-8")
             except Exception:
-                parsed = None
+                pass
+            try:
+                if parsed and isinstance(parsed, dict):
+                    import json as _json
+                    llm_parsed_path.write_text(_json.dumps(parsed, indent=2, ensure_ascii=False), encoding="utf-8")
+            except Exception:
+                pass
             if parsed and isinstance(parsed, dict):
                 # Normalize suggestion
                 st = str(parsed.get("selectorType") or parsed.get("type") or "").lower()
@@ -188,13 +239,81 @@ def def_let_llm_map(
                     "selector": sel,
                     "alternatives": alts,
                     "rationale": rat,
-                    "raw": content,
+                    "raw": content_to_save,
                 }
+                # Build candidate selectors list (normalize + dedup)
+                def _norm(v: str) -> str:
+                    s = (v or "").strip()
+                    if not s:
+                        return s
+                    low = s.lower()
+                    if low.startswith("text:") or low.startswith("css:") or low.startswith("xpath:"):
+                        return s
+                    if s.startswith("//") or s.startswith("(//"):
+                        return f"xpath:{s}"
+                    if s.startswith(".") or s.startswith("#") or s.startswith("[") or s.startswith("*") or _re.search(r":nth-|\w+\[", s):
+                        return f"css:{s}"
+                    if st in ("text", "css", "xpath"):
+                        return f"{st}:{s}"
+                    return s
+                raw_list = []
+                if isinstance(sel, str) and sel:
+                    raw_list.append(sel)
+                if isinstance(alts, list):
+                    raw_list.extend([a for a in alts if isinstance(a, str)])
+                norm_list = []
+                seen = set()
+                for v in raw_list:
+                    nv = _norm(v)
+                    if nv and nv not in seen:
+                        seen.add(nv)
+                        norm_list.append(nv)
+                # Create minimal action plans using fill_and_go (click-only)
+                for s in norm_list:
+                    try:
+                        plan = fill_and_go(mapping={}, action_button_selector=s)
+                        from dataclasses import asdict as _asdict
+                        llm_candidates.append({
+                            "selector": s,
+                            "plan": _asdict(plan),
+                        })
+                    except Exception:
+                        llm_candidates.append({
+                            "selector": s,
+                            "plan": {"actions": [{"kind": "click", "selector": s}]},
+                        })
             else:
                 llm_suggestion = {"raw": content}
             log("INFO", "LLM-RESP", f"ok content_len={len(content)}", component="letLLMMap", extra={"llm": True})
         except Exception as e:
             log("ERROR", "LLM-ERR", f"{type(e).__name__}: {str(e)[:160]}", component="letLLMMap", extra={"llm": True})
+
+    # Build saved paths dict (include LLM response paths if present on disk)
+    saved_paths = {
+        "default": str(default_path),
+        "composed": str(composed_path),
+        "feedback": str(feedback_path) if fb else None,
+        "filtered": str(filtered_path) if filtered_html else None,
+        "meta": str(meta_path),
+        "dir": str(prompts_dir),
+    }
+    try:
+        if llm_raw_path.exists():
+            saved_paths["llm_raw"] = str(llm_raw_path)
+    except Exception:
+        pass
+    try:
+        if llm_parsed_path.exists():
+            saved_paths["llm_parsed"] = str(llm_parsed_path)
+    except Exception:
+        pass
+
+    # Log number of LLM candidates if any
+    try:
+        if llm_candidates:
+            log("INFO", "LLM-CANDS", f"n={len(llm_candidates)}", component="letLLMMap")
+    except Exception:
+        pass
 
     result: Dict[str, Any] = {
         "ok": True,
@@ -204,16 +323,11 @@ def def_let_llm_map(
             "prompt": composed_prompt,
             "filteredHtml": filtered_html,
             "hints": {"variants": variants, "primary": primary},
-            "savedPaths": {
-                "default": str(default_path),
-                "composed": str(composed_path),
-                "feedback": str(feedback_path) if fb else None,
-                "filtered": str(filtered_path) if filtered_html else None,
-                "meta": str(meta_path),
-                "dir": str(prompts_dir),
-            },
+            "savedPaths": saved_paths,
         },
     }
     if llm_suggestion is not None:
         result["planLetLLMMap"]["llmSuggestion"] = llm_suggestion  # type: ignore[index]
+    if llm_candidates:
+        result["planLetLLMMap"]["llmCandidates"] = llm_candidates  # type: ignore[index]
     return result
