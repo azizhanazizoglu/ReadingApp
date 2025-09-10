@@ -227,14 +227,14 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           <ul className="space-y-3">
             {/* Frontend logları */}
             {feLogs && feLogs.length > 0 &&
-              feLogs.slice(-30).reverse().map((log, i) => (
+              [...feLogs].reverse().map((log, i) => (
                 <li key={"frontend-"+i} className="flex flex-col gap-1 p-2 rounded-lg bg-[#F8FAFC] dark:bg-[#335C81] border border-[#B3C7E6] dark:border-[#335C81]">
                   <span className="text-xs text-[#7B8FA1] dark:text-[#B3C7E6]">{log.time.split('T')[1].slice(0,8)} | <b>{log.component}</b> | <b>{log.code}</b></span>
                   <span className="text-sm font-medium text-[#0057A0] dark:text-[#E6F0FA]">{log.message || log.state}</span>
                 </li>
               ))}
             {/* Backend logları */}
-            {backendLogs.slice(-30).reverse().map((log, i) => {
+            {[...backendLogs].reverse().map((log, i) => {
               const key = `backend-${i}`;
               if (typeof log === 'string') {
                 return (

@@ -142,6 +142,26 @@ def def_let_llm_map(
     # Optionally call OpenAI if key exists
     llm_suggestion: Optional[Dict[str, Any]] = None
     llm_candidates: list[Dict[str, Any]] = []
+    # Build a fast lookup of selectors already tried from feedback text (best-effort)
+    _fb_tried_set: set[str] = set()
+    try:
+        if fb:
+            # extract lines like `selector=...` or raw selectors after `] `
+            for line in fb.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                if 'selector=' in line:
+                    sel = line.split('selector=', 1)[1].strip()
+                    if sel:
+                        _fb_tried_set.add(sel)
+                else:
+                    # lines like [12] css:...
+                    m = _re.search(r"\]\s*(.+)$", line)
+                    if m:
+                        _fb_tried_set.add(m.group(1).strip())
+    except Exception:
+        pass
     key = os.getenv("OPENAI_API_KEY")
     model = os.getenv("LLM_MODEL", "gpt-4o")
     if key:
@@ -268,6 +288,13 @@ def def_let_llm_map(
                     if nv and nv not in seen:
                         seen.add(nv)
                         norm_list.append(nv)
+                # Filter out selectors already tried per feedback
+                if _fb_tried_set:
+                    before = len(norm_list)
+                    norm_list = [s for s in norm_list if s not in _fb_tried_set]
+                    after = len(norm_list)
+                    if before != after:
+                        log("DEBUG", "LLM-FILTER", f"removed_dup={before-after}", component="letLLMMap")
                 # Create minimal action plans using fill_and_go (click-only)
                 for s in norm_list:
                     try:

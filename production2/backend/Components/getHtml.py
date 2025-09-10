@@ -184,6 +184,52 @@ def filter_Html(raw_html: Optional[str]) -> FilteredHtmlResult:
                 text = text[:120] + "..."
             if text:
                 nt.string = text
+            # Preserve minimal icon cues so static/LLM can target icon-only controls
+            try:
+                # Look for common icon-bearing children and clone a tiny placeholder
+                icon_children = []
+                # Prioritize direct children; fall back to any descendant if none
+                direct = list(tag.find_all(["svg", "i", "use", "img"], recursive=False))
+                if direct:
+                    icon_children = direct
+                else:
+                    icon_children = tag.find_all(["svg", "i", "use", "img"], limit=3)
+
+                def _trim(s: str, n: int = 120) -> str:
+                    return s if len(s) <= n else (s[:n] + "...")
+
+                kept = 0
+                for ch in icon_children:
+                    if kept >= 3:
+                        break
+                    nm = getattr(ch, "name", "") or ""
+                    if nm not in ("svg", "i", "use", "img"):
+                        continue
+                    ic = out.new_tag(nm)
+                    # Only copy a few attributes that help build selectors
+                    if nm in ("svg", "i"):
+                        cls = ch.get("class") or []
+                        if isinstance(cls, list):
+                            cls_str = " ".join(cls)
+                        else:
+                            cls_str = str(cls)
+                        if cls_str:
+                            ic.attrs["class"] = _trim(cls_str)
+                        aria = ch.get("aria-label") or ch.get("title")
+                        if aria:
+                            ic.attrs["aria-label"] = _trim(str(aria))
+                    elif nm == "use":
+                        href = ch.get("href") or ch.get("xlink:href")
+                        if href:
+                            ic.attrs["href"] = _trim(str(href))
+                    elif nm == "img":
+                        alt = ch.get("alt") or ch.get("title")
+                        if alt:
+                            ic.attrs["alt"] = _trim(str(alt))
+                    nt.append(ic)
+                    kept += 1
+            except Exception:
+                pass
         elif tag.name == "textarea":
             # don't copy free text content (could be big / sensitive)
             placeholder = tag.get("placeholder")

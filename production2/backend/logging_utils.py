@@ -6,8 +6,8 @@ from threading import Lock
 from typing import Any, Deque, Dict, List, Optional
 
 _LOCK = Lock()
-_MAX = 500
-_LOGS: Deque[Dict[str, Any]] = deque(maxlen=_MAX)
+# Keep all logs until explicitly cleared via API (no max length)
+_LOGS: Deque[Dict[str, Any]] = deque()
 
 
 def log(level: str, code: str, message: str, *, component: str = "backend", extra: Optional[Dict[str, Any]] = None) -> None:

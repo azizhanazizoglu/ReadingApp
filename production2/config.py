@@ -16,6 +16,7 @@ _CFG_PATH = _HERE / "config.json"
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     "findHomePage": {
+    "staticMaxCandidates": 40,
         "map_home_page_stetic": {
             "variants": [
                 # Turkish variants
@@ -47,7 +48,6 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 }
 
 _CACHED: Optional[Dict[str, Any]] = None
-_CACHED_MTIME: Optional[float] = None
 
 
 def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
@@ -61,13 +61,8 @@ def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any
 
 
 def load_config() -> Dict[str, Any]:
-    global _CACHED, _CACHED_MTIME
-    try:
-        mtime = _CFG_PATH.stat().st_mtime if _CFG_PATH.exists() else None
-    except Exception:
-        mtime = None
-    # Hot-reload when the file changes on disk
-    if _CACHED is not None and (_CACHED_MTIME is not None) and (mtime == _CACHED_MTIME):
+    global _CACHED
+    if _CACHED is not None:
         return _CACHED
     data: Dict[str, Any] = {}
     if _CFG_PATH.exists():
@@ -76,7 +71,6 @@ def load_config() -> Dict[str, Any]:
         except Exception:
             data = {}
     _CACHED = _deep_merge(DEFAULT_CONFIG, data)
-    _CACHED_MTIME = mtime
     return _CACHED
 
 
@@ -115,3 +109,12 @@ def get_llm_max_attempts_find_home_page() -> int:
         return ival if ival > 0 else 3
     except Exception:
         return 3
+
+
+def get_static_max_candidates_find_home_page() -> int:
+    val = get("findHomePage.staticMaxCandidates")
+    try:
+        ival = int(val) if val is not None else int(DEFAULT_CONFIG["findHomePage"]["staticMaxCandidates"])  # type: ignore[index]
+        return ival if ival > 0 else 40
+    except Exception:
+        return 40

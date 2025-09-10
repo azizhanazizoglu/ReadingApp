@@ -10,7 +10,6 @@ import json
 import sys
 import hashlib
 from dataclasses import asdict
-from urllib.parse import unquote as _unquote, quote as _quote
 
 # Make production2 importable to reach memory and config
 _this = _Path(__file__).resolve()
@@ -61,27 +60,21 @@ def map_home_page_static(html: Optional[str] = None, name: Optional[str] = None)
         txt = (tag.get_text(separator=" ", strip=True) or "").strip()
         if not txt:
             txt = (tag.get("aria-label") or tag.get("title") or tag.get("data-label") or "").strip()
-        if not txt:
-            # Try data-component-content (often URL-encoded JSON like {"text":"Ana Sayfa"})
-            try:
-                dcc = (tag.get("data-component-content") or "").strip()
-                if dcc:
-                    raw = _unquote(dcc)
-                    if raw.startswith("{") and raw.endswith("}"):
-                        try:
-                            j = json.loads(raw)
-                            t = (j.get("text") or "").strip()
-                            if t:
-                                txt = t
-                        except Exception:
-                            pass
-            except Exception:
-                pass
         return txt
 
-    def score_for(text: str, tag_name: str) -> int:
+    def score_for(text: str, tag_name: str, has_home_icon: bool = False, is_logo_link: bool = False) -> int:
         c = canon(text)
         if not c:
+            # If no text but it looks like a home icon or logo link, give a base score
+            base = 0
+            if tag_name == "button":
+                base += 3
+            elif tag_name == "a":
+                base += 2
+            if has_home_icon:
+                return base + 4  # strong but below exact text match
+            if is_logo_link:
+                return base + 3
             return 0
         base = 0
         # prioritize tag types
@@ -111,8 +104,6 @@ def map_home_page_static(html: Optional[str] = None, name: Optional[str] = None)
         val = (tag.get("value") or "").strip()
         role = (tag.get("role") or "").strip()
         text = pick_text(tag)
-        dname = (tag.get("data-component-name") or "").strip()
-        dcc = (tag.get("data-component-content") or "").strip()
         if tid:
             sels["css"].append(f"#{tid}")
         if tname:
@@ -125,18 +116,28 @@ def map_home_page_static(html: Optional[str] = None, name: Optional[str] = None)
             sels["css"].append(f"a[href='{href}']")
         if val and t == "input":
             sels["css"].append(f"input[value='{val}']")
-        if dname:
-            sels["css"].append(f"{t}[data-component-name='{dname}']")
-        if dcc and text:
-            # try to generate a partial match selector using URL-encoded text
-            try:
-                enc = _quote(text, safe='')
-                sels["css"].append(f"{t}[data-component-content*='{enc}']")
-            except Exception:
-                pass
         if text:
             # pseudo locator; UI executor can interpret text:= contains
             sels["heuristic"].append(f"text:{text}")
+        # Icon hints inside buttons/links
+        try:
+            if t in ("button", "a"):
+                # look for svg/i children with classes containing home/house/icon or logos
+                icon = tag.find(["svg", "i"], class_=True)
+                if icon:
+                    cls = icon.get("class") or []
+                    cls_text = " ".join(cls).lower() if isinstance(cls, list) else str(cls).lower()
+                    if any(k in cls_text for k in ["home", "house", "anasayfa", "fa-home", "bi-house", "icon-home"]):
+                        sels["css"].append(f"{t}:has(svg[class*='home']), {t}:has(i[class*='home'])")
+                    # general case: keep a generic has() selector when class exists
+                    sels["css"].append(f"{t}:has(svg), {t}:has(i)")
+                # logo image inside link
+                if t == "a":
+                    img = tag.find("img")
+                    if img and (img.get("alt") or img.get("title")):
+                        sels["css"].append("a:has(img[alt]), a:has(img[title])")
+        except Exception:
+            pass
         return sels
 
     if soup is not None:
@@ -152,7 +153,25 @@ def map_home_page_static(html: Optional[str] = None, name: Optional[str] = None)
                 if itype not in ("button", "submit", "image"):
                     continue
             text = pick_text(el)
-            s = score_for(text, tname)
+            # Detect icon-only home or logo link indicators for scoring when text is empty
+            has_home_icon = False
+            is_logo_link = False
+            try:
+                if tname in ("button", "a"):
+                    icon = el.find(["svg", "i"], class_=True)
+                    if icon:
+                        cls = icon.get("class") or []
+                        cls_text = " ".join(cls).lower() if isinstance(cls, list) else str(cls).lower()
+                        if any(k in cls_text for k in ["home", "house", "anasayfa", "fa-home", "bi-house", "icon-home"]):
+                            has_home_icon = True
+                    if tname == "a":
+                        img = el.find("img")
+                        if img and (img.get("alt") or img.get("title")):
+                            # Heuristic: many sites use logo link to go home
+                            is_logo_link = True
+            except Exception:
+                pass
+            s = score_for(text, tname, has_home_icon=has_home_icon, is_logo_link=is_logo_link)
             if s <= 0:
                 continue
             attrs = {k: v for k, v in (el.attrs or {}).items() if k in {"id", "name", "type", "href", "aria-label", "title", "value", "role"}}

@@ -208,9 +208,19 @@ export async function runFindHomePageSF(opts?: { waitAfterClickMs?: number; name
   // All candidates tried without change → request LLM fallback plan
   // Multi-attempt LLM fallback with cumulative feedback
   const triedForFeedback: string[] = [...triedSelectors];
-  for (let attempt = 0; attempt < 3; attempt++) {
+  // First probe to learn backend-configured maxAttempts (without spending an attempt)
+  // We'll immediately use attempt=0 and then continue until maxAttempts.
+  let maxAttempts = 3;
+  try {
+    const probe = await callF1({ op: 'planLetLLMMap', html: rawBefore, name: opts?.name || 'F1', llm_feedback: '', llm_attempt_index: 0, wait_ms: 0 });
+    if (probe && probe.planLetLLMMap && typeof (probe.planLetLLMMap as any).maxAttempts === 'number') {
+      maxAttempts = Math.max(1, (probe.planLetLLMMap as any).maxAttempts);
+      log(`F1 LLM configured maxAttempts=${maxAttempts}`);
+    }
+  } catch {}
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const feedback = `Tried selectors (in order) and no change detected: ${triedForFeedback.length}\n${triedForFeedback.map((s, idx)=>`[${idx}] ${s}`).join('\n')}`;
-    log(`F1 LLM attempt ${attempt+1}/3; feedback selectors=${triedForFeedback.length}`);
+    log(`F1 LLM attempt ${attempt+1}/${maxAttempts}; feedback selectors=${triedForFeedback.length}`);
     const llmRes = await callF1({
       op: 'planLetLLMMap',
       html: rawBefore,
@@ -219,7 +229,7 @@ export async function runFindHomePageSF(opts?: { waitAfterClickMs?: number; name
       llm_attempt_index: attempt,
       wait_ms: 0,
     });
-    if (llmRes && llmRes.planLetLLMMap) {
+  if (llmRes && llmRes.planLetLLMMap) {
       log(`F1 LLM plan ready: attempt ${llmRes.planLetLLMMap.attempt+1}/${llmRes.planLetLLMMap.maxAttempts}`);
       const sp = (llmRes.planLetLLMMap as any).savedPaths;
       if (sp) {
@@ -228,9 +238,13 @@ export async function runFindHomePageSF(opts?: { waitAfterClickMs?: number; name
         if (sp.llm_parsed) log(`F1 LLM parsed json: ${sp.llm_parsed}`);
       }
       // Candidates with plans
-      const llmCandidates: PlanItem[] = Array.isArray((llmRes.planLetLLMMap as any).llmCandidates) ? (llmRes.planLetLLMMap as any).llmCandidates : [];
-      if (llmCandidates.length > 0) {
-        log(`F1 LLM candidates: total=${llmCandidates.length}`);
+      const llmCandidatesAll: PlanItem[] = Array.isArray((llmRes.planLetLLMMap as any).llmCandidates) ? (llmRes.planLetLLMMap as any).llmCandidates : [];
+      // Skip candidates already tried
+      const triedSet = new Set(triedForFeedback.map(s => (s || '').trim()));
+      const llmCandidates = llmCandidatesAll.filter(c => c && typeof c.selector === 'string' && !triedSet.has(c.selector.trim()));
+      if (llmCandidatesAll.length > 0) {
+        const skipped = llmCandidatesAll.length - llmCandidates.length;
+        log(`F1 LLM candidates: total=${llmCandidatesAll.length}${skipped>0?` (skipped-dup=${skipped})`:''}`);
         let prevRaw2 = rawBefore;
         for (let i = 0; i < llmCandidates.length; i++) {
           const c = llmCandidates[i];
@@ -276,7 +290,14 @@ export async function runFindHomePageSF(opts?: { waitAfterClickMs?: number; name
         if (sel) toTryRaw.push(normalize(sel));
         for (const a of alts) toTryRaw.push(normalize(a));
         const seen = new Set<string>();
-        const toTry = toTryRaw.filter(s => (s && !seen.has(s)) ? (seen.add(s), true) : false);
+        const triedSet2 = new Set(triedForFeedback.map(s => (s || '').trim()));
+        const toTry = toTryRaw.filter(s => {
+          if (!s) return false;
+          if (seen.has(s)) return false;
+          if (triedSet2.has(s)) return false; // skip already-tried selectors
+          seen.add(s);
+          return true;
+        });
         for (let i = 0; i < toTry.length; i++) {
           const ssel = toTry[i];
           const ok = await clickInWebview(ssel);

@@ -21,6 +21,7 @@ import time
 from config import (  # type: ignore
     get_llm_prompt_find_home_page_default,
     get_llm_max_attempts_find_home_page,
+    get_static_max_candidates_find_home_page,
 )
 from logging_utils import log
 
@@ -137,6 +138,15 @@ def FindHomePage(
             candidate_selectors_in_order.extend([s for s in heur_list if isinstance(s, str)])
     except Exception:
         pass
+
+    # Cap how many static selectors we expose, configurable via config
+    try:
+        static_cap = int(get_static_max_candidates_find_home_page())
+    except Exception:
+        static_cap = 40
+    if static_cap and static_cap > 0:
+        candidate_selectors_in_order = candidate_selectors_in_order[:static_cap]
+    log("DEBUG", "F1-STATIC-LIMIT", f"exposing_selectors={len(candidate_selectors_in_order)} cap={static_cap}", component="FindHomePage")
 
     # Build plans for all selectors in order (UI tries sequentially until page changes)
     all_candidate_plans: list[Dict[str, Any]] = []
