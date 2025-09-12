@@ -41,6 +41,30 @@
           {"type": "xpath", "value": "//button[contains(translate(., 'YENI', 'yeni'), 'yeni') and contains(translate(., 'TRAFIK', 'trafik'), 'trafik')]"}
         ],
         "priority": 120
+  },
+      {
+        "id": "userTask.lifeInsurance",
+        "addSynonyms": [
+          "Hayat Sigortası",
+          "Hayat Sigortasi",
+          "Hayat",
+          "Yeni Hayat",
+          "Hayat Ekle",
+          "Hayat Poliçesi",
+          "Life Insurance",
+          "Life",
+          "New Life Insurance",
+          "Add Life Insurance",
+          "Create Life Insurance"
+        ],
+        "extraSelectors": [
+          {"type": "text", "value": "Hayat Sigortası"},
+          {"type": "xpath", "value": "//button[.//span[normalize-space()='Hayat Sigortası'] or normalize-space(.)='Hayat Sigortası']"},
+          {"type": "xpath", "value": "//button[contains(translate(., 'HAYAT SIGORTASI', 'hayat sigortasi'), 'hayat') and contains(translate(., 'HAYAT SIGORTASI', 'hayat sigortasi'), 'sigorta')]"},
+          {"type": "css", "value": "button span:contains('Hayat Sigortası')"},
+          {"type": "css", "value": "button:has(span:contains('Hayat Sigortası'))"}
+        ],
+        "priority": 115
       }
     ],
     "sideMenuToggle": {
@@ -77,7 +101,7 @@
       ]
     },
     "letLLMMap_goUserTask": {
-      "defaultPrompt": "You are an expert web UI analyzer. From the given filtered HTML, identify controls that could be side menu toggles or hamburger menu buttons.\n\nContext:\n- Look for button elements with menu-related icons (3 horizontal lines)\n- Check for SVG elements with classes like 'lucide-menu'\n- Consider aria-label attributes mentioning 'menu', 'toggle', 'hamburger'\n- Focus on clickable elements (button, a, div with role='button')\n\nOutput strict JSON only:\n{\n  \"selectorType\": \"css|xpath|text\",\n  \"selector\": \"<string>\",\n  \"alternatives\": [\"<string>\", ...],\n  \"rationale\": \"<short reason>\"\n}",
+      "defaultPrompt": "You are an expert web UI analyzer. Given filtered HTML and a target user task label (provided separately), identify the single control that opens that task/page.\n\nGuidelines:\n- Consider exact/near matches in visible text, aria-label/title, and data-* (e.g., data-component-content with URL-encoded text).\n- Prefer the clickable ancestor (<a> or <button>) containing the label/icon. Do not target raw <svg> alone.\n- Allowed selectorType: text | css | xpath.\n- Return STRICT JSON only: { \"selectorType\": \"css|xpath|text\", \"selector\": \"<string>\", \"alternatives\": [\"<string>\"], \"rationale\": \"<short reason>\" }.",
       "maxAttempts": 4
     }
   }
