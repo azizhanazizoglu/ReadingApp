@@ -10,6 +10,7 @@ import { runActions } from "@/services/ts3ActionRunner";
 import { runTs3 } from "@/services/ts3Service";
 import { BACKEND_URL } from "@/config";
 import { runFindHomePageSF } from "@/stateflows/findHomePageSF";
+import { runGoUserTaskPageSF } from "@/stateflows/goUserTaskPageSF";
 import { runMasterSF } from "@/stateflows/masterSF";
 
 interface HeaderProps {
@@ -318,7 +319,45 @@ export const Header: React.FC<HeaderProps> = ({
           <Button
             className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] active:scale-95 text-[#0057A0] shadow"
             style={{ fontFamily: fontStack, minWidth: 52, minHeight: 40, fontWeight: 700 }}
-            onClick={() => { devLog('HD-F2', 'F2 clicked (empty)'); }}
+            onClick={async () => {
+              try {
+                const label = (tsxCmd || '').trim() || 'Yeni Trafik';
+                devLog('HD-F2', `F2 clicked goUserTaskPageSF label='${label}'`);
+                // Pull stateflow defaults from backend config on first use
+                let sfCfg: any = (window as any).__CFG_GOUTASK_SF;
+                if (!sfCfg) {
+                  try {
+                    const r = await fetch(`${BACKEND_URL}/api/config`);
+                    const j = await r.json();
+                    sfCfg = (j?.goUserTaskPage?.stateflow) || {};
+                    (window as any).__CFG_GOUTASK_SF = sfCfg;
+                    devLog('HD-F2-CFG', `loaded SF config ${JSON.stringify(sfCfg)}`);
+                  } catch {}
+                }
+                const res = await runGoUserTaskPageSF(label, {
+                  waitAfterClickMs: Number(sfCfg?.waitAfterClickMs ?? 800),
+                  log: (m) => devLog('HD-F2-LOG', m),
+                  useBackend: true,
+                  fuzzy: true,
+                  forceLLM: forceLLM,
+                  maxLoops: Number(sfCfg?.maxLoops ?? 6),
+                  maxStaticTries: Number(sfCfg?.maxStaticTries ?? 8),
+                  maxLLMTries: Number(sfCfg?.maxLLMTries ?? 3),
+                });
+                if (res.changed) {
+                  devLog('HD-F2-DONE', `changed finalSelector=${res.finalSelector || ''}`);
+                } else {
+                  devLog('HD-F2-NOCHANGE', `no change; sideMenuOpened=${res.sideMenuOpened} tried=${res.triedSelectors.length}`);
+                }
+                // Remove any previously injected F2 tried-selectors panel (no longer desired in UI)
+                if (typeof window !== 'undefined') {
+                  const existing = document.getElementById('f2-tried-selectors-panel');
+                  if (existing && existing.parentElement) existing.parentElement.removeChild(existing);
+                }
+              } catch (e: any) {
+                devLog('HD-F2-ERR', String(e?.message || e));
+              }
+            }}
             aria-label="F2"
           >
             F2

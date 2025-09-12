@@ -14,7 +14,14 @@ from Components.getHtml import get_save_Html
 from Features.findHomePage import FindHomePage
 from Components.getHtml import remember_raw_html
 from Components.detectWepPageChange import detect_web_page_change
+from Features.goUserTaskPage import (
+    plan_open_side_menu,
+    plan_go_user_page,
+    plan_check_page_changed,
+    plan_full_user_task_flow,
+)
 from logging_utils import log, get_log_records, clear_log_records
+from config import load_config, get_go_user_task_stateflow
 
 
 class TsxRequest(BaseModel):
@@ -59,6 +66,22 @@ def health() -> Dict[str, Any]:
     return {"status": "ok", "time": datetime.utcnow().isoformat() + "Z"}
 
 
+@app.get("/api/config")
+def get_config() -> Dict[str, Any]:
+    """Expose relevant config to UI (read-only)."""
+    cfg = load_config()
+    # Keep it minimal for now
+    return {
+        "goUserTaskPage": {
+            "stateflow": cfg.get("goUserTaskPage", {}).get("stateflow", {}),
+            "letLLM": {"maxAttempts": cfg.get("goUserTaskPage", {}).get("letLLMMap_goUserTask", {}).get("maxAttempts", 4)},
+        },
+        "findHomePage": {
+            "letLLM": {"maxAttempts": cfg.get("findHomePage", {}).get("letLLMMap_findHomePage", {}).get("maxAttempts", 3)}
+        }
+    }
+
+
 @app.post("/api/tsx/dev-run")
 def tsx_dev_run(req: TsxRequest) -> Dict[str, Any]:
     """POST: TsX akışı (gelecekte). Girdi alır, aksiyon üretir (yan etki vardır)."""
@@ -96,6 +119,20 @@ class HtmlCaptureRequest(BaseModel):
 class HtmlSaveRequest(BaseModel):
     html: str
     name: Optional[str] = None
+
+
+class GoUserTaskRequest(BaseModel):
+    op: Optional[str] = None  # openSideMenu | goUserPage | checkPageChanged | fullFlow
+    html: Optional[str] = None  # current (filtered) html for planning (we accept raw too)
+    taskLabel: Optional[str] = None
+    # For change detection (raw html snapshots)
+    prev_html: Optional[str] = None
+    current_html: Optional[str] = None
+    # LLM fallback
+    llm_feedback: Optional[str] = None
+    llm_attempt_index: Optional[int] = None
+    force_llm: Optional[bool] = None
+    open_menu_first: Optional[bool] = None  # for fullFlow
 
 
 @app.post("/api/f1")
@@ -140,25 +177,66 @@ def f1(req: HtmlCaptureRequest) -> Dict[str, Any]:
 
 
 @app.post("/api/f2")
-def f2(req: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    # Optional: if raw html is provided, remember it for future diffs
-    if isinstance(req, dict):
-        cur = req.get("current_html") or req.get("html")
-        prev = req.get("prev_html")
-    else:
-        cur = None
-        prev = None
-    if cur:
-        remember_raw_html(cur, {"source": "f2"})
-    res = detect_web_page_change(current_raw_html=cur, prev_raw_html=prev)
-    return {
-        "ok": True,
-        "changed": res.changed,
-        "reason": res.reason,
-        "before_hash": res.before_hash,
-        "after_hash": res.after_hash,
-        "details": res.details or {},
-    }
+def f2(req: GoUserTaskRequest) -> Dict[str, Any]:
+    """F2: goUserTaskPage feature entry (repurposed).
+
+    Operations (req.op):
+      - openSideMenu: plan click for side menu toggle
+      - goUserPage: plan navigation to taskLabel (static first, LLM fallback placeholder)
+      - checkPageChanged: diff prev/current raw html
+      - fullFlow: optional open side menu then goUserPage
+
+    Backward compatibility: if no op provided but prev/current html given -> perform diff only.
+    """
+    op = (req.op or "").strip()
+    # Raw diff only fallback
+    if not op:
+        if not (req.current_html or req.html):
+            raise HTTPException(status_code=422, detail="missing html or op")
+        res = detect_web_page_change(current_raw_html=req.current_html or req.html, prev_raw_html=req.prev_html)
+        return {
+            "ok": True,
+            "changed": res.changed,
+            "reason": res.reason,
+            "before_hash": res.before_hash,
+            "after_hash": res.after_hash,
+            "details": res.details or {},
+            "mode": "diff-only",
+        }
+
+    # Require html for planning ops (except pure checkPageChanged which uses current_html)
+    if op in {"openSideMenu", "goUserPage", "fullFlow"} and not (req.html):
+        raise HTTPException(status_code=422, detail="missing html for planning")
+
+    if op == "openSideMenu":
+        return plan_open_side_menu(req.html)
+    if op == "goUserPage":
+        if not req.taskLabel:
+            raise HTTPException(status_code=422, detail="missing taskLabel")
+        return plan_go_user_page(
+            filtered_html=req.html,
+            task_label=req.taskLabel,
+            use_llm_fallback=True,
+            force_llm=bool(req.force_llm),
+            llm_feedback=req.llm_feedback,
+            llm_attempt_index=req.llm_attempt_index,
+        )
+    if op == "checkPageChanged":
+        return plan_check_page_changed(
+            current_raw_html=req.current_html,
+            prev_raw_html=req.prev_html,
+        )
+    if op == "fullFlow":
+        if not req.taskLabel:
+            raise HTTPException(status_code=422, detail="missing taskLabel for fullFlow")
+        return plan_full_user_task_flow(
+            filtered_html=req.html,
+            task_label=req.taskLabel,
+            open_menu_first=True if req.open_menu_first is None else bool(req.open_menu_first),
+            llm_feedback=req.llm_feedback,
+            llm_attempt_index=req.llm_attempt_index,
+        )
+    raise HTTPException(status_code=422, detail=f"invalid op: {op}")
 
 
 @app.post("/api/f3")

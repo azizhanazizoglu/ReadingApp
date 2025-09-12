@@ -118,3 +118,60 @@ def get_static_max_candidates_find_home_page() -> int:
         return ival if ival > 0 else 40
     except Exception:
         return 40
+
+# --- New: goUserTaskPage ---
+
+DEFAULT_CONFIG.setdefault("goUserTaskPage", {
+    "staticMaxCandidates": 50,
+    "mapping": {
+        "max_alternatives": 12
+    },
+    "stateflow": {
+        "maxLoops": 6,
+        "maxStaticTries": 8,
+        "maxLLMTries": 3,
+        "waitAfterClickMs": 800
+    },
+    "letLLMMap_goUserTask": {
+        "defaultPrompt": (
+            "You are an expert web UI analyzer. From the given filtered HTML and the user task label, "
+            "identify the single control that opens the requested task/page. The label is flexible and may be in Turkish or English; "
+            "use fuzzy matching on visible text, aria-label/title, and data-* (e.g., data-component-content with URL-encoded text).\n\n"
+            "Selector rules:\n- Allowed selectorType: text | css | xpath.\n- Prefer the clickable ancestor (<a> or <button>) that contains the label or icon.\n"
+            "Output STRICT JSON only: {\n  \"selectorType\": \"css|xpath|text\",\n  \"selector\": \"<string>\",\n  \"alternatives\": [\"<string>\"],\n  \"rationale\": \"<short reason>\"\n}"
+        ),
+        "maxAttempts": 4
+    }
+})
+
+
+def get_static_max_candidates_go_user_task() -> int:
+    val = get("goUserTaskPage.staticMaxCandidates")
+    try:
+        return int(val) if val is not None else int(DEFAULT_CONFIG["goUserTaskPage"]["staticMaxCandidates"])  # type: ignore[index]
+    except Exception:
+        return 50
+
+
+def get_map_user_task(key: str, default: Any = None) -> Any:
+    return get(f"goUserTaskPage.mapping.{key}", default)
+
+
+def get_llm_prompt_go_user_task_default() -> str:
+    val = get("goUserTaskPage.letLLMMap_goUserTask.defaultPrompt")
+    if isinstance(val, str) and val.strip():
+        return val
+    return DEFAULT_CONFIG["goUserTaskPage"]["letLLMMap_goUserTask"]["defaultPrompt"]  # type: ignore[index]
+
+
+def get_llm_max_attempts_go_user_task() -> int:
+    val = get("goUserTaskPage.letLLMMap_goUserTask.maxAttempts")
+    try:
+        ival = int(val) if val is not None else int(DEFAULT_CONFIG["goUserTaskPage"]["letLLMMap_goUserTask"]["maxAttempts"])  # type: ignore[index]
+        return ival if ival > 0 else 4
+    except Exception:
+        return 4
+
+
+def get_go_user_task_stateflow(key: str, default: Any = None) -> Any:
+    return get(f"goUserTaskPage.stateflow.{key}", default)
