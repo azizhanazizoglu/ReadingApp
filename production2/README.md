@@ -192,3 +192,160 @@ Logs:
 - Run backend (FastAPI/uvicorn) and the Electron+React app.
 - Navigate to a target page and run the FindHomePage flow.
 - Watch the FE/BE logs and inspect `tmp/prompts/findHomePage/` for artifacts.
+
+---
+
+# goUserTaskPage + F2 Button
+
+The goUserTaskPage feature navigates to a user-requested task page (e.g., "Yeni Trafik", "Hayat Sigortası"). It follows the same static-first then LLM-fallback approach, with an extra side-menu open step when needed.
+
+## quick map (F2)
+
+- Frontend (React + Electron)
+  - StateFlow orchestrator: `react_ui/src/stateflows/goUserTaskPageSF.ts`
+  - Trigger: Header F2 button in `react_ui/src/components/Header.tsx`
+  - Behavior: capture → plan goUserPage → if no selector: open side menu → wait/detect → loop → optional LLM fallback
+- Backend (FastAPI)
+  - Feature: `backend/Features/goUserTaskPage.py`
+  - Ops exposed under `/api/f2` (multiplexed by `op`)
+  - Components:
+    - `backend/Components/mappingStaticUserTask.py` (static mapping for user task buttons)
+    - `backend/Components/mappingStaticSideMenu.py` (static mapping for hamburger/side menu)
+    - `backend/Components/letLLMMapUserTaskPage.py` (LLM prompt/parse + candidate plans)
+    - `backend/Components/detectWepPageChange.py` (HTML change detection)
+    - `backend/Components/fillPageFromMapping.py` (plan builder)
+  - Config helpers: `production2/config.py` (`get_go_user_task_stateflow`, `get_llm_*`)
+  - API config passthrough for UI: `/api/config`
+- Config & Artifacts
+  - Config knobs: `production2/config.json` → `goUserTaskPage`
+  - Artifacts: `production2/tmp/prompts/goUserTaskPage/`
+
+## backend ops (F2)
+
+All ops are multiplexed under `/api/f2` via `op`:
+
+- op=openSideMenu
+  - Input: `{ html: string }` (filtered HTML is built server-side when needed)
+  - Behavior: statically detect hamburger/side menu toggle and return a click plan.
+  - Output:
+    - `ok: boolean`
+    - On success: `{ planType: 'fillPlan', action: 'openSideMenu', mapping: { primary, alternatives?, candidateCount }, plan }`
+
+- op=goUserPage
+  - Input: `{ html: string, task_label: string, force_llm?: boolean, llm_feedback?: string, llm_attempt_index?: number }`
+  - Behavior:
+    - Static-first: match `task_label` against configured candidates (synonyms, selectors). If found, return a click-only plan.
+    - Else LLM: return an `llmPrompt` plan with prompt/paths and optional candidate selectors (if API key configured).
+  - Output (static success):
+    - `{ ok, planType: 'fillPlan', action: 'goUserPage', strategy: 'static', taskLabel, match: { id, score, priority }, selector, plan }`
+  - Output (LLM):
+    - `{ ok, planType: 'llmPrompt', action: 'goUserPage', strategy: 'llm'|'static+llm', taskLabel, staticMatched: boolean, llmPlan: { attempt, maxAttempts, prompt, filteredHtml, hints, savedPaths, llmSuggestion?, llmCandidates? } }`
+
+- op=checkPageChanged
+  - Input: `{ prev_html: string, current_html: string, use_normalized_compare?: boolean }`
+  - Output: `{ ok, action: 'checkPageChanged', result: { changed: boolean, reason?: string, before_hash?: string, after_hash?: string } }`
+
+- op=fullFlow (optional helper)
+  - Input: `{ html: string, task_label: string, open_menu_first?: boolean, llm_feedback?: string, llm_attempt_index?: number }`
+  - Output: `{ ok, flow: { openSideMenu?, goUserPage }, taskLabel }`
+
+## backend components (F2)
+
+- mappingStaticUserTask.py
+  - Base candidate(s) for user task buttons (e.g., Yeni Trafik).
+  - Extensible via `config.json` under `goUserTaskPage.userTaskButtons`.
+  - Functions: `get_user_task_candidates`, `find_best_user_task_button` (diacritics-insensitive scoring using exact/substring/token overlap).
+
+- mappingStaticSideMenu.py
+  - Detects hamburger/menu toggle (variants/aria/icon patterns configurable).
+
+- letLLMMapUserTaskPage.py
+  - Prompt composition using `config.json` + `config.py` helpers.
+  - Saves artifacts under `tmp/prompts/goUserTaskPage/` (default/composed/filtered/meta/feedback + optional raw/parsed LLM outputs).
+  - Returns structured `llmPlan` with `llmCandidates` (click plans) and an optional `llmSuggestion` (primary + alternatives).
+
+- detectWepPageChange.py
+  - Same detection utility used by F1; compares prev/current raw HTML.
+
+- fillPageFromMapping.py
+  - Minimal click-only plan for a given selector; used for both static and LLM candidates.
+
+## frontend stateflow (goUserTaskPageSF)
+
+File: `react_ui/src/stateflows/goUserTaskPageSF.ts`
+
+Loop behavior:
+1) Capture raw HTML from webview (and URL for context).
+2) Call backend `goUserPage` with the user-entered label.
+   - If returned `fillPlan`, click it and wait → recapture → change-detection.
+   - If no direct selector and static tries remain, call `openSideMenu` and click the hamburger; wait/recapture.
+3) Repeat for up to `maxLoops`, tracking per-type limits:
+   - `maxStaticTries` caps static selector attempts.
+   - `maxLLMTries` caps LLM prompt attempts (enabled from loop 2+ by default).
+4) If LLM plan present (and allowed), consume `llmCandidates` and/or `llmSuggestion` selectors in order, sending feedback (selectors tried) on each attempt.
+
+Click robustness:
+- Synthetic pointer/mouse event sequence to improve reliability.
+- Side-menu fallbacks: `css:button:has(svg.lucide-menu)` and clicking the closest clickable ancestor of `svg.lucide-menu` when needed.
+
+Header F2 wiring:
+- `react_ui/src/components/Header.tsx` binds F2 to run this SF and fetches `/api/config` once to load stateflow defaults.
+
+## config and tuning (F2)
+
+`production2/config.json` (goUserTaskPage):
+- `staticMaxCandidates`: cap for static DOM scan (backend-side, where used).
+- `mapping.max_alternatives`: number of alternatives when building mapping artifacts.
+- `userTaskButtons`: extend/override static candidates:
+  - Example entries:
+    - `userTask.newTraffic` with synonyms/selectors for "Yeni Trafik".
+    - `userTask.lifeInsurance` with synonyms/selectors for "Hayat Sigortası" (diacritics-insensitive matching; also accepts "Hayat Sigortasi").
+- `sideMenuToggle`: variants, aria keywords, and icon patterns to detect the hamburger.
+- `letLLMMap_goUserTask`:
+  - `defaultPrompt`: focused on identifying the user-task button (strict JSON output).
+  - `maxAttempts`: cap attempts per run.
+- `stateflow` (read by UI via `/api/config`):
+  - `maxLoops` (default: 6)
+  - `maxStaticTries` (default: 8)
+  - `maxLLMTries` (default: 3)
+  - `waitAfterClickMs` (default: 800)
+
+`production2/config.py` provides helpers:
+- `get_llm_prompt_go_user_task_default()`, `get_llm_max_attempts_go_user_task()`
+- `get_go_user_task_stateflow(key)`
+
+## contracts (inputs/outputs)
+
+PlanItem (UI executor input) is the same as F1.
+
+F2Response by op (selected fields):
+```ts
+// openSideMenu
+{ ok: boolean, planType?: 'fillPlan', action?: 'openSideMenu', mapping?: { primary: string, alternatives?: string[], candidateCount: number }, plan?: { actions: any[] } }
+
+// goUserPage (static success)
+{ ok: boolean, planType: 'fillPlan', action: 'goUserPage', strategy: 'static', taskLabel: string, match: { id?: string, score?: number, priority?: number }, selector: string, plan: { actions: any[] } }
+
+// goUserPage (LLM plan)
+{ ok: boolean, planType: 'llmPrompt', action: 'goUserPage', strategy: 'llm'|'static+llm', taskLabel: string, staticMatched: boolean, llmPlan: { attempt: number, maxAttempts: number, prompt: string, filteredHtml: string, hints: any, savedPaths: any, llmSuggestion?: any, llmCandidates?: Array<{ selector: string, plan: { actions: any[] } }> } }
+
+// checkPageChanged
+{ ok: boolean, action: 'checkPageChanged', result: { changed: boolean, reason?: string, before_hash?: string, after_hash?: string } }
+```
+
+## observability
+
+Artifacts: `tmp/prompts/goUserTaskPage/`
+- default_prompt_*.txt, composed_prompt_attemptN_*.txt, feedback_attemptN_*.txt
+- filtered_attemptN_*.html, meta_attemptN_*.json
+- llm_response_attemptN_*.txt (cleaned), llm_parsed_attemptN_*.json (if LLM executed)
+
+Logs:
+- Backend: LLM-UTASK-SAVED, LLM-UTASK-ERR, and standard feature/component tags.
+- Frontend: UTASK loop traces (static/LLM tries, side-menu clicks, detection). 
+
+## try it (F2)
+
+- Enter a task label in the TsX input (e.g., "Yeni Trafik", "Hayat Sigortası").
+- Click F2.
+- Watch logs: you should see menu open (if closed) and a click on the matched task button; on success, detection logs report `changed=true`.
