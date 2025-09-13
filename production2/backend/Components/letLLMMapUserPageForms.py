@@ -109,6 +109,13 @@ def _build_prompt(html: str, ruhsat_json: Optional[Dict[str, Any]]) -> str:
 		"- For clicks in actions, you may return visible texts (e.g., 'Devam'), but DO NOT put text:... into field_mapping.\n"
 		"Output STRICT JSON only with keys: {page_kind, field_mapping?, actions?, evidence?}.\n"
 	)
+	# Allow override via config.json
+	try:
+		cfg_prompt = get("goFillForms.llm.mappingPrompt")
+		if isinstance(cfg_prompt, str) and cfg_prompt.strip():
+			default = cfg_prompt
+	except Exception:
+		pass
 	labels = _extract_labels_and_text(html)
 	cand_keys = _infer_keys_from_labels(labels)
 	parts = [default]

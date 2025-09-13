@@ -154,15 +154,38 @@ DEFAULT_CONFIG.setdefault("goFillForms", {
     },
     "llm": {
         "model": "gpt-4o",           # model for both vision and mapping
-        "temperature": 0.0
+        "temperature": 0.0,
+        # Centralized prompt for F3 mapping (can be overridden in config.json)
+        "mappingPrompt": (
+            "You are an expert web UI analyzer. Task: Given filtered HTML of an insurance form page "
+            "and extracted ruhsat JSON (vehicle registration), decide if this is a fillable form page or the final activation page.\n\n"
+            "If fillable, return a JSON with keys: page_kind='fill_form', field_mapping (map logical keys to selectors), and optional actions (button texts like 'Devam', 'İleri').\n"
+            "If final activation page, return page_kind='final_activation' and actions containing visible final CTA texts, e.g., 'Poliçeyi Aktifleştir'.\n\n"
+            "VERY IMPORTANT mapping rules:\n"
+            "- Only include fields that are PRESENT on THIS page. Do NOT include fields from other steps/pages.\n"
+            "- Each field_mapping selector MUST point to exactly one input/select/textarea element (unique). Avoid container/form selectors.\n"
+			"- Prefer stable CSS like #id, input[name=...], select[name=...], textarea[name=...]. If id/name are missing but the element has a unique data-lov-id attribute, use [data-lov-id='...']. Use XPath only when CSS is not possible.\n"
+            "- For clicks in actions, you may return visible texts (e.g., 'Devam'), but DO NOT put text:... into field_mapping.\n"
+            "Output STRICT JSON only with keys: {page_kind, field_mapping?, actions?, evidence?}.\n"
+        )
     },
     "persist": {
         "dir": "tmp/ruhsat_json"     # where to store normalized extractions (optional)
     },
     "stateflow": {
         "maxLoops": 10,
-        "waitAfterActionMs": 800,
-        "maxLLMTries": 3
+    "waitAfterActionMs": 600,
+    "maxLLMTries": 3,
+    # New: timing knobs for field filling/verification (used by UI SF)
+    # Per-field attempts wait list (ms) e.g. 3 attempts
+    "perFieldAttemptWaits": [250, 400, 600],
+    # Extra delay after each single-field fill before verifying (ms)
+    "postFillVerifyDelayMs": 200,
+    # Delay before running html-only filled check (ms)
+    "htmlCheckDelayMs": 200,
+    # Commit behavior flags
+    "commitEnter": True,
+    "clickOutside": True
     },
     "finalCtas": [
         "Poliçeyi Aktifleştir", "Policeyi Aktiflestir", "Poliçeyi Üret", "Poliçeyi Yazdır"

@@ -9,7 +9,7 @@ This README documents what we built in production2: the architecture, naming, co
   - Webview helpers: `react_ui/src/services/webviewDom.ts`
   - Behavior: capture → plan → click → wait → detect → LLM fallback
 - Backend (FastAPI)
-  - Entrypoint & routing: `backend/app.py`, `backend/routes.py`
+  - Entrypoint & routing: `backend/main.py` (REST under `/api/*`)
   - Feature: `backend/Features/findHomePage.py`
   - Components:
     - `backend/Components/getHtml.py` (HTML filtering & snapshot saving)
@@ -349,3 +349,86 @@ Logs:
 - Enter a task label in the TsX input (e.g., "Yeni Trafik", "Hayat Sigortası").
 - Click F2.
 - Watch logs: you should see menu open (if closed) and a click on the matched task button; on success, detection logs report `changed=true`.
+
+---
+
+# fillFormsUserTaskPage + F3 Button
+
+The F3 feature ingests ruhsat data (file or Vision LLM), analyzes the current page, fills fields with high reliability, verifies persistence, gates on “enough fields filled,” then runs follow-up actions (e.g., Devam/İleri).
+
+## quick map (F3)
+
+- Frontend (Electron + React)
+  - StateFlow orchestrator: `react_ui/src/stateflows/fillFormsUserTaskPageSF.ts`
+  - Services: `react_ui/src/services/ts3InPageFiller.ts`, `ts3ActionRunner.ts`, `webviewDom.ts`
+    - Per-field sequential fill with retries, Enter + clickOutside + change + blur/focusout commits
+    - Selector-level verification (`checkSelectorHasValue`) and `data-ts3-filled` markers
+- Backend (FastAPI)
+  - Feature: `backend/Features/fillFormsUserTaskPage.py`
+  - Components:
+    - `backend/Components/letLLMMapUserPageForms.py` (LLM mapping; prefers id/name and unique data-lov-id; Turkish synonyms)
+    - `backend/Components/detectFormsAreFilled.py` (committed count via HTML + ts3 markers)
+    - `backend/Components/fillPageFromMapping.py` (plan builder for set_value/select_option + optional clicks)
+    - `backend/Components/detectWepPageChange.py` (page change check)
+  - API: `/api/f3` multiplexed ops
+
+## backend ops (F3)
+
+POST `/api/f3` with `op`:
+- `loadRuhsatFromTmp` → auto-ingest ruhsat (from `goFillForms.input.imageDir` or prepared JSON)
+- `analyzePage` → returns `{ page_kind: 'fill_form'|'final_activation', field_mapping?, actions? }`
+- `buildFillPlan` → mapping + ruhsat_json → ordered FillPlan
+- `detectFinalPage` → static CTA detection using configured final labels
+- `checkPageChanged` → raw HTML diff (same as F2)
+- `detectFormsFilled` → counts committed fields; accepts `min_filled` override
+
+Notes:
+- LLM prompt for mapping is centralized: `goFillForms.llm.mappingPrompt` (see config below).
+- Analyze results are cached per-HTML on the UI to avoid repeated LLM calls in the same loop.
+
+## frontend stateflow (F3)
+
+File: `react_ui/src/stateflows/fillFormsUserTaskPageSF.ts`
+- Fetches `/api/config` once to read timing knobs.
+- Sequential per-field fill with up to 3 attempts (configurable backoff).
+- After each attempt, selector-level verification; only proceed on success.
+- Global HTML-only filled check with a dynamic threshold; only then run actions.
+- Prioritizes critical fields like `sasi_no`, `motor_no`, `tescil_tarihi` when present.
+
+## config and tuning (F3)
+
+`production2/config.json` and defaults in `production2/config.py`:
+- `goFillForms.llm`:
+  - `model` (default `gpt-4o`), `temperature`
+  - `mappingPrompt` (centralized LLM prompt for mapping; editable without code changes)
+- `goFillForms.stateflow` (consumed by UI):
+  - `perFieldAttemptWaits`: e.g., `[250, 400, 600]` ms for 3 attempts
+  - `postFillVerifyDelayMs`: extra delay before per-field verify
+  - `htmlCheckDelayMs`: delay before global HTML-only check
+  - `waitAfterActionMs`: pause after click actions
+  - `commitEnter`, `clickOutside`: commit behavior flags
+  - `maxLoops`, `maxLLMTries` (where applicable)
+- `goFillForms.input.imageDir`: image staging dir used by upload
+
+Backend exposes selected config to UI via `/api/config`.
+
+## upload pipeline
+
+- Endpoint: `POST /api/upload` (JPEG/PNG)
+  - Stages into `goFillForms.input.imageDir` (default: `tmp/data`)
+  - Emits structured logs; filename returned for inspection
+
+## observability
+
+- Mapping artifacts and normalized outputs are written under `production2/tmp/` (see feature code for exact folders).
+- UI/BE logs show per-field attempts, selector verifications, gating decisions, and actions.
+
+## build/run notes
+
+- `production2/build2run.ps1` prefers `production2/electron_app` starter and restores working dir. It mirrors built assets when needed and prints the chosen starter.
+
+## try it (F3)
+
+1) Start backend and the Electron app.
+2) Use the F3 flow in UI. Optionally upload a ruhsat image via `/api/upload` beforehand.
+3) Watch logs for sequential fill attempts, verification, gating, and final actions.

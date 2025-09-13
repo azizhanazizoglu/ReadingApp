@@ -29,8 +29,22 @@ async function postF3(op: string, body: any, log?: (m: string)=>void) {
 
 export async function runFillFormsUserTaskPageSF(opts?: F3Options) {
   const log = opts?.log || (()=>{});
-  const waitMs = Math.max(0, opts?.waitAfterActionMs ?? 800);
-  const maxLoops = Math.max(1, opts?.maxLoops ?? 10);
+  // Load config from backend to allow dynamic tuning
+  let cfg: any = undefined;
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/config`);
+    if (res.ok) cfg = await res.json();
+  } catch {}
+  const f3cfg = cfg?.goFillForms?.stateflow || {};
+  const waitMs = Math.max(0, opts?.waitAfterActionMs ?? (typeof f3cfg.waitAfterActionMs === 'number' ? f3cfg.waitAfterActionMs : 600));
+  const maxLoops = Math.max(1, opts?.maxLoops ?? (typeof f3cfg.maxLoops === 'number' ? f3cfg.maxLoops : 10));
+  const perFieldAttemptWaits: number[] = Array.isArray(f3cfg.perFieldAttemptWaits) && f3cfg.perFieldAttemptWaits.length
+    ? f3cfg.perFieldAttemptWaits.map((n: any) => Math.max(0, Number(n)||0))
+    : [250, 400, 600];
+  const postFillVerifyDelayMs: number = typeof f3cfg.postFillVerifyDelayMs === 'number' ? f3cfg.postFillVerifyDelayMs : 200;
+  const htmlCheckDelayMs: number = typeof f3cfg.htmlCheckDelayMs === 'number' ? f3cfg.htmlCheckDelayMs : 200;
+  const commitEnterCfg = (f3cfg.commitEnter !== undefined) ? !!f3cfg.commitEnter : true;
+  const clickOutsideCfg = (f3cfg.clickOutside !== undefined) ? !!f3cfg.clickOutside : true;
 
   // Step 0: get ruhsat json from backend component
   const input = await postF3('loadRuhsatFromTmp', {}, log);
@@ -100,10 +114,11 @@ export async function runFillFormsUserTaskPageSF(opts?: F3Options) {
           const sel = fieldMapping[k];
           log(`SF-F3 step: fill ${k} -> ${sel}`);
           let okOne = false;
-          for (let attempt = 1; attempt <= 3; attempt++) {
-            const waitAfter = attempt === 1 ? 500 : (attempt === 2 ? 700 : 900);
-            await runInPageFill({ [k]: sel }, ruhsat, { highlight: true, simulateTyping: true, stepDelayMs: 0, commitEnter: true, clickOutside: true, waitAfterFillMs: waitAfter }, (c,m)=>log(`${c} ${m}`));
-            await new Promise(r=>setTimeout(r, waitAfter - 100));
+          const attempts = perFieldAttemptWaits.length > 0 ? perFieldAttemptWaits : [300, 500, 700];
+          for (let attempt = 1; attempt <= attempts.length; attempt++) {
+            const waitAfter = attempts[attempt-1];
+            await runInPageFill({ [k]: sel }, ruhsat, { highlight: true, simulateTyping: true, stepDelayMs: 0, commitEnter: commitEnterCfg, clickOutside: clickOutsideCfg, waitAfterFillMs: waitAfter }, (c,m)=>log(`${c} ${m}`));
+            await new Promise(r=>setTimeout(r, Math.max(0, waitAfter - 100)));
             okOne = await checkSelectorHasValue(sel, (c,m)=>log(`${c} ${m}`));
             log(`SF-F3 step: verify ${k} attempt ${attempt} -> ${okOne ? 'YES' : 'NO'}`);
             if (okOne) break;
@@ -113,7 +128,7 @@ export async function runFillFormsUserTaskPageSF(opts?: F3Options) {
         }
 
         // Global verification via HTML-only filled check + critical gates
-        await new Promise(r=>setTimeout(r, 350));
+        await new Promise(r=>setTimeout(r, htmlCheckDelayMs));
         let curHtml = (await getDomAndUrlFromWebview((m)=>log(`[WV] ${m}`))).html || prevHtml;
         const filledCheck = await postF3('detectFormsFilled', { html: curHtml, mapping: { min_filled: dynamicThreshold } }, log);
         log(`SF-F3 Form1: filled-check (html-only) -> ${JSON.stringify(filledCheck)}`);
