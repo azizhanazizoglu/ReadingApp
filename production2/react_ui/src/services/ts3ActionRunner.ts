@@ -163,7 +163,24 @@ export async function runActions(actions: string[] | undefined, highlight: boole
       } catch (e) { return { ok: false, error: String(e) }; }
     })();
   })();`;
-  const res = await webview.executeJavaScript(script, true);
+  let res: any;
+  try {
+    res = await webview.executeJavaScript(script, true);
+  } catch (e: any) {
+    const msg = String(e?.message || e || '');
+    devLog?.('IDX-TS3-ACT-ERR', msg);
+    if (/GUEST_VIEW_MANAGER_CALL|Script failed to execute/i.test(msg)) {
+      await new Promise(r => setTimeout(r, 700));
+      try {
+        res = await webview.executeJavaScript(script, true);
+      } catch (e2: any) {
+        devLog?.('IDX-TS3-ACT-ERR2', String(e2?.message || e2 || ''));
+        throw e2;
+      }
+    } else {
+      throw e;
+    }
+  }
   devLog?.('IDX-TS3-ACTIONS', JSON.stringify(res));
   return res;
 }

@@ -11,6 +11,7 @@ import { runTs3 } from "@/services/ts3Service";
 import { BACKEND_URL } from "@/config";
 import { runFindHomePageSF } from "@/stateflows/findHomePageSF";
 import { runGoUserTaskPageSF } from "@/stateflows/goUserTaskPageSF";
+import { runFillFormsUserTaskPageSF } from "@/stateflows/fillFormsUserTaskPageSF";
 import { runMasterSF } from "@/stateflows/masterSF";
 
 interface HeaderProps {
@@ -365,7 +366,31 @@ export const Header: React.FC<HeaderProps> = ({
           <Button
             className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] active:scale-95 text-[#0057A0] shadow"
             style={{ fontFamily: fontStack, minWidth: 52, minHeight: 40, fontWeight: 700 }}
-            onClick={() => { devLog('HD-F3', 'F3 clicked (empty)'); }}
+            onClick={async () => {
+              try {
+                devLog('HD-F3', 'F3 clicked');
+                // Load config defaults for F3 on first use
+                let sf: any = (window as any).__CFG_F3_SF;
+                if (!sf) {
+                  try {
+                    const r = await fetch(`${BACKEND_URL}/api/config`);
+                    const j = await r.json();
+                    sf = (j?.goFillForms?.stateflow) || {};
+                    (window as any).__CFG_F3_SF = sf;
+                    devLog('HD-F3-CFG', `loaded ${JSON.stringify(sf)}`);
+                  } catch {}
+                }
+                const res = await runFillFormsUserTaskPageSF({
+                  waitAfterActionMs: Number(sf?.waitAfterActionMs ?? 800),
+                  maxLoops: Number(sf?.maxLoops ?? 10),
+                  maxLLMTries: Number(sf?.maxLLMTries ?? 3),
+                  log: (m) => devLog('HD-F3-LOG', m),
+                });
+                devLog('HD-F3-DONE', `ok=${res?.ok} changed=${(res as any)?.changed}`);
+              } catch (e: any) {
+                devLog('HD-F3-ERR', String(e?.message || e));
+              }
+            }}
             aria-label="F3"
           >
             F3

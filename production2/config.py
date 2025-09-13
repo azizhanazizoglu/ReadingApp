@@ -144,6 +144,34 @@ DEFAULT_CONFIG.setdefault("goUserTaskPage", {
     }
 })
 
+# --- New: goFillForms (F3) ---
+
+DEFAULT_CONFIG.setdefault("goFillForms", {
+    "input": {
+        "jsonPath": "",              # optional prepared ruhsat json
+    "imageDir": "tmp/data",      # where staged images are stored (relative to production2 root)
+    "sourceDir": ""              # optional: auto-copy latest from this dir into imageDir on F3
+    },
+    "llm": {
+        "model": "gpt-4o",           # model for both vision and mapping
+        "temperature": 0.0
+    },
+    "persist": {
+        "dir": "tmp/ruhsat_json"     # where to store normalized extractions (optional)
+    },
+    "stateflow": {
+        "maxLoops": 10,
+        "waitAfterActionMs": 800,
+        "maxLLMTries": 3
+    },
+    "finalCtas": [
+        "Poliçeyi Aktifleştir", "Policeyi Aktiflestir", "Poliçeyi Üret", "Poliçeyi Yazdır"
+    ]
+})
+
+def get_go_fill_forms(key: str, default: Any = None) -> Any:
+    return get(f"goFillForms.{key}", default)
+
 
 def get_static_max_candidates_go_user_task() -> int:
     val = get("goUserTaskPage.staticMaxCandidates")

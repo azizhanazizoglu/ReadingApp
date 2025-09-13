@@ -14,8 +14,10 @@ if (-not $root) { $root = (Get-Location).Path }
 $reactDir = Join-Path $root 'react_ui'
 $reactGuiMirror = Join-Path $root 'react_gui'
 $repoRoot = Split-Path $root -Parent
-$electronDir = Join-Path $repoRoot 'electron_app'
-$electronStarter = Join-Path $electronDir 'start_all.ps1'
+$electronDirRoot = Join-Path $repoRoot 'electron_app'
+$electronStarterRoot = Join-Path $electronDirRoot 'start_all.ps1'
+$electronDirProd2 = Join-Path $root 'electron_app'
+$electronStarterProd2 = Join-Path $electronDirProd2 'start_all.ps1'
 
 if (-not (Test-Path $reactDir)) {
     throw "React GUI directory not found: $reactDir"
@@ -42,7 +44,7 @@ if ($hasPnpmLock -and $pnpmCmd) {
 
 Pop-Location
 
-if (Test-Path $electronStarter) {
+if ((Test-Path $electronStarterProd2) -or (Test-Path $electronStarterRoot)) {
     # Mirror build output to production2/react_gui so Electron loads the new UI without external changes
     try {
         if (-not (Test-Path $reactGuiMirror)) { New-Item -ItemType Directory -Path $reactGuiMirror | Out-Null }
@@ -54,10 +56,24 @@ if (Test-Path $electronStarter) {
     } catch {
         Write-Host "Warning: Could not mirror UI build to react_gui. Electron may load legacy UI." -ForegroundColor Yellow
     }
-    Write-Host "Starting Electron app..." -ForegroundColor Cyan
-    Push-Location $electronDir
-    & $electronStarter
-    Pop-Location
+
+    # Prefer production2/electron_app if present; else fall back to repo-root/electron_app
+    $chosenDir = $null
+    $chosenStarter = $null
+    if (Test-Path $electronStarterProd2) {
+        $chosenDir = $electronDirProd2
+        $chosenStarter = $electronStarterProd2
+    } else {
+        $chosenDir = $electronDirRoot
+        $chosenStarter = $electronStarterRoot
+    }
+    Write-Host ("Starting Electron app via: {0}" -f $chosenStarter) -ForegroundColor Cyan
+    Push-Location $chosenDir
+    try {
+        & $chosenStarter
+    } finally {
+        Pop-Location
+    }
 } else {
     Write-Host "Electron app not found. Starting Vite dev server instead..." -ForegroundColor Yellow
     Push-Location $reactDir

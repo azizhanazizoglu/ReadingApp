@@ -3,3 +3,5 @@ uvicorn[standard]==0.30.6
 pydantic==2.8.2
 python-dotenv>=1.0.1
 openai>=1.30.0
+python-multipart>=0.0.9
+beautifulsoup4>=4.12.0

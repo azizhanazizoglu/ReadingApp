@@ -4,10 +4,11 @@ import os
 from datetime import datetime
 from typing import Any, Dict, Optional, List
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pathlib import Path
+from dataclasses import asdict
 
 # Import capture helper (Components is a sibling folder of this file)
 from Components.getHtml import get_save_Html
@@ -22,6 +23,14 @@ from Features.goUserTaskPage import (
 )
 from logging_utils import log, get_log_records, clear_log_records
 from config import load_config, get_go_user_task_stateflow
+from Features.fillFormsUserTaskPage import (
+    plan_load_ruhsat_json,
+    plan_analyze_page,
+    plan_build_fill_plan,
+    plan_detect_final_page,
+    plan_check_page_changed as plan_check_page_changed_f3,
+)
+from Components.uploadToSystemData import stage_uploaded_file  # type: ignore
 
 
 class TsxRequest(BaseModel):
@@ -78,6 +87,9 @@ def get_config() -> Dict[str, Any]:
         },
         "findHomePage": {
             "letLLM": {"maxAttempts": cfg.get("findHomePage", {}).get("letLLMMap_findHomePage", {}).get("maxAttempts", 3)}
+        },
+        "goFillForms": {
+            "stateflow": cfg.get("goFillForms", {}).get("stateflow", {}),
         }
     }
 
@@ -133,6 +145,15 @@ class GoUserTaskRequest(BaseModel):
     llm_attempt_index: Optional[int] = None
     force_llm: Optional[bool] = None
     open_menu_first: Optional[bool] = None  # for fullFlow
+
+
+class F3Request(BaseModel):
+    # op: loadRuhsatFromTmp | analyzePage | buildFillPlan | detectFinalPage
+    op: Optional[str] = None
+    html: Optional[str] = None
+    ruhsat_json: Optional[Dict[str, Any]] = None
+    # For buildFillPlan
+    mapping: Optional[Dict[str, Any]] = None  # expects { field_mapping: {key->selector}, llm_actions?: [str] }
 
 
 @app.post("/api/f1")
@@ -240,8 +261,51 @@ def f2(req: GoUserTaskRequest) -> Dict[str, Any]:
 
 
 @app.post("/api/f3")
-def f3() -> Dict[str, Any]:
-    return {"ok": True, "feature": "F3", "message": "Not implemented"}
+def f3(req: F3Request) -> Dict[str, Any]:
+    """F3: fillFormsUserTaskPage feature entry.
+
+    Operations (req.op):
+      - loadRuhsatFromTmp: auto-ingest ruhsat JSON from tmp (or via Vision LLM)
+      - analyzePage: LLM-based page analysis to produce { page_kind, field_mapping, actions }
+      - buildFillPlan: turn field_mapping + ruhsat_json into FillPlan actions
+      - detectFinalPage: static final-page detection via CTA synonyms
+    """
+    op = (req.op or "").strip()
+    if not op:
+        raise HTTPException(status_code=422, detail="missing op")
+
+    if op == "loadRuhsatFromTmp":
+        return plan_load_ruhsat_json()
+
+    if op == "analyzePage":
+        if not req.html:
+            raise HTTPException(status_code=422, detail="missing html")
+        return plan_analyze_page(req.html, req.ruhsat_json or {})
+
+    if op == "buildFillPlan":
+        # Build plan of set_value/select_option actions from mapping + ruhsat_json
+        return plan_build_fill_plan(req.mapping or {}, req.ruhsat_json or {})
+
+    if op == "detectFinalPage":
+        if not req.html:
+            raise HTTPException(status_code=422, detail="missing html")
+        return plan_detect_final_page(req.html)
+
+    if op == "checkPageChanged":
+        return plan_check_page_changed_f3(req.current_html, req.prev_html)
+
+    if op == "detectFormsFilled":
+        # req.mapping may carry filler result { details: [...] }, or pass req.html for fallback
+        min_filled = 2
+        try:
+            if isinstance(req.mapping, dict) and isinstance(req.mapping.get('min_filled'), int):
+                min_filled = int(req.mapping.get('min_filled'))
+        except Exception:
+            pass
+        from Features.fillFormsUserTaskPage import plan_detect_forms_filled  # type: ignore
+        return plan_detect_forms_filled(details=req.mapping, html=req.html, min_filled=min_filled)
+
+    raise HTTPException(status_code=422, detail=f"invalid op: {op}")
 
 
 @app.post("/api/html/capture")
@@ -280,6 +344,25 @@ def clear_logs() -> Dict[str, Any]:
         return {"ok": True}
     except Exception:
         return {"ok": False}
+
+
+@app.post("/api/upload")
+async def upload(file: UploadFile = File(...)) -> Dict[str, Any]:
+    """Accept JPEG/PNG and stage into configured data dir (goFillForms.input.imageDir)."""
+    try:
+        orig_name = file.filename or "upload"
+        ext = (orig_name.split(".")[-1] or "").lower()
+        if ext not in {"jpg", "jpeg", "png"}:
+            raise HTTPException(status_code=415, detail=f"unsupported file type: .{ext}")
+        data = await file.read()
+        res = stage_uploaded_file(data, orig_name)
+        log("INFO", "UPLOAD", f"staged {res.get('path')}", component="F3", extra={"size": len(data), "orig": orig_name})
+        return {"ok": True, "result": "JPEG yüklendi ve kaydedildi.", "file_path": res.get("path")}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log("ERROR", "UPLOAD", f"upload failed: {e}", component="F3")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

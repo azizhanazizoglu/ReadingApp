@@ -7,21 +7,50 @@ export type FillOptions = {
   // Press Enter after filling inputs to commit values on masked/controlled fields.
   // Defaults to true if undefined.
   commitEnter?: boolean;
+  // After each field, click outside (document body) to force blur/change in some UIs
+  clickOutside?: boolean;
+  // Wait after each field to let the framework update DOM (ms)
+  waitAfterFillMs?: number;
 };
 
 export async function runInPageFill(fieldMapping: Record<string, string>, dataResolved: Record<string, any>, opts: FillOptions, devLog?: (c: string, m: string) => void) {
   const webview = getWebview();
   if (!webview) throw new Error('Webview bulunamadı.');
   const fillScript = `(() => {
+    'use strict';
     try {
+      const pickDoc = () => {
+        try {
+          const frames = Array.from(document.querySelectorAll('iframe'));
+          let bestDoc = null; let bestScore = -1;
+          for (const f of frames) {
+            try {
+              // remove TS casts: use plain contentDocument/contentWindow
+              const doc = (f && f.contentDocument) ? f.contentDocument : ((f && f.contentWindow && f.contentWindow.document) ? f.contentWindow.document : null);
+              if (!doc) continue;
+              const cnt = doc.querySelectorAll('input, textarea, select, [contenteditable="true"]').length;
+              if (cnt > bestScore) { bestScore = cnt; bestDoc = doc; }
+            } catch (e) {}
+          }
+          return bestDoc || document;
+        } catch (e) { return document; }
+      };
+  const DOC = pickDoc();
+  // remove TS casts for defaultView resolution
+  const WIN = (DOC && DOC.defaultView) ? DOC.defaultView : window;
+      const SRC = (DOC === document ? 'main' : 'iframe');
+      
       const mapping = ${JSON.stringify(fieldMapping)};
       const data = ${JSON.stringify(dataResolved)};
-      const logs = [];
+  const logs = [];
+      logs.push('doc-source ' + SRC);
       const highlight = ${JSON.stringify(opts.highlight)};
       const stepDelayMs = ${JSON.stringify(opts.stepDelayMs)};
       const simulateTyping = ${JSON.stringify(opts.simulateTyping)};
   const commitEnter = ${JSON.stringify((opts as any).commitEnter ?? true)};
-      const delay = (ms) => new Promise(r => setTimeout(r, ms));
+  const delay = (ms) => new Promise(r => setTimeout(r, ms));
+  const clickOutside = ${JSON.stringify((opts as any).clickOutside ?? true)};
+  const waitAfterFillMs = ${JSON.stringify((opts as any).waitAfterFillMs ?? 150)};
       const norm = (s) => {
         if (s == null) return '';
         const t = String(s).toLowerCase()
@@ -34,7 +63,7 @@ export async function runInPageFill(fieldMapping: Record<string, string>, dataRe
         if (!el) return '';
         const id = el.id || '';
         let lab = '';
-        try { const l = id ? document.querySelector('label[for="'+id+'"]') : null; lab = l ? (l.textContent||'') : ''; } catch {}
+  try { const l = id ? DOC.querySelector('label[for="'+id+'"]') : null; lab = l ? (l.textContent||'') : ''; } catch {}
         const ph = el.getAttribute && (el.getAttribute('placeholder')||'');
         const ar = el.getAttribute && (el.getAttribute('aria-label')||'');
         const nm = el.getAttribute && (el.getAttribute('name')||'');
@@ -51,7 +80,7 @@ export async function runInPageFill(fieldMapping: Record<string, string>, dataRe
       };
       const findByKey = (key) => {
         const syns = synonyms[key] || [key];
-        const targets = Array.from(document.querySelectorAll('input, textarea, select, [contenteditable="true"]'));
+  const targets = Array.from(DOC.querySelectorAll('input, textarea, select, [contenteditable="true"]'));
         const scored = targets.map(el => {
           const t = textForEl(el);
           const score = syns.reduce((acc, s) => acc + (t.includes(norm(s)) ? 1 : 0), 0) + (t.includes(norm(key)) ? 1 : 0);
@@ -70,7 +99,7 @@ export async function runInPageFill(fieldMapping: Record<string, string>, dataRe
       };
       const setNativeValue = (el, value) => {
         try {
-          const proto = el.tagName === 'INPUT' ? window.HTMLInputElement.prototype : (el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : null);
+          const proto = el.tagName === 'INPUT' ? WIN.HTMLInputElement.prototype : (el.tagName === 'TEXTAREA' ? WIN.HTMLTextAreaElement.prototype : null);
           if (proto) {
             const desc = Object.getOwnPropertyDescriptor(proto, 'value');
             if (desc && desc.set) { desc.set.call(el, value); return true; }
@@ -80,7 +109,7 @@ export async function runInPageFill(fieldMapping: Record<string, string>, dataRe
       };
       const setNativeChecked = (el, checked) => {
         try {
-          const proto = window.HTMLInputElement.prototype;
+          const proto = WIN.HTMLInputElement.prototype;
           const desc = Object.getOwnPropertyDescriptor(proto, 'checked');
           if (desc && desc.set) { desc.set.call(el, !!checked); return true; }
         } catch {}
@@ -133,18 +162,18 @@ export async function runInPageFill(fieldMapping: Record<string, string>, dataRe
         if (commitEnter) {
           try {
             logs.push('commit-enter typing');
-            el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-            el.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-            el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+            el.dispatchEvent(new WIN.KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+            el.dispatchEvent(new WIN.KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+            el.dispatchEvent(new WIN.KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
           } catch {}
         }
       };
       const pressEnter = (el) => {
         try {
           logs.push('commit-enter direct');
-          el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-          el.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-          el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+          el.dispatchEvent(new WIN.KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+          el.dispatchEvent(new WIN.KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+          el.dispatchEvent(new WIN.KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
         } catch {}
       };
       const setVal = (el, val) => {
@@ -163,7 +192,7 @@ export async function runInPageFill(fieldMapping: Record<string, string>, dataRe
             return true;
           }
           if (type === 'radio') {
-            const radios = document.querySelectorAll('input[type="radio"][name="' + el.name + '"]');
+            const radios = DOC.querySelectorAll('input[type="radio"][name="' + el.name + '"]');
             const desired = String(val == null ? '' : val).trim().toLowerCase();
             let done = false;
             radios.forEach(r => {
@@ -183,22 +212,24 @@ export async function runInPageFill(fieldMapping: Record<string, string>, dataRe
             el.blur();
             return true;
           }
-          if (simulateTyping) { return typeInto(el, val).then(() => { try { if (commitEnter) pressEnter(el); el.blur(); } catch {}; return true; }); }
+          if (simulateTyping) { return typeInto(el, val).then(() => { try { if (commitEnter) pressEnter(el); } catch {}; if (clickOutside) { try { (DOC.body||el).click(); el.dispatchEvent(new Event('change', { bubbles: true })); } catch {} } try { el.blur(); el.dispatchEvent(new Event('focusout', { bubbles: true })); } catch {}; return true; }); }
           setNativeValue(el, String(val == null ? '' : val));
           el.dispatchEvent(new Event('input', { bubbles: true }));
           el.dispatchEvent(new Event('change', { bubbles: true }));
           if (commitEnter) { pressEnter(el); }
-          el.blur();
+          if (clickOutside) { try { (DOC.body||el).click(); el.dispatchEvent(new Event('change', { bubbles: true })); } catch {} }
+          try { el.blur(); el.dispatchEvent(new Event('focusout', { bubbles: true })); } catch {}
           return true;
         }
         if (tag === 'textarea') {
           el.focus();
-          if (simulateTyping) { return typeInto(el, val).then(() => { try { if (commitEnter) pressEnter(el); el.blur(); } catch {}; return true; }); }
+          if (simulateTyping) { return typeInto(el, val).then(() => { try { if (commitEnter) pressEnter(el); } catch {}; if (clickOutside) { try { (DOC.body||el).click(); el.dispatchEvent(new Event('change', { bubbles: true })); } catch {} } try { el.blur(); el.dispatchEvent(new Event('focusout', { bubbles: true })); } catch {}; return true; }); }
           setNativeValue(el, String(val == null ? '' : val));
           el.dispatchEvent(new Event('input', { bubbles: true }));
           el.dispatchEvent(new Event('change', { bubbles: true }));
           if (commitEnter) { pressEnter(el); }
-          el.blur();
+          if (clickOutside) { try { (DOC.body||el).click(); el.dispatchEvent(new Event('change', { bubbles: true })); } catch {} }
+          try { el.blur(); el.dispatchEvent(new Event('focusout', { bubbles: true })); } catch {}
           return true;
         }
         if (tag === 'select') {
@@ -219,10 +250,16 @@ export async function runInPageFill(fieldMapping: Record<string, string>, dataRe
       let filled = 0;
       const entries = Object.entries(mapping);
       const details = [];
-      try { logs.push('page-info url=' + (location && location.href ? location.href : '') + ' ready=' + (document && document.readyState ? document.readyState : '')); } catch {}
-      try { const cnt = document.querySelectorAll('input, textarea, select, [contenteditable="true"]').length; logs.push('targets-count ' + cnt); } catch {}
+      try {
+        let u = '';
+        try { u = (DOC && (DOC.URL !== undefined) ? DOC.URL : (location && location.href ? location.href : '')); } catch(e) {}
+        let rs = '';
+        try { rs = (DOC && (DOC.readyState !== undefined) ? DOC.readyState : ''); } catch(e) {}
+        logs.push('page-info url=' + u + ' ready=' + rs);
+      } catch {}
+  try { const cnt = DOC.querySelectorAll('input, textarea, select, [contenteditable="true"]').length; logs.push('targets-count ' + cnt); } catch {}
       const run = async () => {
-        for (const [k, selector] of entries) {
+  for (const [k, selector] of entries) {
           try {
             const has = data && Object.prototype.hasOwnProperty.call(data, k);
             const val = has ? data[k] : '';
@@ -230,9 +267,25 @@ export async function runInPageFill(fieldMapping: Record<string, string>, dataRe
             let el = null;
             try {
               const sel = String(selector);
-              const els = document.querySelectorAll(sel);
+      const els = Array.from(DOC.querySelectorAll(sel));
               logs.push('selector-check '+k+' -> '+sel+' (count='+els.length+')');
-              if (els && els.length > 0) { el = els[0]; }
+              if (els && els.length > 0) {
+                if (els.length === 1) {
+                  el = els[0];
+                } else {
+                  // choose best by scoring label/placeholder/name/title text against key synonyms
+                  const syns = (synonyms[k] || [k]).map(norm);
+                  let best = null;
+                  let bestScore = -1;
+                  for (const cand of els) {
+                    const t = textForEl(cand);
+                    const score = syns.reduce((acc, s) => acc + (t.includes(s) ? 1 : 0), 0);
+                    if (score > bestScore) { bestScore = score; best = cand; }
+                  }
+                  el = best || els[0];
+                  logs.push('multi-match choose '+k+' score='+bestScore);
+                }
+              }
             } catch (e) { logs.push('selector-error '+k+' -> '+String(e)); }
             if (!el) { el = findByKey(k); if (el) logs.push('fallback-selector '+k+' -> '+(el.id?('#'+el.id): (el.name?('name='+el.name): el.tagName))); }
             if (!el) { logs.push('not-found ' + k + ' -> ' + selector); continue; }
@@ -241,6 +294,7 @@ export async function runInPageFill(fieldMapping: Record<string, string>, dataRe
             }
             const before = getInfo(el);
             const result = await setVal(el, val);
+            if (waitAfterFillMs && waitAfterFillMs > 0) { await delay(waitAfterFillMs); }
             const after = getInfo(el);
             if (result) {
               filled++;
@@ -265,11 +319,28 @@ export async function runInPageFill(fieldMapping: Record<string, string>, dataRe
           } catch (e) { logs.push('err '+String(e)); }
         }
       };
-      return run().then(() => ({ ok: true, filled, logs, details }));
-    } catch (e) { return { ok: false, error: String(e) }; }
+      return run().then(() => ({ ok: true, filled, logs, details })).catch(err => ({ ok:false, error: String(err), stack: (err && err.stack) ? String(err.stack) : undefined, logs }));
+  } catch (e) { return { ok: false, error: String(e), stack: (e && e.stack) ? String(e.stack) : undefined }; }
   })();`;
 
-  const res = await webview.executeJavaScript(fillScript, true);
+  let res: any;
+  try {
+    res = await webview.executeJavaScript(fillScript, true);
+  } catch (e: any) {
+    const msg = String(e?.message || e || '');
+    devLog?.('IDX-TS3-FILL-ERR', msg);
+    if (/GUEST_VIEW_MANAGER_CALL|Script failed to execute/i.test(msg)) {
+      await new Promise(r => setTimeout(r, 700));
+      try {
+        res = await webview.executeJavaScript(fillScript, true);
+      } catch (e2: any) {
+        devLog?.('IDX-TS3-FILL-ERR2', String(e2?.message || e2 || ''));
+        throw e2;
+      }
+    } else {
+      throw e;
+    }
+  }
   devLog?.('IDX-TS3-FILL', JSON.stringify({ ok: res?.ok, filled: res?.filled }));
   if (Array.isArray(res?.logs)) {
     (res.logs as string[]).forEach((ln: string, i: number) => devLog?.('IDX-TS3-TRACE', `${i.toString().padStart(3,'0')} ${ln}`));
