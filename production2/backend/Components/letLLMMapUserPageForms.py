@@ -56,6 +56,16 @@ def _extract_labels_and_text(html: str) -> List[str]:
 						texts.append(t.strip())
 				except Exception:
 					pass
+		# NEW: include input placeholders / aria-labels / names as label-like hints
+		for el in soup.select('input, select, textarea'):
+			try:
+				attrs = getattr(el, 'attrs', {}) or {}
+				for a in ('placeholder', 'aria-label', 'name', 'title'):
+					v = attrs.get(a)
+					if v and str(v).strip():
+						texts.append(str(v).strip())
+			except Exception:
+				pass
 	except Exception:
 		pass
 	return texts
@@ -80,9 +90,9 @@ def _infer_keys_from_labels(labels: List[str]) -> List[str]:
 		cand.append('marka')
 	if has_any(['model yılı', 'model yili', 'model']):
 		cand.append('model_yili')
-	if has_any(['şasi', 'sasi']):
+	if has_any(['şasi', 'sasi', 'şase', 'sase', 'chassis', 'vin']):
 		cand.append('sasi_no')
-	if has_any(['motor no']):
+	if has_any(['motor no', 'motor', 'engine', 'engine no', 'engine number', 'motor numarası', 'motor numarasi']):
 		cand.append('motor_no')
 	if has_any(['yakıt', 'yakit', 'fuel']):
 		cand.append('yakit')
@@ -97,17 +107,21 @@ def _infer_keys_from_labels(labels: List[str]) -> List[str]:
 
 
 def _build_prompt(html: str, ruhsat_json: Optional[Dict[str, Any]]) -> str:
+	# Strengthened default prompt: explicit schema, strict-output rules, selector constraints, and omission when unsure.
 	default = (
-		"You are an expert web UI analyzer. Task: Given filtered HTML of an insurance form page "
-		"and extracted ruhsat JSON (vehicle registration), decide if this is a fillable form page or the final activation page.\n\n"
-		"If fillable, return a JSON with keys: page_kind='fill_form', field_mapping (map logical keys to selectors), and optional actions (button texts like 'Devam', 'İleri').\n"
-		"If final activation page, return page_kind='final_activation' and actions containing visible final CTA texts, e.g., 'Poliçeyi Aktifleştir'.\n\n"
-		"VERY IMPORTANT mapping rules:\n"
-		"- Only include fields that are PRESENT on THIS page. Do NOT include fields from other steps/pages.\n"
-		"- Each field_mapping selector MUST point to exactly one input/select/textarea element (unique). Avoid container/form selectors.\n"
-	"- Prefer stable CSS like #id, input[name=...], select[name=...], textarea[name=...]. If id/name are missing but the element has a unique data-lov-id attribute, use [data-lov-id='...']. Use XPath only when CSS is not possible.\n"
-		"- For clicks in actions, you may return visible texts (e.g., 'Devam'), but DO NOT put text:... into field_mapping.\n"
-		"Output STRICT JSON only with keys: {page_kind, field_mapping?, actions?, evidence?}.\n"
+		"You are an expert web UI analyzer.\n"
+		"Given: (1) filtered HTML of an insurance form step, (2) extracted ruhsat JSON (vehicle registration).\n"
+		"Goal: Decide page_kind and, when it's a fillable form, map logical ruhsat keys to UNIQUE, existing form control selectors on THIS page.\n\n"
+		"Output: STRICT JSON ONLY, matching this schema exactly (no extra keys, no prose):\n"
+		"{\n  \"page_kind\": \"fill_form\" | \"final_activation\",\n  \"field_mapping\"?: { [logical_key: string]: string /* CSS or XPath */ },\n  \"actions\"?: string[],\n  \"evidence\"?: string\n}\n\n"
+		"Rules for mapping when page_kind='fill_form':\n"
+		"- Include ONLY fields that are present on THIS page and visibly correspond to the ruhsat info.\n"
+		"- Each selector MUST resolve to exactly one input/select/textarea (or contenteditable) element in the provided HTML.\n"
+		"- Prefer stable CSS selectors in this order: #id, tag[name=...], unique data-* (e.g., [data-testid=...], [data-qa=...]), [aria-label=...], placeholder/title if UNIQUE. Use XPath only if no unique CSS is possible.\n"
+		"- Do NOT fabricate selectors. If a reliable unique selector cannot be formed, OMIT that key.\n"
+		"- Do NOT return labels/headings or button texts as field_mapping values.\n"
+		"- If a logical field is not present on this step, simply omit it from field_mapping.\n\n"
+		"If this is the final activation/confirmation page (no editable fields), return page_kind='final_activation' and provide actions as the visible CTA texts (e.g., 'Poliçeyi Aktifleştir', 'Devam').\n"
 	)
 	# Allow override via config.json
 	try:
@@ -118,16 +132,94 @@ def _build_prompt(html: str, ruhsat_json: Optional[Dict[str, Any]]) -> str:
 		pass
 	labels = _extract_labels_and_text(html)
 	cand_keys = _infer_keys_from_labels(labels)
+
+	# Summarize available controls to help the LLM pick real selectors
+	controls_summary: List[str] = []
+	ids_present: List[str] = []
+	names_present: List[str] = []
+	data_attr_names_present: List[str] = []
+	data_attr_examples: List[str] = []
+	try:
+		from bs4 import BeautifulSoup  # type: ignore
+		soup = BeautifulSoup(html or '', 'html.parser')
+		for el in soup.select('input, select, textarea')[:120]:
+			try:
+				attrs = getattr(el, 'attrs', {}) or {}
+				tag = (getattr(el, 'name', '') or '').lower()
+				idv = attrs.get('id') or ''
+				namev = attrs.get('name') or ''
+				ph = attrs.get('placeholder') or ''
+				al = attrs.get('aria-label') or ''
+				title = attrs.get('title') or ''
+				bits = [tag]
+				if idv:
+					bits.append(f"#{idv}")
+					ids_present.append(str(idv))
+				if namev:
+					bits.append(f"name={namev}")
+					names_present.append(str(namev))
+				if ph:
+					bits.append(f"ph={ph}")
+				if al:
+					bits.append(f"aria={al}")
+				if title:
+					bits.append(f"title={title}")
+				# include up to two data-* attributes to help LLM pick stable selectors
+				data_bits = []
+				for k, v in list(attrs.items()):
+					try:
+						if not isinstance(k, str) or not k.startswith('data-'):
+							continue
+						vs = v if isinstance(v, str) else None
+						if not vs or len(vs) > 160:
+							continue
+						data_bits.append(f"{k}={vs}")
+						if k not in data_attr_names_present:
+							data_attr_names_present.append(k)
+						if len(data_attr_examples) < 60:
+							data_attr_examples.append(f"[{k}='{vs}']")
+					except Exception:
+						pass
+				for db in data_bits[:2]:
+					bits.append(db)
+				controls_summary.append(" ".join(bits)[:200])
+			except Exception:
+				pass
+	except Exception:
+		pass
 	parts = [default]
+	# Always append strict selector rules and examples to reduce hallucinations
+	parts.append(
+		"\nStrict selector rules (MANDATORY):\n"
+		"- Return ONLY selectors that exist in the provided HTML.\n"
+		"- Each selector must match exactly one input/select/textarea (or contenteditable).\n"
+		"- Prefer in this order: #id (if present), then tag[name=...], then unique data-* (e.g., [data-testid=...], [data-qa=...]), then [aria-label=...] or placeholder/title.\n"
+		"- If an element has an id, DO NOT return input[name=...] for it; use #id.\n"
+		"- If you are not sure a unique selector exists, omit that logical key. Do not guess.\n"
+		"Examples: If the plate field is <input id=\"plateNo\" name=\"plateNo\">, return \"#plateNo\". If chassis is <input name=\"chassis\"> and unique, return \"input[name='chassis']\".\n"
+	)
 	if ruhsat_json:
 		try:
 			js = json.dumps(ruhsat_json, ensure_ascii=False)
-			parts.append("Ruhsat JSON:\n" + js)
+			parts.append("Ruhsat JSON (authoritative values to use when fields exist on this page):\n" + js)
 		except Exception:
 			pass
 	if cand_keys:
-		parts.append("On this page, these field keys are likely present; ONLY include these in field_mapping: " + ", ".join(cand_keys))
-	parts.append("Detected labels (truncated): \n" + "; ".join(labels[:30]))
+		parts.append(
+			"Likely present logical keys on this step (restrict mapping ONLY to these if you map anything): "
+			+ ", ".join(cand_keys)
+		)
+	if ids_present:
+		parts.append("IDs present on this page (prefer these first):\n- #" + "\n- #".join(list(dict.fromkeys(ids_present))[:60]))
+	if names_present:
+		parts.append("Names present (use only if no id; ensure unique):\n- " + "\n- ".join(list(dict.fromkeys(names_present))[:60]))
+	if data_attr_names_present:
+		parts.append("data-* attributes seen on this page (unique attributes are valid stable selectors when id/name are missing):\n- " + "\n- ".join(list(dict.fromkeys(data_attr_names_present))[:40]))
+	if data_attr_examples:
+		parts.append("Examples of data-* selectors present (first 40):\n- " + "\n- ".join(list(dict.fromkeys(data_attr_examples))[:40]))
+	if controls_summary:
+		parts.append("Available controls (first 60; showing tag, id/name, data-*, aria/placeholder):\n- " + "\n- ".join(controls_summary[:60]))
+	parts.append("Detected labels/placeholders (truncated):\n" + "; ".join(labels[:30]))
 	parts.append("Filtered HTML (truncated if long):\n" + (html[:16000] if isinstance(html, str) else ""))
 	return "\n\n".join(parts)
 
@@ -162,12 +254,13 @@ def _parse_llm_json(raw: str) -> Dict[str, Any]:
 
 
 _DEFAULT_SYNONYMS: Dict[str, List[str]] = {
-	'plaka_no': ['plaka', 'plaka no', 'plate', 'vehicle plate', 'plaka numarası', 'plaka numarasi'],
+	'plaka_no': ['plaka', 'plaka no', 'plate', 'vehicle plate', 'plaka numarası', 'plaka numarasi', 'license plate', 'plate number'],
 	'ad_soyad': ['ad soyad', 'ad/soyad', 'isim', 'name', 'full name', 'ad soyadı', 'ad soyadi'],
 	'tckimlik': ['tc', 'tc kimlik', 'kimlik', 'kimlik no', 'identity', 'national id', 'tckn', 't.c. kimlik'],
 	'dogum_tarihi': ['doğum tarihi', 'dogum tarihi', 'birth date', 'birthdate', 'dob'],
 	'model_yili': ['model yılı', 'model yili', 'model year', 'yil', 'yılı', 'yili'],
-	'sasi_no': ['şasi', 'sasi', 'şasi no', 'sasi no', 'şasi numarası', 'sasi numarasi', 'şasi num', 'sasi num'],
+	'sasi_no': ['şasi', 'sasi', 'şasi no', 'sasi no', 'şasi numarası', 'sasi numarasi', 'şasi num', 'sasi num', 'şase', 'sase', 'chassis', 'vin'],
+	'motor_no': ['motor', 'motor no', 'motor no.', 'motor numarası', 'motor numarasi', 'engine', 'engine no', 'engine number'],
 }
 
 
@@ -423,31 +516,31 @@ def map_json_to_html_fields(html: str, ruhsat_json: Optional[Dict[str, Any]] = N
 	Returns a dict: { ok, page_kind, field_mapping?, actions?, evidence?, raw? }
 	"""
 	key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
-	model = get("goFillForms.llm.model", os.getenv("LLM_MODEL", "gpt-4o"))
+	# Prefer mappingModel; fallback to generic model or env
+	model = get("goFillForms.llm.mappingModel", get("goFillForms.llm.model", os.getenv("LLM_MODEL", "gpt-4o")))
 	temp = float(get("goFillForms.llm.temperature", 0.0) or 0.0)
 
 	prompt = _build_prompt(html, ruhsat_json)
+	try:
+		# Log a short snippet of the prompt for diagnostics
+		_log("INFO", "F3-PROMPT", (prompt or "")[:1500], component="F3")
+		# Also log provided ruhsat JSON (truncated) to prove dynamic input
+		try:
+			_ru = json.dumps(ruhsat_json or {}, ensure_ascii=False)
+			_log("INFO", "F3-PROMPT-RUHSAT", (_ru or "")[:1500], component="F3")
+		except Exception:
+			pass
+	except Exception:
+		pass
 	raw: str = ""
 	_log("INFO", "F3-ANALYZE", f"key_present={bool(key)} model={model} temp={temp}", component="F3")
 	if key:
 		try:
 			from openai import OpenAI  # type: ignore
 			client = OpenAI(api_key=key)
-			resp = client.chat.completions.create(
-				model=model,
-				messages=[
-					{"role": "system", "content": "Return ONLY strict JSON."},
-					{"role": "user", "content": prompt},
-				],
-				temperature=temp,
-				max_tokens=400,
-			)
-			raw = (resp.choices[0].message.content or "").strip()
-		except Exception:
+			# First attempt with max_tokens (legacy param)
 			try:
-				import openai  # type: ignore
-				openai.api_key = key
-				raw = openai.chat.completions.create(  # type: ignore[attr-defined]
+				resp = client.chat.completions.create(
 					model=model,
 					messages=[
 						{"role": "system", "content": "Return ONLY strict JSON."},
@@ -455,7 +548,62 @@ def map_json_to_html_fields(html: str, ruhsat_json: Optional[Dict[str, Any]] = N
 					],
 					temperature=temp,
 					max_tokens=400,
-				).choices[0].message.content.strip()
+				)
+				raw = (resp.choices[0].message.content or "").strip()
+			except Exception as e1:
+				# Retry using max_completion_tokens when model rejects max_tokens
+				msg = str(e1)
+				if ("max_tokens" in msg and "max_completion_tokens" in msg) or ("unsupported_parameter" in msg and "max_tokens" in msg):
+					try:
+						_log("WARN", "F3-LLM-RETRY", "retrying with max_completion_tokens=400", component="F3")
+						resp = client.chat.completions.create(
+							model=model,
+							messages=[
+								{"role": "system", "content": "Return ONLY strict JSON."},
+								{"role": "user", "content": prompt},
+							],
+							temperature=temp,
+							max_completion_tokens=400,  # type: ignore[arg-type]
+						)
+						raw = (resp.choices[0].message.content or "").strip()
+					except Exception:
+						raw = ""
+				else:
+					# Different error
+					raw = ""
+		except Exception:
+			try:
+				import openai  # type: ignore
+				openai.api_key = key
+				# First attempt with max_tokens
+				try:
+					raw = openai.chat.completions.create(  # type: ignore[attr-defined]
+						model=model,
+						messages=[
+							{"role": "system", "content": "Return ONLY strict JSON."},
+							{"role": "user", "content": prompt},
+						],
+						temperature=temp,
+						max_tokens=400,
+					).choices[0].message.content.strip()
+				except Exception as e2:
+					msg2 = str(e2)
+					if ("max_tokens" in msg2 and "max_completion_tokens" in msg2) or ("unsupported_parameter" in msg2 and "max_tokens" in msg2):
+						try:
+							_log("WARN", "F3-LLM-RETRY", "retrying (legacy) with max_completion_tokens=400", component="F3")
+							raw = openai.chat.completions.create(  # type: ignore[attr-defined]
+								model=model,
+								messages=[
+									{"role": "system", "content": "Return ONLY strict JSON."},
+									{"role": "user", "content": prompt},
+								],
+								temperature=temp,
+								max_completion_tokens=400,  # type: ignore[arg-type]
+							).choices[0].message.content.strip()
+						except Exception:
+							raw = ""
+					else:
+						raw = ""
 			except Exception:
 				raw = ""
 	# If no key or failure, return empty mapping (caller can fallback)
@@ -469,21 +617,34 @@ def map_json_to_html_fields(html: str, ruhsat_json: Optional[Dict[str, Any]] = N
 	page_kind = (data.get("page_kind") or "fill_form").strip().lower()
 	original_mapping = data.get("field_mapping") or {}
 	validated = _validate_and_clean_mapping(html, original_mapping) if page_kind == 'fill_form' else {"cleaned": {}, "dropped": {}, "stats": {}}
-	# Heuristic salvage: if some keys dropped, try to map dropped ones by label/attributes and merge
+	# Keep a copy of the original LLM validation before any heuristics, so we can assess LLM quality.
+	llm_validation_snapshot = dict(validated) if isinstance(validated, dict) else {"cleaned": {}, "dropped": {}, "stats": {}}
+
+	# Config flag to control heuristic salvage behavior (default True to preserve current behavior)
+	try:
+		heuristics_enabled = bool(get("goFillForms.llm.useHeuristics", True))
+	except Exception:
+		heuristics_enabled = True
+
+	# Heuristic salvage: if enabled and some keys dropped, try to map by label/attributes and merge
 	mapping_source: Dict[str, str] = {}
-	if page_kind == 'fill_form' and isinstance(validated, dict):
+	heuristics_used = False
+	heuristics_added_keys: List[str] = []
+	if heuristics_enabled and page_kind == 'fill_form' and isinstance(validated, dict):
 		cleaned_now = dict(validated.get('cleaned') or {})
 		dropped_now = dict(validated.get('dropped') or {})
 		# If nothing kept, try broader fallback on common keys or original keys
 		if len(cleaned_now) == 0:
 			keys = list(original_mapping.keys()) if isinstance(original_mapping, dict) and original_mapping else []
 			if not keys:
-				keys = ['plaka_no', 'tckimlik', 'dogum_tarihi', 'ad_soyad', 'model_yili', 'sasi_no']
+				keys = ['plaka_no', 'tckimlik', 'dogum_tarihi', 'ad_soyad', 'model_yili', 'sasi_no', 'motor_no']
 			auto_map = _heuristic_map_fields(html, keys)
 			if auto_map:
 				auto_valid = _validate_and_clean_mapping(html, auto_map)
 				if len(auto_valid.get('cleaned') or {}) > 0:
 					validated = auto_valid
+					heuristics_used = True
+					heuristics_added_keys = list((auto_valid.get('cleaned') or {}).keys())
 					mapping_source.update({k: 'auto' for k in (auto_valid.get('cleaned') or {}).keys()})
 		else:
 			# Some keys were dropped: try to salvage only those
@@ -506,14 +667,34 @@ def map_json_to_html_fields(html: str, ruhsat_json: Optional[Dict[str, Any]] = N
 							"contexts": merged_contexts,
 							"stats": {"kept": len(merged_cleaned), "dropped": len(merged_dropped)}
 						}
+						heuristics_used = True
+						heuristics_added_keys = list(c2.keys())
 						mapping_source.update({k: 'auto' for k in c2.keys()})
+	# Debug helpers about prompt usage
+	try:
+		_cfg_prompt = get("goFillForms.llm.mappingPrompt")
+		_prompt_source = "config" if (isinstance(_cfg_prompt, str) and _cfg_prompt.strip()) else "builtin"
+	except Exception:
+		_prompt_source = "builtin"
+	_ru_keys = list((ruhsat_json or {}).keys())
+
 	out: Dict[str, Any] = {
 		"ok": True,
 		"page_kind": page_kind,
-		"field_mapping": validated.get("cleaned") if page_kind == 'fill_form' else {},
+	"field_mapping": validated.get("cleaned") if page_kind == 'fill_form' else {},
 		"actions": data.get("actions") or [],
 		"evidence": data.get("evidence") or None,
 		"raw": raw,
+		# Diagnostics (safe to ignore by UI)
+		"prompt_source": _prompt_source,
+		"prompt_snippet": (prompt or "")[:1500],
+		"ruhsat_keys": _ru_keys,
+	# New diagnostics to assess LLM mapping quality vs heuristics
+	"llm_field_mapping": original_mapping if isinstance(original_mapping, dict) else {},
+	"llm_validation": llm_validation_snapshot,
+	"heuristics_enabled": heuristics_enabled,
+	"heuristics_used": heuristics_used,
+	"heuristics_added_keys": heuristics_added_keys,
 	}
 	if page_kind == 'fill_form':
 		out["validation"] = validated

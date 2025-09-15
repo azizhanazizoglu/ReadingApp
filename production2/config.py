@@ -153,20 +153,26 @@ DEFAULT_CONFIG.setdefault("goFillForms", {
     "sourceDir": ""              # optional: auto-copy latest from this dir into imageDir on F3
     },
     "llm": {
-        "model": "gpt-4o",           # model for both vision and mapping
+    "model": "gpt-4o",           # fallback model (used if specific model not set)
+    "mappingModel": "gpt-4o",    # model for HTML→selector mapping (F3 analyzePage)
+    "visionModel": "gpt-4o-mini",# model for Vision JPEG→JSON extract (F3 ingest)
         "temperature": 0.0,
+        "useHeuristics": False,         # allow heuristic salvage when LLM mapping is incomplete
         # Centralized prompt for F3 mapping (can be overridden in config.json)
         "mappingPrompt": (
-            "You are an expert web UI analyzer. Task: Given filtered HTML of an insurance form page "
-            "and extracted ruhsat JSON (vehicle registration), decide if this is a fillable form page or the final activation page.\n\n"
-            "If fillable, return a JSON with keys: page_kind='fill_form', field_mapping (map logical keys to selectors), and optional actions (button texts like 'Devam', 'İleri').\n"
-            "If final activation page, return page_kind='final_activation' and actions containing visible final CTA texts, e.g., 'Poliçeyi Aktifleştir'.\n\n"
-            "VERY IMPORTANT mapping rules:\n"
-            "- Only include fields that are PRESENT on THIS page. Do NOT include fields from other steps/pages.\n"
-            "- Each field_mapping selector MUST point to exactly one input/select/textarea element (unique). Avoid container/form selectors.\n"
-			"- Prefer stable CSS like #id, input[name=...], select[name=...], textarea[name=...]. If id/name are missing but the element has a unique data-lov-id attribute, use [data-lov-id='...']. Use XPath only when CSS is not possible.\n"
-            "- For clicks in actions, you may return visible texts (e.g., 'Devam'), but DO NOT put text:... into field_mapping.\n"
-            "Output STRICT JSON only with keys: {page_kind, field_mapping?, actions?, evidence?}.\n"
+            "You are an expert web UI analyzer.\n"
+            "Given: (1) filtered HTML of an insurance form step, (2) extracted ruhsat JSON (vehicle registration).\n"
+            "Goal: Decide page_kind and, when it's a fillable form, map logical ruhsat keys to UNIQUE, existing form control selectors on THIS page.\n\n"
+            "Output: STRICT JSON ONLY, matching this schema exactly (no extra keys, no prose):\n"
+            "{\n  \"page_kind\": \"fill_form\" | \"final_activation\",\n  \"field_mapping\"?: { [logical_key: string]: string /* CSS or XPath */ },\n  \"actions\"?: string[],\n  \"evidence\"?: string\n}\n\n"
+            "Rules for mapping when page_kind='fill_form':\n"
+            "- Include ONLY fields that are present on THIS page and visibly correspond to the ruhsat info.\n"
+            "- Each selector MUST resolve to exactly one input/select/textarea (or contenteditable) element in the provided HTML.\n"
+            "- Prefer stable CSS selectors in this order: #id, tag[name=...], [data-lov-id=...], [aria-label=...], placeholder/title if UNIQUE. Use XPath only if no unique CSS is possible.\n"
+            "- Do NOT fabricate selectors. If a reliable unique selector cannot be formed, OMIT that key.\n"
+            "- Do NOT return labels/headings or button texts as field_mapping values.\n"
+            "- If a logical field is not present on this step, simply omit it from field_mapping.\n\n"
+            "If this is the final activation/confirmation page (no editable fields), return page_kind='final_activation' and provide actions as the visible CTA texts (e.g., 'Poliçeyi Aktifleştir', 'Devam').\n"
         )
     },
     "persist": {

@@ -90,6 +90,12 @@ def get_config() -> Dict[str, Any]:
         },
         "goFillForms": {
             "stateflow": cfg.get("goFillForms", {}).get("stateflow", {}),
+            "llm": {
+                "mappingPrompt": cfg.get("goFillForms", {}).get("llm", {}).get("mappingPrompt", ""),
+                "useHeuristics": cfg.get("goFillForms", {}).get("llm", {}).get("useHeuristics", True),
+                "mappingModel": cfg.get("goFillForms", {}).get("llm", {}).get("mappingModel", cfg.get("goFillForms", {}).get("llm", {}).get("model", "")),
+                "visionModel": cfg.get("goFillForms", {}).get("llm", {}).get("visionModel", cfg.get("goFillForms", {}).get("llm", {}).get("model", ""))
+            }
         }
     }
 

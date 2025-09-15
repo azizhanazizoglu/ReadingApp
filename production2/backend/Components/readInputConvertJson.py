@@ -228,7 +228,8 @@ def read_input_and_convert_to_json() -> Dict[str, Any]:
 	"""
 	json_path = _get_cfg("goFillForms.input.jsonPath")
 	image_dir = _get_cfg("goFillForms.input.imageDir", str(_ROOT / "tmp/data"))
-	model = _get_cfg("goFillForms.llm.model", os.getenv("LLM_MODEL", "gpt-4o-mini"))
+	# Prefer visionModel; fallback to llm.model, then env
+	model = _get_cfg("goFillForms.llm.visionModel", _get_cfg("goFillForms.llm.model", os.getenv("LLM_MODEL", "gpt-4o-mini")))
 	temperature = float(_get_cfg("goFillForms.llm.temperature", 0.0) or 0.0)
 	persist_dir = _get_cfg("goFillForms.persist.dir")
 

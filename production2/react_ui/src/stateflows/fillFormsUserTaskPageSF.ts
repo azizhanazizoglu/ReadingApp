@@ -46,6 +46,10 @@ export async function runFillFormsUserTaskPageSF(opts?: F3Options) {
   const commitEnterCfg = (f3cfg.commitEnter !== undefined) ? !!f3cfg.commitEnter : true;
   const clickOutsideCfg = (f3cfg.clickOutside !== undefined) ? !!f3cfg.clickOutside : true;
 
+  // Log the prompt used for LLM mapping (from config)
+  const llmPrompt = cfg?.goFillForms?.llm?.mappingPrompt;
+  log(`[PROMPT] LLM mappingPrompt: ${llmPrompt ? llmPrompt.substring(0, 300) : '[none found]'}`);
+
   // Step 0: get ruhsat json from backend component
   const input = await postF3('loadRuhsatFromTmp', {}, log);
   if (!input?.ok) {
@@ -87,6 +91,14 @@ export async function runFillFormsUserTaskPageSF(opts?: F3Options) {
       ana = await postF3('analyzePage', { html: prevHtml, ruhsat_json: ruhsat }, log);
       lastAnaHtml = prevHtml;
       lastAna = ana;
+      // Log prompt diagnostics if backend provided
+      try {
+        if (ana && typeof ana === 'object') {
+          if (ana.prompt_source) log(`SF-F3 prompt: source=${ana.prompt_source}`);
+          if (Array.isArray(ana.ruhsat_keys)) log(`SF-F3 prompt: ruhsat_keys=${ana.ruhsat_keys.join(',')}`);
+          if (typeof ana.prompt_snippet === 'string') log(`[PROMPT] snippet: ${ana.prompt_snippet.slice(0, 300)}`);
+        }
+      } catch {}
     }
     if (!ana?.ok) return { ok:false, step:'analyze', error: ana?.error || 'llm-failed' };
     if (ana.page_kind === 'final_activation') {
