@@ -168,7 +168,7 @@ DEFAULT_CONFIG.setdefault("goFillForms", {
             "Rules for mapping when page_kind='fill_form':\n"
             "- Include ONLY fields that are present on THIS page and visibly correspond to the ruhsat info.\n"
             "- Each selector MUST resolve to exactly one input/select/textarea (or contenteditable) element in the provided HTML.\n"
-            "- Prefer stable CSS selectors in this order: #id, tag[name=...], [data-lov-id=...], [aria-label=...], placeholder/title if UNIQUE. Use XPath only if no unique CSS is possible.\n"
+            "- Prefer stable CSS selectors in this order: #id, tag[name=...], unique data-* (e.g., [data-testid=...], [data-qa=...]), [aria-label=...], placeholder/title if UNIQUE. Use XPath only if no unique CSS is possible.\n"
             "- Do NOT fabricate selectors. If a reliable unique selector cannot be formed, OMIT that key.\n"
             "- Do NOT return labels/headings or button texts as field_mapping values.\n"
             "- If a logical field is not present on this step, simply omit it from field_mapping.\n\n"

@@ -142,6 +142,7 @@ def _build_prompt(html: str, ruhsat_json: Optional[Dict[str, Any]]) -> str:
 	try:
 		from bs4 import BeautifulSoup  # type: ignore
 		soup = BeautifulSoup(html or '', 'html.parser')
+		attr_name_counts: Dict[str, int] = {}
 		for el in soup.select('input, select, textarea')[:120]:
 			try:
 				attrs = getattr(el, 'attrs', {}) or {}
@@ -150,6 +151,8 @@ def _build_prompt(html: str, ruhsat_json: Optional[Dict[str, Any]]) -> str:
 				namev = attrs.get('name') or ''
 				ph = attrs.get('placeholder') or ''
 				al = attrs.get('aria-label') or ''
+				aria_lb = attrs.get('aria-labelledby') or ''
+				aria_db = attrs.get('aria-describedby') or ''
 				title = attrs.get('title') or ''
 				bits = [tag]
 				if idv:
@@ -162,8 +165,33 @@ def _build_prompt(html: str, ruhsat_json: Optional[Dict[str, Any]]) -> str:
 					bits.append(f"ph={ph}")
 				if al:
 					bits.append(f"aria={al}")
+				if aria_lb:
+					bits.append(f"aria-labelledby={aria_lb}")
+				if aria_db:
+					bits.append(f"aria-describedby={aria_db}")
 				if title:
 					bits.append(f"title={title}")
+				# linked label text
+				try:
+					if idv:
+						lab_el = soup.find('label', {'for': idv})
+						if lab_el and hasattr(lab_el, 'get_text'):
+							bits.append("label=" + lab_el.get_text(" ").strip())
+					parent_label = el.find_parent('label') if hasattr(el, 'find_parent') else None
+					if parent_label and hasattr(parent_label, 'get_text'):
+						bits.append("label-wrap=" + parent_label.get_text(" ").strip())
+					if aria_lb:
+						for rid in str(aria_lb).split():
+							ref_el = soup.find(id=rid)
+							if ref_el and hasattr(ref_el, 'get_text'):
+								bits.append("lb=" + ref_el.get_text(" ").strip())
+					if aria_db:
+						for rid in str(aria_db).split():
+							ref_el = soup.find(id=rid)
+							if ref_el and hasattr(ref_el, 'get_text'):
+								bits.append("db=" + ref_el.get_text(" ").strip())
+				except Exception:
+					pass
 				# include up to two data-* attributes to help LLM pick stable selectors
 				data_bits = []
 				for k, v in list(attrs.items()):
@@ -178,6 +206,7 @@ def _build_prompt(html: str, ruhsat_json: Optional[Dict[str, Any]]) -> str:
 							data_attr_names_present.append(k)
 						if len(data_attr_examples) < 60:
 							data_attr_examples.append(f"[{k}='{vs}']")
+						attr_name_counts[k] = attr_name_counts.get(k, 0) + 1
 					except Exception:
 						pass
 				for db in data_bits[:2]:
@@ -185,6 +214,15 @@ def _build_prompt(html: str, ruhsat_json: Optional[Dict[str, Any]]) -> str:
 				controls_summary.append(" ".join(bits)[:200])
 			except Exception:
 				pass
+	except Exception:
+		pass
+
+	# Compute rare attribute names as likely stable candidates
+	rare_attr_names: List[str] = []
+	try:
+		for an, cnt in (attr_name_counts or {}).items():
+			if cnt <= 3:
+				rare_attr_names.append(an)
 	except Exception:
 		pass
 	parts = [default]
@@ -195,6 +233,7 @@ def _build_prompt(html: str, ruhsat_json: Optional[Dict[str, Any]]) -> str:
 		"- Each selector must match exactly one input/select/textarea (or contenteditable).\n"
 		"- Prefer in this order: #id (if present), then tag[name=...], then unique data-* (e.g., [data-testid=...], [data-qa=...]), then [aria-label=...] or placeholder/title.\n"
 		"- If an element has an id, DO NOT return input[name=...] for it; use #id.\n"
+		"- Do NOT assume site-specific attribute names. Only use attribute names you actually see listed in the inventory below.\n"
 		"- If you are not sure a unique selector exists, omit that logical key. Do not guess.\n"
 		"Examples: If the plate field is <input id=\"plateNo\" name=\"plateNo\">, return \"#plateNo\". If chassis is <input name=\"chassis\"> and unique, return \"input[name='chassis']\".\n"
 	)
@@ -217,6 +256,8 @@ def _build_prompt(html: str, ruhsat_json: Optional[Dict[str, Any]]) -> str:
 		parts.append("data-* attributes seen on this page (unique attributes are valid stable selectors when id/name are missing):\n- " + "\n- ".join(list(dict.fromkeys(data_attr_names_present))[:40]))
 	if data_attr_examples:
 		parts.append("Examples of data-* selectors present (first 40):\n- " + "\n- ".join(list(dict.fromkeys(data_attr_examples))[:40]))
+	if rare_attr_names:
+		parts.append("Rare attribute names observed (likely stable):\n- " + "\n- ".join(sorted(list(dict.fromkeys(rare_attr_names)))[:30]))
 	if controls_summary:
 		parts.append("Available controls (first 60; showing tag, id/name, data-*, aria/placeholder):\n- " + "\n- ".join(controls_summary[:60]))
 	parts.append("Detected labels/placeholders (truncated):\n" + "; ".join(labels[:30]))
@@ -280,17 +321,42 @@ def _norm_text(s: Optional[str]) -> str:
 		return str(s)
 
 
-def _score_element_text(n, key: str, synonyms: Dict[str, List[str]]) -> int:
+def _score_element_text(soup, n, key: str, synonyms: Dict[str, List[str]]) -> int:
 	try:
 		attrs = getattr(n, 'attrs', {}) or {}
 		texts: List[str] = []
 		# label[for=id]
-		lab = None
 		try:
 			idv = attrs.get('id')
-			if idv:
-				# will be resolved in caller via soup; here just keep placeholder
-				pass
+			if idv and soup is not None:
+				try:
+					lab_el = soup.find('label', {'for': idv})
+					if lab_el and hasattr(lab_el, 'get_text'):
+						texts.append(lab_el.get_text(" "))
+				except Exception:
+					pass
+		except Exception:
+			pass
+		# wrapping label text
+		try:
+			parent_label = n.find_parent('label') if hasattr(n, 'find_parent') else None
+			if parent_label and hasattr(parent_label, 'get_text'):
+				texts.append(parent_label.get_text(" "))
+		except Exception:
+			pass
+		# aria-labelledby / aria-describedby references
+		try:
+			for aria_attr in ('aria-labelledby', 'aria-describedby'):
+				ref = attrs.get(aria_attr)
+				if ref and soup is not None:
+					# can be space-separated ids
+					for rid in str(ref).split():
+						try:
+							ref_el = soup.find(id=rid)
+							if ref_el and hasattr(ref_el, 'get_text'):
+								texts.append(ref_el.get_text(" "))
+						except Exception:
+							pass
 		except Exception:
 			pass
 		# attributes
@@ -339,16 +405,39 @@ def _unique_selector_for_node(soup, n) -> Optional[str]:
 					return sel
 			except Exception:
 				pass
-		# Lovable builder adds unique data-lov-* attributes; use them if unique
-		for a in ('data-lov-id', 'data-lov-name'):
+		# Prefer unique data-* attributes (generic across sites), including common testing hooks
+		def _quote_attr(val: str) -> str:
+			s = str(val)
+			# choose quotes that don't conflict with the value
+			if "'" in s and '"' not in s:
+				return f'"{s}"'
+			return f"'{s.replace("'", "\\'")}'"
+		# Try any unique data-* generically (no site-specific assumptions)
+		for a, v in list((attrs or {}).items()):
 			try:
-				v = attrs.get(a)
-				if v:
-					sel = f"[{a}='{v}']"
-					if len(soup.select(sel)) == 1:
-						return sel
+				if isinstance(a, str) and a.startswith('data-') and isinstance(v, str):
+					qp = _quote_attr(v)
+					sel1 = f"{tag}[{a}={qp}]"
+					sel2 = f"[{a}={qp}]"
+					if len(soup.select(sel1)) == 1:
+						return sel1
+					if len(soup.select(sel2)) == 1:
+						return sel2
 			except Exception:
 				pass
+		# Angular/Reactive forms: formcontrolname as stable attribute
+		try:
+			v = attrs.get('formcontrolname')
+			if v:
+				qp = _quote_attr(v)
+				sel1 = f"{tag}[formcontrolname={qp}]"
+				sel2 = f"[formcontrolname={qp}]"
+				if len(soup.select(sel1)) == 1:
+					return sel1
+				if len(soup.select(sel2)) == 1:
+					return sel2
+		except Exception:
+			pass
 		# Unique attribute-based selectors
 		for a in ('placeholder', 'aria-label', 'title'):
 			try:
@@ -434,7 +523,7 @@ def _heuristic_map_fields(html: str, keys: List[str], synonyms: Optional[Dict[st
 					ce = str(attrs.get('contenteditable', '')).lower() == 'true'
 					if not ce:
 						continue
-				score = _score_element_text(n, key, syns)
+				score = _score_element_text(soup, n, key, syns)
 				if score > best_score:
 					best_score = score
 					best = n
@@ -491,6 +580,38 @@ def _validate_and_clean_mapping(html: str, field_mapping: Dict[str, Any]) -> Dic
 						"id": (getattr(n, 'attrs', {}) or {}).get('id'),
 						"name": (getattr(n, 'attrs', {}) or {}).get('name'),
 					}
+					# classify selector kind for diagnostics
+					kind = "unknown"; attr_used = None
+					try:
+						ss = sel_s
+						if ss.startswith('#'):
+							kind = 'id'
+						elif "[name=" in ss:
+							kind = 'name'
+						else:
+							m = re.search(r"\[(data-[^=\]]+)=", ss)
+							if m:
+								kind = 'data-attr'
+								attr_used = m.group(1)
+							elif "[aria-label=" in ss:
+								kind = 'aria-label'
+							elif "[aria-labelledby=" in ss:
+								kind = 'aria-labelledby'
+							elif "[aria-describedby=" in ss:
+								kind = 'aria-describedby'
+							elif "[placeholder=" in ss:
+								kind = 'placeholder'
+							elif "[title=" in ss:
+								kind = 'title'
+							elif "." in ss and ":nth-of-type(" not in ss:
+								kind = 'class'
+							elif ":nth-of-type(" in ss:
+								kind = 'nth-of-type'
+					except Exception:
+						pass
+					ctx["selector_kind"] = kind
+					if attr_used:
+						ctx["selector_attr"] = attr_used
 					if form is not None:
 						fattrs = getattr(form, 'attrs', {}) or {}
 						ctx["form"] = {

@@ -127,13 +127,20 @@ class FindLLMHomePageButton:
                     seen.add(key)
                     ordered.append((raw_label, el))
 
-            # Emit click by text and, when possible, a css selector using data-lov-id for robustness
+            # Emit click by text and, when possible, a css selector using a stable attribute for robustness
             for raw_label, el in ordered:
                 actions.append(f"click#{raw_label}")
                 try:
-                    lov_id = el.get("data-lov-id")
-                    if lov_id:
-                        actions.append(f"css#[data-lov-id='{lov_id}']")
+                    # Prefer id when present
+                    eid = el.get("id")
+                    if eid:
+                        actions.append(f"css##{eid}")
+                    else:
+                        # Fall back to any data-* attribute if available
+                        for a, v in (el.attrs or {}).items():  # type: ignore[attr-defined]
+                            if isinstance(a, str) and a.startswith("data-") and isinstance(v, str):
+                                actions.append(f"css#[{a}='{v}']")
+                                break
                 except Exception:
                     pass
 

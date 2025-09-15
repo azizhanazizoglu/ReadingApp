@@ -1,0 +1,17 @@
+ .../Components/detectImportantFormsFilled.py       | 177 [31m-------------[m
+ .../backend/Components/letLLMMapUserPageForms.py   | 255 [32m++++++++++++++++[m[31m---[m
+ .../backend/Components/mappingStaticFillForms.py   | 276 [31m---------------------[m
+ .../backend/Components/readInputConvertJson.py     |  25 [32m+[m[31m-[m
+ .../backend/Features/fillFormsUserTaskPage.py      | 135 [31m----------[m
+ production2/backend/main.py                        |  62 [32m+[m[31m----[m
+ ...d93e6b50f656e7d30fefa2d2630_static_mapping.json |  43 [31m----[m
+ ...e4289859f4cfc005697a21cbbd5_static_mapping.json |  28 [31m---[m
+ ...1ed3ffe186724c0fd5700d7646c_static_mapping.json |  45 [31m----[m
+ ...b9380809f3d47775425d346e6b6_static_mapping.json |  43 [31m----[m
+ ...5993bedae3d692712147c361eba_static_mapping.json |  43 [31m----[m
+ ...140d25f2e10b3c51a22ff24b679_static_mapping.json |  28 [31m---[m
+ ...ad2f5e10e007b164ccf5b6fd286_static_mapping.json |  45 [31m----[m
+ production2/config.json                            |  63 [32m+[m[31m----[m
+ production2/config.py                              |  28 [32m++[m[31m-[m
+ .../src/stateflows/fillFormsUserTaskPageSF.ts      |  12 [32m+[m
+ 16 files changed, 260 insertions(+), 1048 deletions(-)

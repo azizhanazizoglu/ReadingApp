@@ -366,7 +366,7 @@ The F3 feature ingests ruhsat data (file or Vision LLM), analyzes the current pa
 - Backend (FastAPI)
   - Feature: `backend/Features/fillFormsUserTaskPage.py`
   - Components:
-    - `backend/Components/letLLMMapUserPageForms.py` (LLM mapping; prefers id/name and unique data-lov-id; Turkish synonyms)
+  - `backend/Components/letLLMMapUserPageForms.py` (LLM mapping; prefers id/name and any unique data-*; Turkish synonyms)
     - `backend/Components/detectFormsAreFilled.py` (committed count via HTML + ts3 markers)
     - `backend/Components/fillPageFromMapping.py` (plan builder for set_value/select_option + optional clicks)
     - `backend/Components/detectWepPageChange.py` (page change check)
