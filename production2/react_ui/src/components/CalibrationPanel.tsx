@@ -1,5 +1,6 @@
 import React from "react";
 import { getDomAndUrlFromWebview } from "../services/webviewDom";
+import { BACKEND_URL } from "@/config";
 
 type Props = {
   host: string;
@@ -11,9 +12,10 @@ type Props = {
   onSaveDraft: (draft: any) => void;
   onTestPlan?: () => void;
   onFinalize?: () => void;
+  existingDraft?: any;
 };
 
-export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, candidates, darkMode = false, onClose, onSaveDraft, onTestPlan, onFinalize }) => {
+export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, candidates, darkMode = false, onClose, onSaveDraft, onTestPlan, onFinalize, existingDraft }) => {
   const [fieldSelectors, setFieldSelectors] = React.useState<Record<string, string>>({});
   const [executionOrder, setExecutionOrder] = React.useState<string[]>([]);
   // Actions as detailed list with label + selector (back-compat labels array is derived on save)
@@ -52,6 +54,8 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, candidat
   const [actOpenHtml, setActOpenHtml] = React.useState<Record<string, boolean>>({});
   const [actDragIdx, setActDragIdx] = React.useState<number | null>(null);
   const [actLiveAssignId, setActLiveAssignId] = React.useState<string | null>(null);
+  // Read/Write mode
+  const [readMode, setReadMode] = React.useState<boolean>(false);
 
   // No entrance animation to keep it snappy
 
@@ -94,6 +98,17 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, candidat
           if (info && typeof info === 'string') setPreviews((p) => ({ ...p, [k]: info }));
         } catch {}
       }
+    } catch {}
+  };
+
+  const handleShowField = async (k: string) => {
+    const sel = fieldSelectors[k];
+    if (!sel) return;
+    try {
+      const info = await (window as any).previewSelectorInWebview?.(sel);
+      if (info && typeof info === 'string') setPreviews((p) => ({ ...p, [k]: info }));
+      const html = await (window as any).getElementHtmlInWebview?.(sel, 1600);
+      if (html && typeof html === 'string') setHtmlSnippets((h)=>({ ...h, [k]: html }));
     } catch {}
   };
 
@@ -197,6 +212,9 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, candidat
   const chipBorder = darkMode ? 'rgba(99,102,241,0.6)' : '#94a3b8';
   const scrimBg = 'rgba(0,0,0,0.35)';
   const glassShadow = '0 20px 50px rgba(0,0,0,0.45)';
+  // Animation helpers
+  const ease = 'cubic-bezier(0.4, 0, 0.2, 1)';
+  const transFast = `all 220ms ${ease}`;
 
   // Action helpers
   const handleActionChange = (id: string, field: 'label'|'selector', value: string) => {
@@ -239,6 +257,17 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, candidat
     } catch {}
   };
 
+  const handleShowAction = async (id: string) => {
+    const current = actionsDetail.find(a => a.id === id)?.selector || '';
+    if (!current) return;
+    try {
+      const info = await (window as any).previewSelectorInWebview?.(current);
+      if (info && typeof info === 'string') setActPreviews((p) => ({ ...p, [id]: info }));
+      const html = await (window as any).getElementHtmlInWebview?.(current, 1600);
+      if (html && typeof html === 'string') setActHtmlSnippets((h)=>({ ...h, [id]: html }));
+    } catch {}
+  };
+
   const addAction = () => {
     const idx = actionsDetail.length + 1;
     const id = `a${Date.now().toString(36)}_${idx}`;
@@ -255,16 +284,99 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, candidat
     setActDragIdx(null);
   };
 
+  // Helper: apply a draft object to local state
+  const applyDraft = React.useCallback((draft: any) => {
+    if (!draft || typeof draft !== 'object') return;
+    try {
+      const pagesArr = Array.isArray(draft.pages) ? draft.pages : [];
+      if (pagesArr.length > 0) {
+        setPages(pagesArr as any);
+        const first: any = pagesArr[0];
+        setCurrentPageId(first.id || `p_${Date.now().toString(36)}`);
+        setPageName(first.name || 'Page 1');
+        setUrlPattern(first.urlPattern || '');
+        setUrlSample(first.urlSample || '');
+        setFieldSelectors(first.fieldSelectors || {});
+        setExecutionOrder(Array.isArray(first.executionOrder) ? first.executionOrder : []);
+        const acts = Array.isArray(first.actionsDetail) ? first.actionsDetail : [];
+        setActionsDetail(acts.length ? acts : (Array.isArray(draft.actions) ? (draft.actions as string[]).map((lbl, i) => ({ id: `a${i+1}`, label: String(lbl), selector: '' })) : [{ id:'a1', label:'Action 1', selector:'' }]));
+        setCriticalFields(Array.isArray(first.criticalFields) ? first.criticalFields : (Array.isArray(draft.criticalFields) ? draft.criticalFields : criticalFields));
+      } else {
+        // Back-compat: derive a single page from top-level
+        const fs = (draft.fieldSelectors && typeof draft.fieldSelectors === 'object') ? draft.fieldSelectors : {};
+        const eo = Array.isArray(draft.executionOrder) ? draft.executionOrder : [];
+        const actsL: string[] = Array.isArray(draft.actions) ? draft.actions : [];
+        const actsD: any[] = Array.isArray(draft.actionsDetail) ? draft.actionsDetail : (actsL.length ? actsL.map((lbl: string, i: number) => ({ id:`a${i+1}`, label: String(lbl), selector: '' })) : []);
+        const crit = Array.isArray(draft.criticalFields) ? draft.criticalFields : criticalFields;
+        const pgId = `p_${Date.now().toString(36)}`;
+        const one = { id: pgId, name: 'Page 1', fieldSelectors: fs, executionOrder: eo, actionsDetail: actsD, criticalFields: crit } as CalibPage;
+        setPages([one]);
+        setCurrentPageId(pgId);
+        setPageName(one.name);
+        setFieldSelectors(fs);
+        setExecutionOrder(eo);
+        setActionsDetail(actsD.length ? actsD : [{ id:'a1', label:'Action 1', selector:'' }]);
+        setCriticalFields(crit);
+      }
+    } catch {}
+  }, [criticalFields]);
+
+  // Initialize from existing draft when provided
+  React.useEffect(() => {
+    if (existingDraft) applyDraft(existingDraft);
+  }, [existingDraft, applyDraft]);
+
+  // Helper: load latest draft from backend calib.json
+  const loadLatestDraft = React.useCallback(async () => {
+    try {
+      const r = await fetch(`${BACKEND_URL}/api/calib`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'load', mapping: { host, task } }) });
+      const j = await r.json();
+      if (j?.ok && j?.data) applyDraft(j.data);
+    } catch {}
+  }, [host, task, applyDraft]);
+
+  // When switching to Read mode, load the latest draft from backend calib.json
+  React.useEffect(() => {
+    if (!readMode) return;
+    loadLatestDraft();
+  }, [readMode, loadLatestDraft]);
+
   return (
     <>
       {/* scrim overlay */}
   {/* scrim overlay (visual only; does not block clicks to iframe) */}
-  <div style={{ position: 'fixed', inset: 0, background: scrimBg, zIndex: 1999, pointerEvents: 'none' }} />
-  <div style={{ position: 'fixed', right: 24, top: 80, width: 560, height: 620, background: bgPanel, backdropFilter: 'blur(12px)', border: `1px solid ${borderCol}`, borderRadius: 16, boxShadow: glassShadow, zIndex: 2000, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+  <div style={{ position: 'fixed', inset: 0, background: scrimBg, zIndex: 1999, pointerEvents: 'none', transition: transFast, opacity: 1 }} />
+  <div style={{ position: 'fixed', right: 24, top: 80, width: 560, height: 620, background: bgPanel, backdropFilter: 'blur(12px)', border: `1px solid ${borderCol}`, borderRadius: 16, boxShadow: glassShadow, zIndex: 2000, display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: transFast, transform: readMode ? 'scale(0.995)' : 'scale(1.0)' }}>
         <div style={{ padding: '12px 14px', borderBottom: `1px solid ${headerBorder}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-          <div style={{ color: textMain, fontWeight: 600, letterSpacing: 0.2 }}>Calibration</div>
+          <div style={{ color: textMain, fontWeight: 600, letterSpacing: 0.2, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span>Calibration</span>
+            {/* Mode badge */}
+            <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 999, border: `1px solid ${readMode ? '#f59e0b' : '#6366f1'}`, background: readMode ? (darkMode ? '#3b2f1a' : '#fef3c7') : (darkMode ? '#1e1b4b' : '#e0e7ff'), color: readMode ? (darkMode ? '#fde68a' : '#92400e') : (darkMode ? '#c7d2fe' : '#4338ca') }}>{readMode ? 'READ' : 'WRITE'}</span>
+            {/* Read-only legend (hover) */}
+            {readMode && (
+              <div style={{ position: 'relative' }}>
+                <span title="Read-only: editing is hidden. Use Show to highlight elements. Use Refresh to re-load calib.json." style={{ fontSize: 12, color: textSub, cursor: 'help', userSelect: 'none' }}>ⓘ</span>
+              </div>
+            )}
+          </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button onClick={()=>{ handleMarkLastPage(); handleSave(); }} title="Mark this page as last and save the mapping" style={{ fontSize: 12, padding: '6px 10px', border: `1px solid ${chipBorder}`, borderRadius: 10, background: chipBg, color: textMain, cursor: 'pointer' }}>Finish Automation</button>
+            {/* Segmented mode toggle */}
+            <div role="tablist" aria-label="Mode" style={{ display: 'inline-flex', border: `1px solid ${chipBorder}`, borderRadius: 999, overflow: 'hidden', transition: transFast }}>
+              <button role="tab" aria-selected={!readMode} onClick={()=>setReadMode(false)}
+                style={{ padding: '6px 10px', fontSize: 12, border: 'none', cursor: 'pointer', background: !readMode ? (darkMode ? '#1e1b4b' : '#e0e7ff') : 'transparent', color: textMain, transition: transFast }}>
+                Write
+              </button>
+              <button role="tab" aria-selected={readMode} onClick={()=>setReadMode(true)}
+                style={{ padding: '6px 10px', fontSize: 12, border: 'none', borderLeft: `1px solid ${chipBorder}`, cursor: 'pointer', background: readMode ? (darkMode ? '#3b2f1a' : '#fef3c7') : 'transparent', color: textMain, transition: transFast }}>
+                Read
+              </button>
+            </div>
+            {!readMode && (
+              <button onClick={()=>{ handleMarkLastPage(); handleSave(); }} title="Mark this page as last and save the mapping" style={{ fontSize: 12, padding: '6px 10px', border: `1px solid ${chipBorder}`, borderRadius: 10, background: chipBg, color: textMain, cursor: 'pointer', transition: transFast }}>Finish Automation</button>
+            )}
+            {readMode && (
+              <button onClick={loadLatestDraft} title="Reload latest from calib.json" style={{ fontSize: 12, padding: '6px 10px', border: `1px solid ${chipBorder}`, borderRadius: 10, background: chipBg, color: textMain, cursor: 'pointer', transition: transFast }}>Refresh</button>
+            )}
             <button onClick={onClose} title="Close" style={{ color: textSub, background: 'transparent', border: 'none', fontSize: 18, padding: 6, borderRadius: 8, cursor: 'pointer' }}>✕</button>
           </div>
         </div>
@@ -276,15 +388,21 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, candidat
               <div style={{ marginLeft: 'auto', fontSize: 11, color: textSub }}>Page {Math.max(1, pages.findIndex(p=>p.id===currentPageId)+1)} of {Math.max(1, pages.length || 1)}</div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 6 }}>
-              <input value={pageName} onChange={(e)=>setPageName(e.target.value)} placeholder="Page name (e.g., Form, Review, Payment)" style={{ width: '100%', fontSize: 12, padding: '8px 10px', color: textMain, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10 }} />
-              <input value={urlPattern} onChange={(e)=>setUrlPattern(e.target.value)} placeholder="URL pattern (regex or part); optional" style={{ width: '100%', fontSize: 12, padding: '8px 10px', color: textMain, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10 }} />
+              <input value={pageName} onChange={(e)=>setPageName(e.target.value)} placeholder="Page name (e.g., Form, Review, Payment)" style={{ width: '100%', fontSize: 12, padding: '8px 10px', color: textMain, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10 }} disabled={readMode} />
+              <input value={urlPattern} onChange={(e)=>setUrlPattern(e.target.value)} placeholder="URL pattern (regex or part); optional" style={{ width: '100%', fontSize: 12, padding: '8px 10px', color: textMain, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10 }} disabled={readMode} />
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input value={urlSample} onChange={(e)=>setUrlSample(e.target.value)} placeholder="URL sample (auto-captured)" style={{ flex: 1, fontSize: 12, padding: '8px 10px', color: textMain, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10 }} />
-                <button onClick={handleCaptureUrl} title="Capture current page URL" style={{ fontSize: 12, padding: '8px 10px', border: `1px solid ${chipBorder}`, borderRadius: 10, background: chipBg, color: textMain, cursor: 'pointer' }}>Capture URL</button>
+                <input value={urlSample} onChange={(e)=>setUrlSample(e.target.value)} placeholder="URL sample (auto-captured)" style={{ flex: 1, fontSize: 12, padding: '8px 10px', color: textMain, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10 }} disabled={readMode} />
+                {!readMode && (
+                  <button onClick={handleCaptureUrl} title="Capture current page URL" style={{ fontSize: 12, padding: '8px 10px', border: `1px solid ${chipBorder}`, borderRadius: 10, background: chipBg, color: textMain, cursor: 'pointer' }}>Capture URL</button>
+                )}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={handleAddNextPage} title="Commit current page and start next page calibration" style={{ fontSize: 12, padding: '8px 10px', border: `1px solid ${chipBorder}`, borderRadius: 10, background: chipBg, color: textMain, cursor: 'pointer' }}>+ Add Next Page</button>
-                <button onClick={handleMarkLastPage} title="Mark current page as LAST in the flow" style={{ fontSize: 12, padding: '8px 10px', border: `1px solid ${chipBorder}`, borderRadius: 10, background: darkMode ? '#052e2b' : '#ccfbf1', color: textMain, cursor: 'pointer' }}>Mark as Last Page</button>
+                {!readMode && (
+                  <>
+                    <button onClick={handleAddNextPage} title="Commit current page and start next page calibration" style={{ fontSize: 12, padding: '8px 10px', border: `1px solid ${chipBorder}`, borderRadius: 10, background: chipBg, color: textMain, cursor: 'pointer' }}>+ Add Next Page</button>
+                    <button onClick={handleMarkLastPage} title="Mark current page as LAST in the flow" style={{ fontSize: 12, padding: '8px 10px', border: `1px solid ${chipBorder}`, borderRadius: 10, background: darkMode ? '#052e2b' : '#ccfbf1', color: textMain, cursor: 'pointer' }}>Mark as Last Page</button>
+                  </>
+                )}
               </div>
               {!!pages.length && (
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -303,7 +421,7 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, candidat
               <span style={{ fontSize: 11, color: '#22d3ee' }}>Live assign: click a target input… (Esc to cancel)</span>
             ) : null}
           </div>
-          <div style={{ maxHeight: 260, overflowY: 'auto', border: `1px solid ${headerBorder}`, borderRadius: 10, padding: 10, background: darkMode ? 'rgba(2,6,23,0.35)' : '#ffffff' }}>
+          <div style={{ maxHeight: 260, overflowY: 'auto', border: `1px solid ${headerBorder}`, borderRadius: 10, padding: 10, background: darkMode ? 'rgba(2,6,23,0.35)' : '#ffffff', transition: transFast }}>
           {fields.map((k) => (
             <div key={k} style={{ display: 'flex', alignItems: 'center', marginBottom: 6, gap: 6 }}>
               <div style={{ width: 160, fontSize: 12, color: textSub, display: 'flex', alignItems: 'center', gap: 8 }} title="Tip: Double-click chip below to assign via picker. Drag chips to set order.">
@@ -315,8 +433,8 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, candidat
                 </span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: 4 }}>
-                <input value={fieldSelectors[k] || ''} onChange={(e)=>handleChange(k, e.target.value)} placeholder={`CSS selector for ${k}`} style={{ width: '100%', fontSize: 12, padding: '8px 10px', color: textMain, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10, outline: 'none' }} />
-                {previews[k] && <div style={{ fontSize: 11, color: textSub }}>{previews[k]}</div>}
+                <input value={fieldSelectors[k] || ''} onChange={(e)=>handleChange(k, e.target.value)} placeholder={`CSS selector for ${k}`} style={{ width: '100%', fontSize: 12, padding: '8px 10px', color: textMain, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10, outline: 'none' }} disabled={readMode} />
+                {previews[k] && <div style={{ fontSize: 11, color: textSub, transition: transFast, opacity: 1 }}>{previews[k]}</div>}
                 {htmlSnippets[k] && (
                   <div style={{ fontSize: 11, color: textSub }}>
                     <button onClick={()=>setOpenHtml((o)=>({ ...o, [k]: !o[k] }))} style={{ fontSize: 11, padding: '2px 6px', marginRight: 6, borderRadius: 8, border: `1px solid ${inputBorder}`, background: 'transparent', color: textSub, cursor: 'pointer' }}>
@@ -324,49 +442,71 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, candidat
                     </button>
                     <button onClick={()=>{ try { navigator.clipboard.writeText(htmlSnippets[k]); } catch {} }} style={{ fontSize: 11, padding: '2px 6px', borderRadius: 8, border: `1px solid ${inputBorder}`, background: 'transparent', color: textSub, cursor: 'pointer' }}>Copy</button>
                     {openHtml[k] && (
-                      <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', marginTop: 6, padding: 8, border: `1px solid ${inputBorder}`, borderRadius: 8, background: darkMode ? 'rgba(2,6,23,0.5)' : '#f8fafc', color: textSub, maxHeight: 220, overflowY: 'auto' }}>{htmlSnippets[k]}</pre>
+                      <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', marginTop: 6, padding: 8, border: `1px solid ${inputBorder}`, borderRadius: 8, background: darkMode ? 'rgba(2,6,23,0.5)' : '#f8fafc', color: textSub, maxHeight: 220, overflowY: 'auto', transition: transFast }}>{htmlSnippets[k]}</pre>
                     )}
                   </div>
                 )}
               </div>
-              <button title="Pick a field from the page" onClick={()=>handlePickAssign(k)} style={{ fontSize: 12, padding: '8px 10px', border: `1px solid ${chipBorder}`, borderRadius: 10, background: chipBg, color: textMain, cursor: 'pointer' }}>Pick</button>
-              <button title="Enable live assign for this field" onClick={async ()=>{
-                setLiveAssignKey(k);
-                try {
-                  await handlePickAssign(k);
-                } finally {
-                  setLiveAssignKey(null);
-                }
-              }} style={{ fontSize: 12, padding: '8px 10px', border: `1px solid ${chipBorder}`, borderRadius: 10, background: darkMode ? '#0b1220' : '#f8fafc', color: textMain, cursor: 'pointer' }}>Live</button>
+              {!readMode && (
+                <button title="Pick a field from the page" onClick={()=>handlePickAssign(k)} style={{ fontSize: 12, padding: '8px 10px', border: `1px solid ${chipBorder}`, borderRadius: 10, background: chipBg, color: textMain, cursor: 'pointer' }}>Pick</button>
+              )}
+              <button title="Show: highlight current selector on page" onClick={()=>handleShowField(k)} style={{ fontSize: 12, padding: '8px 10px', border: `1px dashed ${chipBorder}`, borderRadius: 10, background: 'transparent', color: textMain, cursor: 'pointer' }}>Show</button>
+              {!readMode && (
+                <button title="Enable live assign for this field" onClick={async ()=>{
+                  setLiveAssignKey(k);
+                  try {
+                    await handlePickAssign(k);
+                  } finally {
+                    setLiveAssignKey(null);
+                  }
+                }} style={{ fontSize: 12, padding: '8px 10px', border: `1px solid ${chipBorder}`, borderRadius: 10, background: darkMode ? '#0b1220' : '#f8fafc', color: textMain, cursor: 'pointer' }}>Live</button>
+              )}
             </div>
           ))}
         </div>
-        <div style={{ marginTop: 10, fontSize: 12, color: textSub }}>Execution order (comma-separated keys):</div>
-        <input value={executionOrder.join(',')} onChange={(e)=>setExecutionOrder(e.target.value.split(',').map(s=>s.trim()).filter(Boolean))} placeholder="e.g. sasi_no,motor_no,plaka_no,model_yili" style={{ width: '100%', fontSize: 12, padding: '8px 10px', color: textMain, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10 }} />
-        <div style={{ marginTop: 6, fontSize: 12, color: textSub }}>Or drag to reorder:</div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', border: `1px dashed ${inputBorder}`, borderRadius: 10, padding: 8, minHeight: 44 }}>
-          {displayedOrder.map((k, idx) => (
-            <div key={`${k}-${idx}`} title="Drag to reorder. Double-click to assign on page." onDoubleClick={async ()=>{
-                try {
-                  const sel = await (window as any).pickSelectorFromWebview?.();
-                  if (sel && typeof sel === 'string') setFieldSelectors((prev) => ({ ...prev, [k]: sel }));
-                } catch {}
-              }} draggable onDragStart={()=>onDragStart(idx)} onDragOver={onDragOver} onDrop={()=>onDrop(idx)}
-              style={{ cursor: 'grab', fontSize: 11, padding: '6px 10px', border: `1px solid ${chipBorder}`, borderRadius: 16, background: chipBg, color: textMain }}>
-              ☰ {k}
+        {!readMode ? (
+          <>
+            <div style={{ marginTop: 10, fontSize: 12, color: textSub }}>Execution order (comma-separated keys):</div>
+            <input value={executionOrder.join(',')} onChange={(e)=>setExecutionOrder(e.target.value.split(',').map(s=>s.trim()).filter(Boolean))} placeholder="e.g. sasi_no,motor_no,plaka_no,model_yili" style={{ width: '100%', fontSize: 12, padding: '8px 10px', color: textMain, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10 }} />
+            <div style={{ marginTop: 6, fontSize: 12, color: textSub }}>Or drag to reorder:</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', border: `1px dashed ${inputBorder}`, borderRadius: 10, padding: 8, minHeight: 44, transition: transFast }}>
+              {displayedOrder.map((k, idx) => (
+                <div key={`${k}-${idx}`} title="Drag to reorder. Double-click to assign on page." onDoubleClick={async ()=>{
+                    try {
+                      const sel = await (window as any).pickSelectorFromWebview?.();
+                      if (sel && typeof sel === 'string') setFieldSelectors((prev) => ({ ...prev, [k]: sel }));
+                    } catch {}
+                  }} draggable onDragStart={()=>onDragStart(idx)} onDragOver={onDragOver} onDrop={()=>onDrop(idx)}
+                  style={{ cursor: 'grab', fontSize: 11, padding: '6px 10px', border: `1px solid ${chipBorder}`, borderRadius: 16, background: chipBg, color: textMain }}>
+                  ☰ {k}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-  <div style={{ marginTop: 6, fontSize: 11, color: textSub }}>Note: Dragging directly onto the iframe isn’t supported. Use “Pick” or double-click a chip to assign a selector, and drag chips here to define order.</div>
+            <div style={{ marginTop: 6, fontSize: 11, color: textSub }}>Note: Dragging directly onto the iframe isn’t supported. Use “Pick” or double-click a chip to assign a selector, and drag chips here to define order.</div>
+          </>
+        ) : (
+          <>
+            <div style={{ marginTop: 10, fontSize: 12, color: textSub }}>Execution order:</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', border: `1px solid ${inputBorder}`, borderRadius: 10, padding: 8, minHeight: 44, background: darkMode ? 'rgba(2,6,23,0.35)' : '#ffffff', transition: transFast }}>
+              {displayedOrder.map((k, idx) => (
+                <div key={`ro-${k}-${idx}`} style={{ fontSize: 11, padding: '6px 10px', border: `1px solid ${chipBorder}`, borderRadius: 16, background: chipBg, color: textMain }}>
+                  {k}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
         <div style={{ marginTop: 14, fontSize: 12, color: textSub, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>Actions:</span>
-          <button onClick={addAction} title="Add another action" style={{ fontSize: 12, padding: '6px 10px', border: `1px solid ${chipBorder}`, borderRadius: 10, background: chipBg, color: textMain, cursor: 'pointer' }}>+ Add Action</button>
+          {!readMode && (
+            <button onClick={addAction} title="Add another action" style={{ fontSize: 12, padding: '6px 10px', border: `1px solid ${chipBorder}`, borderRadius: 10, background: chipBg, color: textMain, cursor: 'pointer' }}>+ Add Action</button>
+          )}
         </div>
-        <div style={{ maxHeight: 220, overflowY: 'auto', border: `1px solid ${headerBorder}`, borderRadius: 10, padding: 10, background: darkMode ? 'rgba(2,6,23,0.35)' : '#ffffff' }}>
+  <div style={{ maxHeight: 220, overflowY: 'auto', border: `1px solid ${headerBorder}`, borderRadius: 10, padding: 10, background: darkMode ? 'rgba(2,6,23,0.35)' : '#ffffff', transition: transFast }}>
           {actionsDetail.map((a, idx) => (
             <div key={a.id} style={{ display: 'flex', alignItems: 'center', marginBottom: 6, gap: 6 }}>
               <div style={{ width: 160, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <input value={a.label} onChange={(e)=>handleActionChange(a.id, 'label', e.target.value)} placeholder={`Action ${idx+1} label`} style={{ width: '100%', fontSize: 12, padding: '6px 8px', color: textMain, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10 }} />
+                <input value={a.label} onChange={(e)=>handleActionChange(a.id, 'label', e.target.value)} placeholder={`Action ${idx+1} label`} style={{ width: '100%', fontSize: 12, padding: '6px 8px', color: textMain, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10 }} disabled={readMode} />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: textSub }}>
                   {actStatus[a.id] === 'ok' && <span title="Selector found" style={{ width: 8, height: 8, background: '#10b981', borderRadius: 9999, display: 'inline-block' }} />}
                   {actStatus[a.id] === 'missing' && <span title="No match" style={{ width: 8, height: 8, background: '#ef4444', borderRadius: 9999, display: 'inline-block' }} />}
@@ -374,7 +514,7 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, candidat
                 </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: 4 }}>
-                <input value={a.selector || ''} onChange={(e)=>handleActionChange(a.id, 'selector', e.target.value)} placeholder={`CSS selector for ${a.label || ('Action ' + (idx+1))}`} style={{ width: '100%', fontSize: 12, padding: '8px 10px', color: textMain, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10 }} />
+                <input value={a.selector || ''} onChange={(e)=>handleActionChange(a.id, 'selector', e.target.value)} placeholder={`CSS selector for ${a.label || ('Action ' + (idx+1))}`} style={{ width: '100%', fontSize: 12, padding: '8px 10px', color: textMain, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10 }} disabled={readMode} />
                 {actPreviews[a.id] && <div style={{ fontSize: 11, color: textSub }}>{actPreviews[a.id]}</div>}
                 {actHtmlSnippets[a.id] && (
                   <div style={{ fontSize: 11, color: textSub }}>
@@ -383,41 +523,73 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, candidat
                     </button>
                     <button onClick={()=>{ try { navigator.clipboard.writeText(actHtmlSnippets[a.id]); } catch {} }} style={{ fontSize: 11, padding: '2px 6px', borderRadius: 8, border: `1px solid ${inputBorder}`, background: 'transparent', color: textSub, cursor: 'pointer' }}>Copy</button>
                     {actOpenHtml[a.id] && (
-                      <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', marginTop: 6, padding: 8, border: `1px solid ${inputBorder}`, borderRadius: 8, background: darkMode ? 'rgba(2,6,23,0.5)' : '#f8fafc', color: textSub, maxHeight: 220, overflowY: 'auto' }}>{actHtmlSnippets[a.id]}</pre>
+                      <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', marginTop: 6, padding: 8, border: `1px solid ${inputBorder}`, borderRadius: 8, background: darkMode ? 'rgba(2,6,23,0.5)' : '#f8fafc', color: textSub, maxHeight: 220, overflowY: 'auto', transition: transFast }}>{actHtmlSnippets[a.id]}</pre>
                     )}
                   </div>
                 )}
               </div>
-              <button title="Pick an action element (button/link)" onClick={()=>handlePickAction(a.id)} style={{ fontSize: 12, padding: '8px 10px', border: `1px solid ${chipBorder}`, borderRadius: 10, background: chipBg, color: textMain, cursor: 'pointer' }}>Pick</button>
-              <button title="Enable live assign for this action" onClick={async ()=>{
-                setActLiveAssignId(a.id);
-                try { await handlePickAction(a.id); } finally { setActLiveAssignId(null); }
-              }} style={{ fontSize: 12, padding: '8px 10px', border: `1px solid ${chipBorder}`, borderRadius: 10, background: darkMode ? '#0b1220' : '#f8fafc', color: textMain, cursor: 'pointer' }}>Live</button>
+              {!readMode && (
+                <button title="Pick an action element (button/link)" onClick={()=>handlePickAction(a.id)} style={{ fontSize: 12, padding: '8px 10px', border: `1px solid ${chipBorder}`, borderRadius: 10, background: chipBg, color: textMain, cursor: 'pointer' }}>Pick</button>
+              )}
+              <button title="Show: highlight current selector on page" onClick={()=>handleShowAction(a.id)} style={{ fontSize: 12, padding: '8px 10px', border: `1px dashed ${chipBorder}`, borderRadius: 10, background: 'transparent', color: textMain, cursor: 'pointer' }}>Show</button>
+              {!readMode && (
+                <button title="Enable live assign for this action" onClick={async ()=>{
+                  setActLiveAssignId(a.id);
+                  try { await handlePickAction(a.id); } finally { setActLiveAssignId(null); }
+                }} style={{ fontSize: 12, padding: '8px 10px', border: `1px solid ${chipBorder}`, borderRadius: 10, background: darkMode ? '#0b1220' : '#f8fafc', color: textMain, cursor: 'pointer' }}>Live</button>
+              )}
             </div>
           ))}
         </div>
-        <div style={{ marginTop: 6, fontSize: 12, color: textSub }}>Actions: drag to reorder</div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', border: `1px dashed ${inputBorder}`, borderRadius: 10, padding: 8, minHeight: 44 }}>
-          {actionsDetail.map((a, idx) => (
-            <div key={`${a.id}-chip`} title="Drag to reorder. Double-click to pick selector." onDoubleClick={async ()=>{
-                try {
-                  const sel = await (window as any).pickSelectorFromWebview?.();
-                  if (sel && typeof sel === 'string') handleActionChange(a.id, 'selector', sel);
-                } catch {}
-              }} draggable onDragStart={()=>onActionDragStart(idx)} onDragOver={onDragOver} onDrop={()=>onActionDrop(idx)}
-              style={{ cursor: 'grab', fontSize: 11, padding: '6px 10px', border: `1px solid ${chipBorder}`, borderRadius: 16, background: chipBg, color: textMain }}>
-              ☰ {a.label || `Action ${idx+1}`}
+        {!readMode ? (
+          <>
+            <div style={{ marginTop: 6, fontSize: 12, color: textSub }}>Actions: drag to reorder</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', border: `1px dashed ${inputBorder}`, borderRadius: 10, padding: 8, minHeight: 44, transition: transFast }}>
+              {actionsDetail.map((a, idx) => (
+                <div key={`${a.id}-chip`} title="Drag to reorder. Double-click to pick selector." onDoubleClick={async ()=>{
+                    try {
+                      const sel = await (window as any).pickSelectorFromWebview?.();
+                      if (sel && typeof sel === 'string') handleActionChange(a.id, 'selector', sel);
+                    } catch {}
+                  }} draggable onDragStart={()=>onActionDragStart(idx)} onDragOver={onDragOver} onDrop={()=>onActionDrop(idx)}
+                  style={{ cursor: 'grab', fontSize: 11, padding: '6px 10px', border: `1px solid ${chipBorder}`, borderRadius: 16, background: chipBg, color: textMain }}>
+                  ☰ {a.label || `Action ${idx+1}`}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </>
+        ) : (
+          <>
+            <div style={{ marginTop: 6, fontSize: 12, color: textSub }}>Actions:</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', border: `1px solid ${inputBorder}`, borderRadius: 10, padding: 8, minHeight: 44, background: darkMode ? 'rgba(2,6,23,0.35)' : '#ffffff', transition: transFast }}>
+              {actionsDetail.map((a, idx) => (
+                <div key={`ro-act-${a.id}-${idx}`} style={{ fontSize: 11, padding: '6px 10px', border: `1px solid ${chipBorder}`, borderRadius: 16, background: chipBg, color: textMain }}>
+                  {a.label || `Action ${idx+1}`}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
         <div style={{ marginTop: 10, fontSize: 12, color: textSub }}>Critical fields (comma-separated):</div>
-        <input value={criticalFields.join(',')} onChange={(e)=>setCriticalFields(e.target.value.split(',').map(s=>s.trim()).filter(Boolean))} placeholder="plaka_no,model_yili,sasi_no,motor_no" style={{ width: '100%', fontSize: 12, padding: '8px 10px', color: textMain, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10 }} />
-        <div style={{ marginTop: 12, display: 'flex', gap: 10 }}>
-          <button title="Save a draft of your mapping without changing config.json" onClick={handleSave} style={{ fontSize: 12, padding: '8px 12px', border: `1px solid ${inputBorder}`, borderRadius: 12, background: darkMode ? '#0f172a' : '#e2e8f0', color: textMain, cursor: 'pointer' }}>Save Draft</button>
-          {onTestPlan && <button title="Build a dry-run plan from your draft to verify" onClick={onTestPlan} style={{ fontSize: 12, padding: '8px 12px', border: `1px solid ${inputBorder}`, borderRadius: 12, background: darkMode ? '#0f172a' : '#e2e8f0', color: textMain, cursor: 'pointer' }}>Test Plan</button>}
-          {onFinalize && <button title="Merge current mapping into config.json for this host/task" onClick={onFinalize} style={{ fontSize: 12, padding: '8px 12px', border: `1px solid ${chipBorder}`, borderRadius: 12, background: darkMode ? '#052e2b' : '#ccfbf1', color: textMain, cursor: 'pointer' }}>Finalize to Config</button>}
-        </div>
-        <div style={{ marginTop: 12, fontSize: 11, color: textSub }}>Tip: Click Pick and then the target input inside the page to capture selector. Use drag area to adjust execution order.</div>
+        {!readMode ? (
+          <>
+            <input value={criticalFields.join(',')} onChange={(e)=>setCriticalFields(e.target.value.split(',').map(s=>s.trim()).filter(Boolean))} placeholder="plaka_no,model_yili,sasi_no,motor_no" style={{ width: '100%', fontSize: 12, padding: '8px 10px', color: textMain, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10 }} />
+            <div style={{ marginTop: 12, display: 'flex', gap: 10 }}>
+              <button title="Save a draft of your mapping without changing config.json" onClick={handleSave} style={{ fontSize: 12, padding: '8px 12px', border: `1px solid ${inputBorder}`, borderRadius: 12, background: darkMode ? '#0f172a' : '#e2e8f0', color: textMain, cursor: 'pointer' }}>Save Draft</button>
+              {onTestPlan && <button title="Build a dry-run plan from your draft to verify" onClick={onTestPlan} style={{ fontSize: 12, padding: '8px 12px', border: `1px solid ${inputBorder}`, borderRadius: 12, background: darkMode ? '#0f172a' : '#e2e8f0', color: textMain, cursor: 'pointer' }}>Test Plan</button>}
+              {onFinalize && <button title="Merge current mapping into config.json for this host/task" onClick={onFinalize} style={{ fontSize: 12, padding: '8px 12px', border: `1px solid ${chipBorder}`, borderRadius: 12, background: darkMode ? '#052e2b' : '#ccfbf1', color: textMain, cursor: 'pointer' }}>Finalize to Config</button>}
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', border: `1px solid ${inputBorder}`, borderRadius: 10, padding: 8, minHeight: 44, background: darkMode ? 'rgba(2,6,23,0.35)' : '#ffffff', transition: transFast }}>
+              {criticalFields.map((k, idx) => (
+                <div key={`ro-crit-${k}-${idx}`} style={{ fontSize: 11, padding: '6px 10px', border: `1px solid ${chipBorder}`, borderRadius: 16, background: chipBg, color: textMain }}>{k}</div>
+              ))}
+            </div>
+          </>
+        )}
+        {!readMode && <div style={{ marginTop: 12, fontSize: 11, color: textSub }}>Tip: Click Pick and then the target input inside the page to capture selector. Use drag area to adjust execution order.</div>}
         </div>
       </div>
     </>

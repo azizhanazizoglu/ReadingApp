@@ -140,6 +140,7 @@ export const Header: React.FC<HeaderProps> = ({
       const res = await runCalibStart('Yeni Trafik', (m)=>devLog('HD-CALIB', m));
       devLog('HD-CALIB', `StartSession returned ok=${res?.ok} host=${res?.host||''} inputs_found=${res?.inputs_found ?? 'n/a'}`);
       if (!res?.ok) { devLog('HD-CALIB-ERR', res?.error || 'start_failed'); return; }
+      try { (window as any).__CALIB_EXISTING__ = res?.existing || null; } catch {}
       setCalibHost(res.host || 'unknown');
       setCalibTask(res.task || 'Yeni Trafik');
       setCalibCandidates(res.candidates_preview || []);
@@ -597,6 +598,7 @@ export const Header: React.FC<HeaderProps> = ({
       ruhsat={calibRuhsat}
       candidates={calibCandidates}
       darkMode={darkMode}
+      existingDraft={(window as any).__CALIB_EXISTING__}
       onClose={() => setCalibOpen(false)}
       onSaveDraft={async (draft) => {
         try {

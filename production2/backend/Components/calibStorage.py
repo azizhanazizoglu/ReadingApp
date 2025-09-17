@@ -2,8 +2,9 @@ from __future__ import annotations
 
 """Calibration storage helpers.
 
-Persist and retrieve calibration drafts per host/task under production2/calib,
-and provide a function to merge a draft into config.json for runtime usage.
+Persist and retrieve calibration drafts per host/task inside a single
+JSON file at production2/calib.json, and merge finalized mapping into
+config.json structure.
 """
 
 from typing import Any, Dict, List, Optional
@@ -15,8 +16,7 @@ from urllib.parse import urlparse
 
 _THIS = Path(__file__).resolve()
 _ROOT = _THIS.parents[2]
-_CALIB = _ROOT / "calib"
-_CALIB.mkdir(parents=True, exist_ok=True)
+_CALIB_FILE = _ROOT / "calib.json"
 
 
 def _now() -> str:
@@ -30,48 +30,65 @@ def host_from_url(u: Optional[str]) -> str:
         return "unknown"
 
 
-def _site_dir(host: str) -> Path:
-    p = _CALIB / host
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-
 def _safe_task(task: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_\-\. ]+", "_", task or "task")
 
 
-def task_file(host: str, task: str) -> Path:
-    return _site_dir(host) / f"{_safe_task(task)}.json"
+def _read_all() -> Dict[str, Any]:
+    if not _CALIB_FILE.exists():
+        return {}
+    try:
+        data = json.loads(_CALIB_FILE.read_text(encoding="utf-8") or "{}")
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        pass
+    return {}
+
+
+def _write_all(data: Dict[str, Any]) -> None:
+    _CALIB_FILE.write_text(json.dumps(data or {}, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def load(host: str, task: str) -> Dict[str, Any]:
-    p = task_file(host, task)
-    if not p.exists():
+    data = _read_all()
+    site = data.get(host) if isinstance(data, dict) else None
+    if not isinstance(site, dict):
         return {}
-    try:
-        return json.loads(p.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
+    t = site.get(task)
+    return t if isinstance(t, dict) else {}
 
 
 def save(host: str, task: str, data: Dict[str, Any]) -> Dict[str, Any]:
-    p = task_file(host, task)
-    data = dict(data or {})
-    data.setdefault("host", host)
-    data.setdefault("task", task)
-    data["updatedAt"] = _now()
-    data.setdefault("createdAt", data["updatedAt"])
-    p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    return {"ok": True, "path": str(p)}
+    all_data = _read_all()
+    if not isinstance(all_data, dict):
+        all_data = {}
+    site = all_data.setdefault(host, {})
+    if not isinstance(site, dict):
+        all_data[host] = site = {}
+    payload = dict(data or {})
+    payload.setdefault("host", host)
+    payload.setdefault("task", task)
+    payload["updatedAt"] = _now()
+    payload.setdefault("createdAt", payload["updatedAt"])
+    site[task] = payload
+    _write_all(all_data)
+    return {"ok": True, "path": str(_CALIB_FILE)}
 
 
 def list_sites() -> List[str]:
-    return [d.name for d in _CALIB.iterdir() if d.is_dir()]
+    data = _read_all()
+    if isinstance(data, dict):
+        return list(data.keys())
+    return []
 
 
 def list_tasks(host: str) -> List[str]:
-    p = _site_dir(host)
-    return [f.stem for f in p.glob("*.json")]
+    data = _read_all()
+    site = data.get(host) if isinstance(data, dict) else None
+    if isinstance(site, dict):
+        return list(site.keys())
+    return []
 
 
 def finalize_to_config(host: str, task: str) -> Dict[str, Any]:

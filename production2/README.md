@@ -454,10 +454,19 @@ The Calibration panel lets you build a deterministic, per-site mapping used by t
 - Save Draft, Test Plan (dry-run), Finalize to Config
 
 ## Storage and config merge
-- Drafts are stored under `production2/calib/<host>/<task>.json` with a `pages` array; top-level fields mirror the first page for backward compatibility.
+- Drafts are stored in a single file: `production2/calib.json` keyed by host and task. Example shape:
+  {
+    "example.com": {
+      "Yeni Trafik": { pages: [...], fieldSelectors: {...}, actionsDetail: [...], ... }
+    }
+  }
+  Top-level fields mirror the first page for backward compatibility.
 - Finalize writes to `production2/config.json` under `staticFormMapping.sites[host][task]` with:
   - fieldSelectors, actions, executionOrder, criticalFields, synonyms (compat)
   - actionsDetail, actionsExecutionOrder, pages, multiPage (new)
+
+### Read/Write toggle
+- The Calibration panel includes a Read/Write toggle (in the header). In Read mode the UI is non-editable but “Show” still highlights elements on the page so you can validate selectors.
 
 ## Static-first summary (F3 + Calibration)
 1) Try static mapping first:
