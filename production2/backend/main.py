@@ -102,15 +102,177 @@ def get_config() -> Dict[str, Any]:
 
 @app.post("/api/tsx/dev-run")
 def tsx_dev_run(req: TsxRequest) -> Dict[str, Any]:
-    """POST: TsX akışı (gelecekte). Girdi alır, aksiyon üretir (yan etki vardır)."""
-    # Placeholder: implement Tsx orchestration here later
-    return {
-        "state": "noop",
-        "details": {
-            "message": "TsX not implemented yet in production2 backend",
-            "phase": "init",
-        },
-    }
+    """POST: TsX orchestration - Static-first form filling with LLM fallback.
+    
+    F3 Button Flow:
+    1. Try static form filling first (fast heuristics)
+    2. If static succeeds → return success with actions
+    3. If static fails critical validation → return should_go_home + use_llm_fallback
+    """
+    log("INFO", "TSX-START", f"TsX endpoint called", component="TsX", extra={
+        "html_len": len(req.html or ""),
+        "current_url": req.current_url,
+        "user_command": req.user_command,
+        "force_llm": req.force_llm,
+        "hard_reset": req.hard_reset
+    })
+    
+    if not req.html:
+        log("ERROR", "TSX-NO-HTML", "Missing HTML in request", component="TsX")
+        return {
+            "ok": False,
+            "error": "missing html",
+            "details": {"message": "HTML required for TsX form filling analysis"}
+        }
+    
+    try:
+        # Load ruhsat data first
+        log("INFO", "TSX-RUHSAT", "Loading ruhsat data", component="TsX")
+        ruhsat_result = f3_static(F3Request(op="loadRuhsatFromTmp"))
+        log("INFO", "TSX-RUHSAT-RES", f"Ruhsat result: ok={ruhsat_result.get('ok')}", component="TsX")
+        
+        if not ruhsat_result.get("ok"):
+            log("ERROR", "TSX-RUHSAT-FAIL", f"Failed to load ruhsat: {ruhsat_result}", component="TsX")
+            return {
+                "ok": False,
+                "state": "ruhsat_failed",
+                "error": "Failed to load ruhsat data",
+                "details": {"ruhsat_error": ruhsat_result}
+            }
+        
+        ruhsat_data = ruhsat_result.get("data", {})
+        log("INFO", "TSX-RUHSAT-DATA", f"Ruhsat data keys: {list(ruhsat_data.keys()) if ruhsat_data else 'empty'}", component="TsX")
+        
+        # Check if final page first
+        log("INFO", "TSX-FINAL-CHECK", "Checking for final page", component="TsX")
+        final_check = f3_static(F3Request(op="detectFinalPage", html=req.html))
+        log("INFO", "TSX-FINAL-RES", f"Final check: ok={final_check.get('ok')} is_final={final_check.get('is_final')}", component="TsX")
+        
+        if final_check.get("ok") and final_check.get("is_final"):
+            log("INFO", "TSX-FINAL-DETECTED", "Final page detected", component="TsX")
+            return {
+                "ok": True,
+                "state": "final_page_detected",
+                "details": {
+                    "message": "Final activation page detected - ready to click",
+                    "phase": "final",
+                    "actions": final_check.get("hits", []),
+                    "method": "static_detection",
+                    "cta_buttons": final_check.get("hits", [])
+                }
+            }
+        
+        # Analyze page with static heuristics
+        log("INFO", "TSX-ANALYZE", "Starting static page analysis", component="TsX")
+        analysis = f3_static(F3Request(
+            op="analyzePageStaticFillForms", 
+            html=req.html,
+            current_url=req.current_url,
+            task="Yeni Trafik"
+        ))
+        log("INFO", "TSX-ANALYZE-RES", f"Analysis result: ok={analysis.get('ok')}", component="TsX")
+        
+        if not analysis.get("ok"):
+            log("ERROR", "TSX-ANALYZE-FAIL", f"Analysis failed: {analysis}", component="TsX")
+            return {
+                "ok": False,
+                "state": "analysis_failed",
+                "error": "Static page analysis failed",
+                "details": {"analysis_error": analysis}
+            }
+        
+        field_mapping = analysis.get("field_mapping", {})
+        log("INFO", "TSX-MAPPING", f"Field mapping: {len(field_mapping)} fields found", component="TsX")
+        
+        if not field_mapping:
+            log("INFO", "TSX-NO-FORMS", "No form fields detected", component="TsX")
+            return {
+                "ok": True,  # Not an error, just no form fields found
+                "state": "no_forms_detected",
+                "details": {
+                    "message": "No form fields detected on this page",
+                    "phase": "skip",
+                    "method": "static_detection",
+                    "analysis": analysis
+                }
+            }
+        
+        # Validate critical fields
+        log("INFO", "TSX-VALIDATE", "Validating critical fields", component="TsX")
+        validation = f3_static(F3Request(
+            op="validateCriticalFields",
+            mapping=field_mapping,
+            ruhsat_json=ruhsat_data,
+            task="Yeni Trafik"
+        ))
+        log("INFO", "TSX-VALIDATE-RES", f"Validation result: ok={validation.get('ok')}", component="TsX")
+        
+        if not validation.get("ok"):
+            log("ERROR", "TSX-VALIDATE-FAIL", f"Validation failed: {validation}", component="TsX")
+            return {
+                "ok": False,
+                "state": "validation_error",
+                "error": "Critical field validation failed",
+                "details": {"validation_error": validation}
+            }
+        
+        # Check if should fallback to LLM
+        log("INFO", "TSX-FALLBACK-CHECK", "Checking if LLM fallback needed", component="TsX")
+        fallback_check = f3_static(F3Request(
+            op="checkShouldFallbackToLLM",
+            validation_result=validation,
+            task="Yeni Trafik"
+        ))
+        log("INFO", "TSX-FALLBACK-RES", f"Fallback check: ok={fallback_check.get('ok')} should_fallback={fallback_check.get('should_fallback')}", component="TsX")
+        
+        if fallback_check.get("ok") and fallback_check.get("should_fallback"):
+            log("INFO", "TSX-FALLBACK-NEEDED", f"LLM fallback required: {fallback_check.get('reason')}", component="TsX")
+            return {
+                "ok": True,
+                "state": "need_llm_fallback",
+                "details": {
+                    "message": "Static mapping insufficient - critical fields not met",
+                    "phase": "fallback_required",
+                    "method": "static_to_llm",
+                    "should_go_home": True,
+                    "use_llm_fallback": True,
+                    "fallback_reason": fallback_check.get("reason"),
+                    "success_rate": fallback_check.get("success_rate"),
+                    "mapped_critical": validation.get("mapped_critical", []),
+                    "missing_critical": validation.get("missing_critical", []),
+                    "threshold": fallback_check.get("threshold", 0.75)
+                }
+            }
+        
+        # Static approach is sufficient - ready to proceed
+        log("INFO", "TSX-READY", f"Static form filling ready: {validation.get('success_rate')}% success", component="TsX")
+        return {
+            "ok": True,
+            "state": "static_ready",
+            "details": {
+                "message": "Static form filling ready - critical fields satisfied",
+                "phase": "ready_to_fill",
+                "method": "static_heuristics",
+                "field_mapping": field_mapping,
+                "actions": analysis.get("actions", []),
+                "success_rate": validation.get("success_rate"),
+                "mapped_critical": validation.get("mapped_critical", []),
+                "total_fields": len(field_mapping),
+                "critical_fields": validation.get("critical_fields", [])
+            }
+        }
+        
+    except Exception as e:
+        log("ERROR", "TSX-EXCEPTION", f"TsX error: {e}", component="TsX")
+        return {
+            "ok": False,
+            "state": "error",
+            "error": str(e),
+            "details": {
+                "message": f"TsX static form filling failed: {e}",
+                "phase": "error"
+            }
+        }
 
 class HtmlCaptureRequest(BaseModel):
     # Operation mode (MANDATORY): 'allPlanHomePageCandidates' | 'planCheckHtmlIfChanged'
@@ -154,12 +316,20 @@ class GoUserTaskRequest(BaseModel):
 
 
 class F3Request(BaseModel):
-    # op: loadRuhsatFromTmp | analyzePage | buildFillPlan | detectFinalPage
+    # op: loadRuhsatFromTmp | analyzePage | buildFillPlan | detectFinalPage | analyzePageStaticFillForms | validateCriticalFields | detectFormsFilled | checkShouldFallbackToLLM
     op: Optional[str] = None
     html: Optional[str] = None
     ruhsat_json: Optional[Dict[str, Any]] = None
     # For buildFillPlan
     mapping: Optional[Dict[str, Any]] = None  # expects { field_mapping: {key->selector}, llm_actions?: [str] }
+    # For static operations
+    current_url: Optional[str] = None
+    task: Optional[str] = None
+    validation_result: Optional[Dict[str, Any]] = None
+    min_filled: Optional[int] = None
+    # For page change detection
+    current_html: Optional[str] = None
+    prev_html: Optional[str] = None
 
 
 @app.post("/api/f1")
@@ -266,6 +436,71 @@ def f2(req: GoUserTaskRequest) -> Dict[str, Any]:
     raise HTTPException(status_code=422, detail=f"invalid op: {op}")
 
 
+@app.post("/api/calib")
+def calib(req: F3Request) -> Dict[str, Any]:
+    """Calibration API (backend-heavy).
+
+    ops:
+      - startSession { html, current_url, task }
+      - scanDom { html }
+      - saveDraft { mapping: { host, task, draft } }
+      - list { mapping?: { host } }
+      - load { mapping: { host, task } }
+      - finalizeToConfig { mapping: { host, task } }
+    """
+    op = (req.op or "").strip()
+    if not op:
+        raise HTTPException(status_code=422, detail="missing op")
+
+    from Features.calibFillUserTaskPageStatic import (
+        plan_calib_start_session,
+        plan_calib_scan_dom,
+        plan_calib_save_draft,
+        plan_calib_list,
+        plan_calib_load,
+        plan_calib_finalize_to_config,
+        plan_calib_test_fill_plan,
+    )
+
+    if op == "startSession":
+        return plan_calib_start_session(req.html, req.current_url, req.task)
+    if op == "scanDom":
+        return plan_calib_scan_dom(req.html)
+    if op == "saveDraft":
+        body = req.mapping or {}
+        host = body.get("host") or ""
+        task = body.get("task") or (req.task or "Yeni Trafik")
+        draft = body.get("draft") or {}
+        if not host:
+            raise HTTPException(status_code=422, detail="missing host")
+        return plan_calib_save_draft(host, task, draft)
+    if op == "list":
+        host = (req.mapping or {}).get("host")
+        return plan_calib_list(host)
+    if op == "load":
+        body = req.mapping or {}
+        host = body.get("host") or ""
+        task = body.get("task") or (req.task or "Yeni Trafik")
+        if not host:
+            raise HTTPException(status_code=422, detail="missing host")
+        return plan_calib_load(host, task)
+    if op == "finalizeToConfig":
+        body = req.mapping or {}
+        host = body.get("host") or ""
+        task = body.get("task") or (req.task or "Yeni Trafik")
+        if not host:
+            raise HTTPException(status_code=422, detail="missing host")
+        return plan_calib_finalize_to_config(host, task)
+    if op == "testFillPlan":
+        body = req.mapping or {}
+        host = body.get("host") or ""
+        task = body.get("task") or (req.task or "Yeni Trafik")
+        if not host:
+            raise HTTPException(status_code=422, detail="missing host")
+        return plan_calib_test_fill_plan(host, task)
+    raise HTTPException(status_code=422, detail=f"invalid op: {op}")
+
+
 @app.post("/api/f3")
 def f3(req: F3Request) -> Dict[str, Any]:
     """F3: fillFormsUserTaskPage feature entry.
@@ -310,6 +545,72 @@ def f3(req: F3Request) -> Dict[str, Any]:
             pass
         from Features.fillFormsUserTaskPage import plan_detect_forms_filled  # type: ignore
         return plan_detect_forms_filled(details=req.mapping, html=req.html, min_filled=min_filled)
+
+    raise HTTPException(status_code=422, detail=f"invalid op: {op}")
+
+
+@app.post("/api/f3-static")
+def f3_static(req: F3Request) -> Dict[str, Any]:
+    """F3-Static: fillFormsUserTaskPageStatic feature entry (STATIC ONLY).
+
+    Operations (req.op):
+      - loadRuhsatFromTmp: auto-ingest ruhsat JSON from tmp (or via Vision LLM)
+      - analyzePageStaticFillForms: STATIC-only page analysis using heuristics
+      - validateCriticalFields: validate critical field mapping success
+      - detectFinalPage: static final-page detection via CTA synonyms
+      - detectFormsFilled: check if forms are filled
+      - checkShouldFallbackToLLM: determine if LLM fallback is needed
+    """
+    op = (req.op or "").strip()
+    if not op:
+        raise HTTPException(status_code=422, detail="missing op")
+
+    log("INFO", "F3-STATIC", f"F3-Static operation: {op}", component="F3-Static", extra={
+        "html_len": len(req.html or ""),
+        "current_url": req.current_url,
+        "task": req.task,
+        "has_mapping": bool(req.mapping),
+        "has_ruhsat": bool(req.ruhsat_json),
+        "has_validation": bool(req.validation_result)
+    })
+
+    from Features.fillFormsUserTaskPageStatic import (
+        plan_load_ruhsat_json as static_plan_load_ruhsat_json,
+        plan_analyze_page_static_fill_forms,
+        plan_validate_critical_fields,
+        plan_detect_final_page as static_plan_detect_final_page,
+        plan_detect_forms_filled as static_plan_detect_forms_filled,
+        plan_check_should_fallback_to_llm,
+    )
+
+    if op == "loadRuhsatFromTmp":
+        return static_plan_load_ruhsat_json()
+
+    if op == "analyzePageStaticFillForms":
+        if not req.html:
+            raise HTTPException(status_code=422, detail="missing html")
+        return plan_analyze_page_static_fill_forms(req.html, req.current_url, req.task)
+
+    if op == "validateCriticalFields":
+        if not req.mapping or not req.ruhsat_json:
+            raise HTTPException(status_code=422, detail="missing field_mapping or ruhsat_json")
+        return plan_validate_critical_fields(req.mapping, req.ruhsat_json, req.task)
+
+    if op == "detectFinalPage":
+        if not req.html:
+            raise HTTPException(status_code=422, detail="missing html")
+        return static_plan_detect_final_page(req.html)
+
+    if op == "detectFormsFilled":
+        min_filled = 2
+        if hasattr(req, 'min_filled') and isinstance(req.min_filled, int):
+            min_filled = req.min_filled
+        return static_plan_detect_forms_filled(details=req.mapping, html=req.html, min_filled=min_filled)
+
+    if op == "checkShouldFallbackToLLM":
+        if not req.validation_result:
+            raise HTTPException(status_code=422, detail="missing validation_result")
+        return plan_check_should_fallback_to_llm(req.validation_result, req.task)
 
     raise HTTPException(status_code=422, detail=f"invalid op: {op}")
 

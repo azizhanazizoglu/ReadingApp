@@ -1,16 +1,25 @@
 {
   "findHomePage": {
-  "staticMaxCandidates": 40,
+    "staticMaxCandidates": 40,
     "map_home_page_stetic": {
       "variants": [
-        "ana sayfa", "anasayfa", "ana-sayfa", "ana_sayfa",
-        "home", "homepage", "home-page", "home_page",
-        "main", "start", "dashboard", "portal"
+        "ana sayfa",
+        "anasayfa",
+        "ana-sayfa",
+        "ana_sayfa",
+        "home",
+        "homepage",
+        "home-page",
+        "home_page",
+        "main",
+        "start",
+        "dashboard",
+        "portal"
       ],
       "max_alternatives": 10
     },
     "letLLMMap_findHomePage": {
-  "defaultPrompt": "You are an expert web UI analyzer. From the given filtered HTML, identify the single control that navigates to the Home page.\n\nContext:\n- The filtered HTML keeps only interactive elements and useful data-* attributes.\n- Buttons may have data-component-name=\"Button\" and data-component-content with URL-encoded text (Ana%20Sayfa => \"Ana Sayfa\").\n\nLanguage and synonyms (case-insensitive; visible text normalized):\n- Turkish exact: Ana Sayfa, Anasayfa\n- Turkish near: Giris, Giriş, Baslangic, Başlangıç, Ana Menu, Ana Menü, Ana Ekran, Anasayfaya Don, Anasayfaya Dön\n- English exact: Home, Homepage\n- English near: Start, Dashboard, Main, Go Home, Back to Home, Back Home\n\nTypos / guessing:\n- If text has typos (not only minor; e.g., \"Anasayfa\", \"Homeepage\", \"Hom\", \"Ansayfa\", \"AnaSafya\", \"Homepge\"), infer the intended Home control using fuzzy matching (case/diacritics-insensitive; allow small edit distance and transpositions).\n- When exact text is unclear, rely on attributes like aria-label/title and data-component-content containing the normalized idea of Home (TR/EN).\n- Prefer selectors that are robust to whitespace and encoding differences (normalize-space(.), contains @data-component-content with encoded text).\n\nIcon-only / symbol-based Home control (important):\n- Treat an icon-only control as Home when the clickable ancestor (<a> or <button>) contains an <svg> or <i> whose class/name/aria suggests Home/House (e.g., classes \"lucide-house\", \"lucide-home\", \"icon-home\") or has data-lov-name=\"Home\" / data-component-name=\"Home\".\n- Prefer targeting the clickable ancestor (<a> or <button>) that wraps the icon; do not target the raw <svg> alone.\n- Example selectors:\n  • css:button:has(svg.lucide-house)\n  • css:a:has(svg[class*='house' i]), css:a:has(svg[class*='home' i])\n  • xpath://*[self::a or self::button][.//svg[contains(@class,'house') or contains(@class,'home') or @data-lov-name='Home' or @data-component-name='Home']]\n\nElement choice & diversity (very important):\n- PRIORITY when choosing an element:\n  1) <a> link to site root or home (href='/' or contains '/home', '/anasayfa', '/index').\n  2) Header logo link (an <a> wrapping a logo image/text, or [aria-label*='logo']).\n  3) Breadcrumb first item labeled Home/Ana Sayfa.\n  4) Top navigation link labeled Home/Ana Sayfa.\n  5) Button or icon-only control that clearly indicates Home (e.g., a house icon).\n- If feedback shows previously tried selectors, DO NOT return the same DOM element again. Choose a different element that likely goes Home (e.g., logo link, breadcrumb, navbar item).\n- Only propose alternatives for the chosen element; across attempts, pick a different element when feedback indicates failure.\n\nChoosing rules:\n- Prefer a visible primary navigation control clearly returning to the main page.\n- If multiple exist, prefer exact \"Ana Sayfa\" or \"Home\" over \"Back to Home\" when both are present.\n- Avoid controls for reset/submit/onboarding unless explicitly labeled Home.\n\nSelector rules:\n- Allowed selectorType: text | css | xpath.\n- If exact visible text matches a synonym (e.g., \"Ana Sayfa\"), use selectorType=\"text\" with that exact text. If icon-only, prefer css/xpath targeting the clickable ancestor with the icon descendant.\n- Provide up to 10 alternatives for the SAME element (aim for 8–10 when possible), such as:\n  • xpath://button[normalize-space(.)='Ana Sayfa']\n  • xpath://*[self::a or self::button or @role='button'][contains(normalize-space(.), 'Ana Sayfa')]\n  • css:[data-component-name=\"Button\"][data-component-content*='Ana%20Sayfa']\n  • xpath://*[contains(@aria-label,'Home') or contains(@title,'Home')]\n  • css:button:has(svg.lucide-house)\n  • xpath://*[self::a or self::button][.//svg[@data-lov-name='Home' or @data-component-name='Home']]\n- All selectors MUST be derivable from the provided HTML; do not invent ids/class names.\n\nFeedback usage:\n- Treat feedback selectors as already tried. DO NOT return the same selectors or trivial variations (case-only/whitespace-only).\n- More importantly: avoid re-targeting the same DOM element as in feedback; pick a different plausible Home element following the priority above.\n- Prefer meaningfully different selectors (by structure/attributes) that increase success odds.\n\nOutput STRICT JSON only (one object), no markdown fences, no prose:\n{\n  \"selectorType\": \"css|xpath|text\",\n  \"selector\": \"<string>\",\n  \"alternatives\": [\"<string>\", \"...\"],\n  \"rationale\": \"<short reason>\"\n}\n\nExample if a visible button reads Ana Sayfa:\n{\n  \"selectorType\": \"text\",\n  \"selector\": \"Ana Sayfa\",\n  \"alternatives\": [\n    \"xpath://button[normalize-space(.)='Ana Sayfa']\",\n    \"css:[data-component-name=\\\"Button\\\"][data-component-content*='Ana%20Sayfa']\",\n    \"xpath://*[self::a or self::button or @role='button'][contains(normalize-space(.), 'Ana Sayfa')]\"\n  ],\n  \"rationale\": \"Visible primary navigation labeled 'Ana Sayfa' or 'Home' navigates home; different from prior attempts if they failed\"\n}",
+      "defaultPrompt": "You are an expert web UI analyzer. From the given filtered HTML, identify the single control that navigates to the Home page.\n\nContext:\n- The filtered HTML keeps only interactive elements and useful data-* attributes.\n- Buttons may have data-component-name=\"Button\" and data-component-content with URL-encoded text (Ana%20Sayfa => \"Ana Sayfa\").\n\nLanguage and synonyms (case-insensitive; visible text normalized):\n- Turkish exact: Ana Sayfa, Anasayfa\n- Turkish near: Giris, Giriş, Baslangic, Başlangıç, Ana Menu, Ana Menü, Ana Ekran, Anasayfaya Don, Anasayfaya Dön\n- English exact: Home, Homepage\n- English near: Start, Dashboard, Main, Go Home, Back to Home, Back Home\n\nTypos / guessing:\n- If text has typos (not only minor; e.g., \"Anasayfa\", \"Homeepage\", \"Hom\", \"Ansayfa\", \"AnaSafya\", \"Homepge\"), infer the intended Home control using fuzzy matching (case/diacritics-insensitive; allow small edit distance and transpositions).\n- When exact text is unclear, rely on attributes like aria-label/title and data-component-content containing the normalized idea of Home (TR/EN).\n- Prefer selectors that are robust to whitespace and encoding differences (normalize-space(.), contains @data-component-content with encoded text).\n\nIcon-only / symbol-based Home control (important):\n- Treat an icon-only control as Home when the clickable ancestor (<a> or <button>) contains an <svg> or <i> whose class/name/aria suggests Home/House (e.g., classes \"lucide-house\", \"lucide-home\", \"icon-home\") or has data-lov-name=\"Home\" / data-component-name=\"Home\".\n- Prefer targeting the clickable ancestor (<a> or <button>) that wraps the icon; do not target the raw <svg> alone.\n- Example selectors:\n  • css:button:has(svg.lucide-house)\n  • css:a:has(svg[class*='house' i]), css:a:has(svg[class*='home' i])\n  • xpath://*[self::a or self::button][.//svg[contains(@class,'house') or contains(@class,'home') or @data-lov-name='Home' or @data-component-name='Home']]\n\nElement choice & diversity (very important):\n- PRIORITY when choosing an element:\n  1) <a> link to site root or home (href='/' or contains '/home', '/anasayfa', '/index').\n  2) Header logo link (an <a> wrapping a logo image/text, or [aria-label*='logo']).\n  3) Breadcrumb first item labeled Home/Ana Sayfa.\n  4) Top navigation link labeled Home/Ana Sayfa.\n  5) Button or icon-only control that clearly indicates Home (e.g., a house icon).\n- If feedback shows previously tried selectors, DO NOT return the same DOM element again. Choose a different element that likely goes Home (e.g., logo link, breadcrumb, navbar item).\n- Only propose alternatives for the chosen element; across attempts, pick a different element when feedback indicates failure.\n\nChoosing rules:\n- Prefer a visible primary navigation control clearly returning to the main page.\n- If multiple exist, prefer exact \"Ana Sayfa\" or \"Home\" over \"Back to Home\" when both are present.\n- Avoid controls for reset/submit/onboarding unless explicitly labeled Home.\n\nSelector rules:\n- Allowed selectorType: text | css | xpath.\n- If exact visible text matches a synonym (e.g., \"Ana Sayfa\"), use selectorType=\"text\" with that exact text. If icon-only, prefer css/xpath targeting the clickable ancestor with the icon descendant.\n- Provide up to 10 alternatives for the SAME element (aim for 8–10 when possible), such as:\n  • xpath://button[normalize-space(.)='Ana Sayfa']\n  • xpath://*[self::a or self::button or @role='button'][contains(normalize-space(.), 'Ana Sayfa')]\n  • css:[data-component-name=\"Button\"][data-component-content*='Ana%20Sayfa']\n  • xpath://*[contains(@aria-label,'Home') or contains(@title,'Home')]\n  • css:button:has(svg.lucide-house)\n  • xpath://*[self::a or self::button][.//svg[@data-lov-name='Home' or @data-component-name='Home']]\n- All selectors MUST be derivable from the provided HTML; do not invent ids/class names.\n\nFeedback usage:\n- Treat feedback selectors as already tried. DO NOT return the same selectors or trivial variations (case-only/whitespace-only).\n- More importantly: avoid re-targeting the same DOM element as in feedback; pick a different plausible Home element following the priority above.\n- Prefer meaningfully different selectors (by structure/attributes) that increase success odds.\n\nOutput STRICT JSON only (one object), no markdown fences, no prose:\n{\n  \"selectorType\": \"css|xpath|text\",\n  \"selector\": \"<string>\",\n  \"alternatives\": [\"<string>\", \"...\"],\n  \"rationale\": \"<short reason>\"\n}\n\nExample if a visible button reads Ana Sayfa:\n{\n  \"selectorType\": \"text\",\n  \"selector\": \"Ana Sayfa\",\n  \"alternatives\": [\n    \"xpath://button[normalize-space(.)='Ana Sayfa']\",\n    \"css:[data-component-name=\\\"Button\\\"][data-component-content*='Ana%20Sayfa']\",\n    \"xpath://*[self::a or self::button or @role='button'][contains(normalize-space(.), 'Ana Sayfa')]\"\n  ],\n  \"rationale\": \"Visible primary navigation labeled 'Ana Sayfa' or 'Home' navigates home; different from prior attempts if they failed\"\n}",
       "maxAttempts": 4
     }
   },
@@ -18,6 +27,16 @@
     "staticMaxCandidates": 50,
     "mapping": {
       "max_alternatives": 12
+    },
+    "stateflow": {
+      "maxLoops": 6,
+      "maxStaticTries": 8,
+      "maxLLMTries": 3,
+      "waitAfterClickMs": 800
+    },
+    "letLLMMap_goUserTask": {
+      "defaultPrompt": "You are an expert web UI analyzer. Given filtered HTML and a target user task label (provided separately), identify the single control that opens that task/page.\n\nGuidelines:\n- Consider exact/near matches in visible text, aria-label/title, and data-* (e.g., data-component-content with URL-encoded text).\n- Prefer the clickable ancestor (<a> or <button>) containing the label/icon. Do not target raw <svg> alone.\n- Allowed selectorType: text | css | xpath.\n- Return STRICT JSON only: { \"selectorType\": \"css|xpath|text\", \"selector\": \"<string>\", \"alternatives\": [\"<string>\"], \"rationale\": \"<short reason>\" }.",
+      "maxAttempts": 4
     },
     "userTaskButtons": [
       {
@@ -37,11 +56,17 @@
           "Add New Traffic"
         ],
         "extraSelectors": [
-          {"type": "xpath", "value": "//button[normalize-space()='Yeni Trafik']"},
-          {"type": "xpath", "value": "//button[contains(translate(., 'YENI', 'yeni'), 'yeni') and contains(translate(., 'TRAFIK', 'trafik'), 'trafik')]"}
+          {
+            "type": "xpath",
+            "value": "//button[normalize-space()='Yeni Trafik']"
+          },
+          {
+            "type": "xpath",
+            "value": "//button[contains(translate(., 'YENI', 'yeni'), 'yeni') and contains(translate(., 'TRAFIK', 'trafik'), 'trafik')]"
+          }
         ],
         "priority": 120
-  },
+      },
       {
         "id": "userTask.lifeInsurance",
         "addSynonyms": [
@@ -58,11 +83,26 @@
           "Create Life Insurance"
         ],
         "extraSelectors": [
-          {"type": "text", "value": "Hayat Sigortası"},
-          {"type": "xpath", "value": "//button[.//span[normalize-space()='Hayat Sigortası'] or normalize-space(.)='Hayat Sigortası']"},
-          {"type": "xpath", "value": "//button[contains(translate(., 'HAYAT SIGORTASI', 'hayat sigortasi'), 'hayat') and contains(translate(., 'HAYAT SIGORTASI', 'hayat sigortasi'), 'sigorta')]"},
-          {"type": "css", "value": "button span:contains('Hayat Sigortası')"},
-          {"type": "css", "value": "button:has(span:contains('Hayat Sigortası'))"}
+          {
+            "type": "text",
+            "value": "Hayat Sigortası"
+          },
+          {
+            "type": "xpath",
+            "value": "//button[.//span[normalize-space()='Hayat Sigortası'] or normalize-space(.)='Hayat Sigortası']"
+          },
+          {
+            "type": "xpath",
+            "value": "//button[contains(translate(., 'HAYAT SIGORTASI', 'hayat sigortasi'), 'hayat') and contains(translate(., 'HAYAT SIGORTASI', 'hayat sigortasi'), 'sigorta')]"
+          },
+          {
+            "type": "css",
+            "value": "button span:contains('Hayat Sigortası')"
+          },
+          {
+            "type": "css",
+            "value": "button:has(span:contains('Hayat Sigortası'))"
+          }
         ],
         "priority": 115
       }
@@ -70,7 +110,7 @@
     "sideMenuToggle": {
       "variants": [
         "lucide-menu",
-        "menu-icon", 
+        "menu-icon",
         "hamburger",
         "navbar-toggler",
         "fa-bars",
@@ -82,7 +122,7 @@
       ],
       "aria_keywords": [
         "menu",
-        "hamburger", 
+        "hamburger",
         "toggle",
         "navigation",
         "sidebar",
@@ -94,25 +134,224 @@
       "icon_patterns": [
         "lucide-menu",
         "fa-bars",
-        "fa-hamburger", 
+        "fa-hamburger",
         "icon-menu",
         "menu-lines",
         "three-lines"
       ]
-    },
-    "letLLMMap_goUserTask": {
-      "defaultPrompt": "You are an expert web UI analyzer. Given filtered HTML and a target user task label (provided separately), identify the single control that opens that task/page.\n\nGuidelines:\n- Consider exact/near matches in visible text, aria-label/title, and data-* (e.g., data-component-content with URL-encoded text).\n- Prefer the clickable ancestor (<a> or <button>) containing the label/icon. Do not target raw <svg> alone.\n- Allowed selectorType: text | css | xpath.\n- Return STRICT JSON only: { \"selectorType\": \"css|xpath|text\", \"selector\": \"<string>\", \"alternatives\": [\"<string>\"], \"rationale\": \"<short reason>\" }.",
-      "maxAttempts": 4
     }
-  }
-  ,
+  },
   "goFillForms": {
+    "input": {
+      "jsonPath": "",
+      "imageDir": "tmp/data",
+      "sourceDir": ""
+    },
     "llm": {
-  "model": "gpt-4o",
-  "mappingModel": "gpt-4o",
-  "visionModel": "gpt-4o",
-  "useHeuristics": true,
-  "mappingPrompt": "You are an expert web UI analyzer. Task: Given filtered HTML of an insurance form page and extracted ruhsat JSON (vehicle registration), decide if this is a fillable form page or the final activation page.\n\nIf fillable, return a JSON with keys: page_kind='fill_form', field_mapping (map logical keys to selectors), and REQUIRED actions array (button texts like 'Devam', 'İleri', 'Continue', 'Next').\nIf final activation page, return page_kind='final_activation' and actions containing visible final CTA texts (e.g., 'Poliçeyi Aktifleştir').\n\nVERY IMPORTANT mapping rules:\n- Include ONLY fields that are present on THIS page.\n- Each field_mapping selector MUST point to exactly one input/select/textarea (unique). Avoid container/form selectors.\n- Prefer stable CSS in this order: #id, tag[name=...], then a unique data-* attribute that exists on THIS page (e.g., [data-testid=...], [data-qa=...]), then [aria-label=...], placeholder/title if unique. Use XPath only if no unique CSS is possible.\n- Do NOT assume any site-specific attribute names; only use attribute names that are actually present in the provided HTML.\n- Do NOT fabricate selectors. If unsure a unique selector exists, omit that key.\n- For actions, ALWAYS scan for buttons with text content like 'Devam', 'Continue', 'Next', 'İleri', 'Submit' - these are CRITICAL for form progression.\n- Actions should contain the visible text content of buttons, never CSS selectors.\n\nSPECIAL FIELD MAPPING RULES:\n- model_yili (model year): MUST map to an INPUT field that accepts year values (like 2024, 2005), NOT to vehicle type dropdowns.\n- plaka_no: Look for input fields labeled 'Plaka' or with 'plate' in labels.\n- motor_no: Look for input fields labeled 'Motor' or 'Engine Number'.\n- sasi_no: Look for input fields labeled 'Şasi', 'Chassis' or 'VIN'.\n- Examine labels carefully - model year inputs have labels like 'Model Year', 'Model Yılı' while vehicle type dropdowns have labels like 'Kullanım Türü', 'Vehicle Type'.\n\nCRITICAL: If you see any buttons with text like 'DEVAM', 'Continue', 'Next', you MUST include them in the actions array.\n\nOutput STRICT JSON only with keys: {page_kind, field_mapping?, actions?, evidence?}."
+      "model": "gpt-4o",
+      "mappingModel": "gpt-4o",
+      "visionModel": "gpt-4o",
+      "temperature": 0.0,
+      "useHeuristics": false,
+      "mappingPrompt": "You are an expert web UI analyzer. Task: Given filtered HTML of an insurance form page and extracted ruhsat JSON (vehicle registration), decide if this is a fillable form page or the final activation page.\n\nIf fillable, return a JSON with keys: page_kind='fill_form', field_mapping (map logical keys to selectors), and REQUIRED actions array (button texts like 'Devam', 'İleri', 'Continue', 'Next').\nIf final activation page, return page_kind='final_activation' and actions containing visible final CTA texts (e.g., 'Poliçeyi Aktifleştir').\n\nVERY IMPORTANT mapping rules:\n- Include ONLY fields that are present on THIS page.\n- Each field_mapping selector MUST point to exactly one input/select/textarea (unique). Avoid container/form selectors.\n- Prefer stable CSS in this order: #id, tag[name=...], then a unique data-* attribute that exists on THIS page (e.g., [data-testid=...], [data-qa=...]), then [aria-label=...], placeholder/title if unique. Use XPath only if no unique CSS is possible.\n- Do NOT assume any site-specific attribute names; only use attribute names that are actually present in the provided HTML.\n- Do NOT fabricate selectors. If unsure a unique selector exists, omit that key.\n- For actions, ALWAYS scan for buttons with text content like 'Devam', 'Continue', 'Next', 'İleri', 'Submit' - these are CRITICAL for form progression.\n- Actions should contain the visible text content of buttons, never CSS selectors.\n\nSPECIAL FIELD MAPPING RULES:\n- model_yili (model year): MUST map to an INPUT field that accepts year values (like 2024, 2005), NOT to vehicle type dropdowns.\n- plaka_no: Look for input fields labeled 'Plaka' or with 'plate' in labels.\n- motor_no: Look for input fields labeled 'Motor' or 'Engine Number'.\n- sasi_no: Look for input fields labeled 'Şasi', 'Chassis' or 'VIN'.\n- Examine labels carefully - model year inputs have labels like 'Model Year', 'Model Yılı' while vehicle type dropdowns have labels like 'Kullanım Türü', 'Vehicle Type'.\n\nCRITICAL: If you see any buttons with text like 'DEVAM', 'Continue', 'Next', you MUST include them in the actions array.\n\nOutput STRICT JSON only with keys: {page_kind, field_mapping?, actions?, evidence?}."
+    },
+    "persist": {
+      "dir": "tmp/ruhsat_json"
+    },
+    "stateflow": {
+      "maxLoops": 10,
+      "waitAfterActionMs": 600,
+      "maxLLMTries": 3,
+      "perFieldAttemptWaits": [
+        250,
+        400,
+        600
+      ],
+      "postFillVerifyDelayMs": 200,
+      "htmlCheckDelayMs": 200,
+      "commitEnter": true,
+      "clickOutside": true
+    },
+    "finalCtas": [
+      "Poliçeyi Aktifleştir",
+      "Policeyi Aktiflestir",
+      "Poliçeyi Üret",
+      "Poliçeyi Yazdır"
+    ],
+    "static": {
+      "actions": [
+        "Devam",
+        "İleri",
+        "Ileri",
+        "Kaydet",
+        "Poliçeyi Aktifleştir",
+        "Aktifleştir"
+      ],
+      "fallbackThreshold": 0.75,
+      "synonyms": {
+        "plaka_no": [
+          "plaka",
+          "plaka no",
+          "plaka numarası",
+          "araç plakası",
+          "plate",
+          "license plate"
+        ],
+        "sasi_no": [
+          "şasi",
+          "şasi no",
+          "şasi numarası",
+          "vin",
+          "chassis"
+        ],
+        "model_yili": [
+          "model yılı",
+          "yıl",
+          "model year",
+          "production year"
+        ],
+        "motor_no": [
+          "motor no",
+          "motor numarası",
+          "engine number"
+        ],
+        "marka": [
+          "marka",
+          "brand",
+          "make"
+        ],
+        "model": [
+          "model",
+          "araç modeli",
+          "vehicle model"
+        ],
+        "yakit": [
+          "yakit",
+          "yakıt",
+          "fuel"
+        ],
+        "renk": [
+          "renk",
+          "color",
+          "colour"
+        ]
+      },
+      "criticalFields": {
+        "Yeni Trafik": [
+          "plaka_no",
+          "model_yili",
+          "sasi_no",
+          "motor_no"
+        ],
+        "Hayat Sigortası": [
+          "tc_kimlik_no",
+          "ad_soyad",
+          "dogum_tarihi"
+        ],
+        "Konut Sigortası": [
+          "adres",
+          "il",
+          "ilce",
+          "mahalle"
+        ]
+      },
+      "scenarios": {
+        "Yeni Trafik": {
+          "criticalSelectors": {
+            "plaka_no": [
+              "#plate",
+              "[name='plaka']",
+              "input[aria-label='Plaka']"
+            ],
+            "model_yili": [
+              "[name='modelYili']",
+              "input[placeholder*='Model']"
+            ],
+            "sasi_no": [
+              "[name='sasi']",
+              "[name='vin']",
+              "input[placeholder*='Şasi']"
+            ],
+            "motor_no": [
+              "[name='motorNo']",
+              "input[placeholder*='Motor']"
+            ]
+          }
+        }
+      },
+      "fieldSynonyms": {
+        "plaka_no": [
+          "plaka",
+          "plate",
+          "plaka no",
+          "araç plaka",
+          "vehicle plate",
+          "license plate"
+        ],
+        "model_yili": [
+          "model yılı",
+          "model year",
+          "yapım yılı",
+          "üretim yılı",
+          "year",
+          "yıl"
+        ],
+        "sasi_no": [
+          "şasi no",
+          "chassis",
+          "vin",
+          "şasi numarası",
+          "chassis number",
+          "vin number"
+        ],
+        "motor_no": [
+          "motor no",
+          "engine number",
+          "motor numarası",
+          "engine no"
+        ],
+        "tc_kimlik_no": [
+          "tc kimlik",
+          "tc no",
+          "kimlik no",
+          "national id",
+          "citizenship number"
+        ],
+        "ad_soyad": [
+          "ad soyad",
+          "full name",
+          "isim",
+          "name",
+          "ad",
+          "soyad"
+        ],
+        "dogum_tarihi": [
+          "doğum tarihi",
+          "birth date",
+          "doğum",
+          "birth"
+        ]
+      }
+    }
+  },
+  "staticFormMapping": {
+    "sites": {
+      "preview--screen-to-data.lovable.app": {
+        "Yeni Trafik": {
+          "fieldSelectors": {
+            "plaka_no": "<input data-lov-id=\"src/pages/TrafficInsurance.tsx:148:16\" data-lov-name=\"Input\" data-component-path=\"src/pages/TrafficInsurance.tsx\" data-component-line=\"148\" data-component-file=\"TrafficInsurance.tsx\" data-component-name=\"Input\" data-component-content=\"%7B%22className%22%3A%22h-10%22%7D\" class=\"flex w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm h-10\" id=\"plateNo\" value=\"\">"
+          },
+          "actions": [],
+          "executionOrder": [],
+          "criticalFields": [
+            "plaka_no",
+            "model_yili",
+            "sasi_no",
+            "motor_no"
+          ],
+          "synonyms": {}
+        }
+      }
     }
   }
 }

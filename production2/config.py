@@ -74,6 +74,18 @@ def load_config() -> Dict[str, Any]:
     return _CACHED
 
 
+def save_config(new_cfg: Dict[str, Any]) -> None:
+    """Persist merged config back to production2/config.json and refresh cache."""
+    global _CACHED
+    try:
+        _CFG_PATH.write_text(json.dumps(new_cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+        _CACHED = None
+        load_config()  # reload into cache
+    except Exception:
+        # Do not crash callers; they can handle missing write permissions
+        pass
+
+
 def get(path: str, default: Any = None) -> Any:
     cfg = load_config()
     cur: Any = cfg
@@ -195,7 +207,38 @@ DEFAULT_CONFIG.setdefault("goFillForms", {
     },
     "finalCtas": [
         "Poliçeyi Aktifleştir", "Policeyi Aktiflestir", "Poliçeyi Üret", "Poliçeyi Yazdır"
-    ]
+    ],
+    # New: static-first settings for form fill
+    "static": {
+        "actions": ["Devam", "İleri", "Ileri", "Kaydet", "Poliçeyi Aktifleştir", "Aktifleştir"],
+        "fallbackThreshold": 0.75,
+        # Global synonyms (can be overridden per-scenario)
+        "synonyms": {
+            "plaka_no": ["plaka", "plaka no", "plaka numarası", "araç plakası", "plate", "license plate"],
+            "sasi_no": ["şasi", "şasi no", "şasi numarası", "vin", "chassis"],
+            "model_yili": ["model yılı", "yıl", "model year", "production year"],
+            "motor_no": ["motor no", "motor numarası", "engine number"],
+            "marka": ["marka", "brand", "make"],
+            "model": ["model", "araç modeli", "vehicle model"],
+            "yakit": ["yakit", "yakıt", "fuel"],
+            "renk": ["renk", "color", "colour"]
+        },
+        "criticalFields": {
+            "Yeni Trafik": ["plaka_no", "model_yili", "sasi_no", "motor_no"]
+        },
+        "scenarios": {
+            "Yeni Trafik": {
+                # Add any id/name selector hints if the site is known
+                "criticalSelectors": {
+                    # Example hints (safe, only applied if present)
+                    "plaka_no": ["#plate", "[name='plaka']", "input[aria-label='Plaka']"],
+                    "model_yili": ["[name='modelYili']", "input[placeholder*='Model']"],
+                    "sasi_no": ["[name='sasi']", "[name='vin']", "input[placeholder*='Şasi']"],
+                    "motor_no": ["[name='motorNo']", "input[placeholder*='Motor']"]
+                }
+            }
+        }
+    }
 })
 
 def get_go_fill_forms(key: str, default: Any = None) -> Any:

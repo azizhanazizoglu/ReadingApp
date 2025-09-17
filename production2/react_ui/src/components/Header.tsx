@@ -13,6 +13,8 @@ import { runFindHomePageSF } from "@/stateflows/findHomePageSF";
 import { runGoUserTaskPageSF } from "@/stateflows/goUserTaskPageSF";
 import { runFillFormsUserTaskPageSF } from "@/stateflows/fillFormsUserTaskPageSF";
 import { runMasterSF } from "@/stateflows/masterSF";
+import { runCalibStart, saveCalibDraft, finalizeCalib } from "@/stateflows/calibFillUserTaskPageStaticSF";
+import { CalibrationPanel } from "@/components/CalibrationPanel";
 
 interface HeaderProps {
   appName: string;
@@ -124,6 +126,30 @@ export const Header: React.FC<HeaderProps> = ({
       }
     } catch {}
   };
+  // Calibration panel state
+  const [calibOpen, setCalibOpen] = React.useState(false);
+  const [calibHost, setCalibHost] = React.useState<string>("");
+  const [calibTask, setCalibTask] = React.useState<string>("Yeni Trafik");
+  const [calibCandidates, setCalibCandidates] = React.useState<any[]>([]);
+  const [calibRuhsat, setCalibRuhsat] = React.useState<Record<string, string>>({});
+
+  const onCalibClick = async () => {
+    try {
+      devLog('HD-CALIB-CLICK', 'Calibration button clicked');
+      devLog('HD-CALIB', 'Preparing to start session (collecting DOM)');
+      const res = await runCalibStart('Yeni Trafik', (m)=>devLog('HD-CALIB', m));
+      devLog('HD-CALIB', `StartSession returned ok=${res?.ok} host=${res?.host||''} inputs_found=${res?.inputs_found ?? 'n/a'}`);
+      if (!res?.ok) { devLog('HD-CALIB-ERR', res?.error || 'start_failed'); return; }
+      setCalibHost(res.host || 'unknown');
+      setCalibTask(res.task || 'Yeni Trafik');
+      setCalibCandidates(res.candidates_preview || []);
+      setCalibRuhsat((res.ruhsat as any) || {});
+      setCalibOpen(true);
+      devLog('HD-CALIB-OK', `host=${res.host} inputs=${res.inputs_found}`);
+    } catch (e: any) {
+      devLog('HD-CALIB-ERR', String(e?.message || e));
+    }
+  };
   // Wait for one did-stop-loading from webview (with timeout)
   const waitForWebviewStop = (timeoutMs = 7000) => new Promise<void>((resolve) => {
     try {
@@ -138,17 +164,27 @@ export const Header: React.FC<HeaderProps> = ({
 
   // Run TsX loop: capture → backend → maybe click 1 action → wait → repeat (max few steps)
   const runTsxLoop = async () => {
+    devLog('HD-TSX-START', 'TsX button clicked - starting loop');
     const MAX_STEPS = 6;
     let lastExecuted: string | undefined = undefined;
     for (let step = 1; step <= MAX_STEPS; step++) {
       try {
+        devLog('HD-TSX-STEP', `[step ${step}] Getting HTML from webview`);
         const { html, url } = await getDomAndUrlFromWebview((c, m) => devLog(c, `[step ${step}] ${m}`));
-        if (!html) { devLog('HD-TSX-NOHTML', `[step ${step}] Webview HTML alınamadı`); break; }
-  const r = await fetch(`${BACKEND_URL}/api/tsx/dev-run`, {
+        if (!html) { 
+          devLog('HD-TSX-NOHTML', `[step ${step}] Webview HTML alınamadı`); 
+          break; 
+        }
+        devLog('HD-TSX-REQUEST', `[step ${step}] Sending request to backend: ${html.length} chars, URL: ${url}`);
+        const r = await fetch(`${BACKEND_URL}/api/tsx/dev-run`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ user_command: tsxCmd || 'Yeni Trafik', html, force_llm: !!forceLLM, executed_action: lastExecuted, current_url: url, hard_reset: step === 1 })
         });
-        if (!r.ok) { devLog('HD-TSX-ERR', `[step ${step}] HTTP ${r.status}`); break; }
+        devLog('HD-TSX-RESPONSE', `[step ${step}] Backend response: ${r.status} ${r.statusText}`);
+        if (!r.ok) { 
+          devLog('HD-TSX-ERR', `[step ${step}] HTTP ${r.status}`); 
+          break; 
+        }
         const j = await r.json();
         devLog('HD-TSX-OK', `[step ${step}] state=${j?.state} details=${JSON.stringify(j?.details||{})}`);
         if (j?.state === 'nav_failed') {
@@ -224,6 +260,7 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
   return (
+  <>
   <header
     className={"w-full flex items-center justify-between px-10 py-4 bg-white/80 dark:bg-[#223A5E]/90 shadow-md rounded-b-3xl transition-colors border-b border-[#e6f0fa] dark:border-[#335C81]"}
     style={{
@@ -243,8 +280,7 @@ export const Header: React.FC<HeaderProps> = ({
     {/* Search Bar + Buttons */}
   <div className="flex items-center gap-3 flex-1 justify-center">
       {/* Developer butonları - search bar solunda */}
-    {developerMode && (
-  <div className="flex items-center gap-2 mr-3 pr-0">
+    <div className="flex items-center gap-2 mr-3 pr-0">
           {/* TsX Command input (Dev) */}
           <input
             value={tsxCmd}
@@ -269,14 +305,34 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Home size={20} />
           </Button>
+          {developerMode && (
           <Button
             className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] active:scale-95 text-[#0057A0] shadow"
             style={{ fontFamily: fontStack, minWidth: 52, minHeight: 40, fontWeight: 700 }}
-            onClick={runTsxLoop}
+            onClick={async () => {
+              try {
+                devLog('HD-TSX-CLICK', 'TsX button clicked');
+                await runTsxLoop();
+                devLog('HD-TSX-COMPLETE', 'TsX loop completed');
+              } catch (e: any) {
+                devLog('HD-TSX-CLICK-ERR', `TsX button error: ${String(e?.message || e)}`);
+              }
+            }}
             aria-label="TsX Dev Run"
           >
             TsX
           </Button>
+          )}
+          <Button
+            className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] active:scale-95 text-[#0057A0] shadow"
+            style={{ fontFamily: fontStack, minWidth: 40, minHeight: 40, fontWeight: 700 }}
+            onClick={onCalibClick}
+            aria-label="Calibration"
+            title="Calibration"
+          >
+            C
+          </Button>
+          {developerMode && (
           <Button
             className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] active:scale-95 text-[#0057A0] shadow"
             style={{ fontFamily: fontStack, minWidth: 52, minHeight: 40, fontWeight: 700 }}
@@ -301,6 +357,8 @@ export const Header: React.FC<HeaderProps> = ({
           >
             F1
           </Button>
+          )}
+          {developerMode && (
           <Button
             className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] active:scale-95 text-[#0057A0] shadow"
             style={{ fontFamily: fontStack, minWidth: 72, minHeight: 40, fontWeight: 700 }}
@@ -317,6 +375,8 @@ export const Header: React.FC<HeaderProps> = ({
           >
             Master
           </Button>
+          )}
+          {developerMode && (
           <Button
             className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] active:scale-95 text-[#0057A0] shadow"
             style={{ fontFamily: fontStack, minWidth: 52, minHeight: 40, fontWeight: 700 }}
@@ -363,40 +423,71 @@ export const Header: React.FC<HeaderProps> = ({
           >
             F2
           </Button>
+          )}
+          {developerMode && (
           <Button
             className="px-3 py-1 rounded-full bg-[#E6F0FA] hover:bg-[#B3C7E6] active:scale-95 text-[#0057A0] shadow"
             style={{ fontFamily: fontStack, minWidth: 52, minHeight: 40, fontWeight: 700 }}
             onClick={async () => {
               try {
-                devLog('HD-F3', 'F3 clicked');
-                // Load config defaults for F3 on first use
-                let sf: any = (window as any).__CFG_F3_SF;
-                if (!sf) {
-                  try {
-                    const r = await fetch(`${BACKEND_URL}/api/config`);
-                    const j = await r.json();
-                    sf = (j?.goFillForms?.stateflow) || {};
-                    (window as any).__CFG_F3_SF = sf;
-                    devLog('HD-F3-CFG', `loaded ${JSON.stringify(sf)}`);
-                  } catch {}
+                devLog('HD-F3', 'F3 clicked - Static-first form filling');
+                
+                // Get current page HTML and URL
+                const { html, url } = await getDomAndUrlFromWebview((c, m) => devLog(c, `[F3] ${m}`));
+                if (!html) {
+                  devLog('HD-F3-NOHTML', 'F3: Webview HTML alınamadı');
+                  return;
                 }
-                const res = await runFillFormsUserTaskPageSF({
-                  waitAfterActionMs: Number(sf?.waitAfterActionMs ?? 800),
-                  maxLoops: Number(sf?.maxLoops ?? 10),
-                  maxLLMTries: Number(sf?.maxLLMTries ?? 3),
-                  log: (m) => devLog('HD-F3-LOG', m),
+
+                devLog('HD-F3-START', `F3: Analyzing page (${html.length} chars) at ${url}`);
+                
+                // Call TsX static-first endpoint
+                const r = await fetch(`${BACKEND_URL}/api/tsx/dev-run`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ 
+                    user_command: 'Yeni Trafik', 
+                    html, 
+                    current_url: url 
+                  })
                 });
-                devLog('HD-F3-DONE', `ok=${res?.ok} changed=${(res as any)?.changed}`);
+
+                if (!r.ok) {
+                  devLog('HD-F3-HTTP-ERR', `F3: HTTP ${r.status}`);
+                  return;
+                }
+
+                const result = await r.json();
+                const state = result?.state || 'unknown';
+                const details = result?.details || {};
+
+                devLog('HD-F3-RESULT', `F3: state=${state} method=${details?.method || 'unknown'}`);
+
+                if (state === 'final_page_detected') {
+                  devLog('HD-F3-FINAL', `F3: Final page detected - ready to click`);
+                } else if (state === 'static_ready') {
+                  devLog('HD-F3-READY', `F3: Static form filling ready (${details?.total_fields || 0} fields, ${details?.success_rate || 0}% critical)`);
+                } else if (state === 'need_llm_fallback') {
+                  devLog('HD-F3-FALLBACK', `F3: Static insufficient (${details?.success_rate || 0}% < ${details?.threshold || 75}%) - requires LLM fallback`);
+                  if (details?.should_go_home) {
+                    devLog('HD-F3-HOME', 'F3: Returning to start page for LLM fallback');
+                  }
+                } else if (state === 'no_forms_detected') {
+                  devLog('HD-F3-NOFORMS', 'F3: No form fields detected on this page');
+                } else {
+                  devLog('HD-F3-OTHER', `F3: ${details?.message || state}`);
+                }
+
               } catch (e: any) {
-                devLog('HD-F3-ERR', String(e?.message || e));
+                devLog('HD-F3-ERR', `F3: ${String(e?.message || e)}`);
               }
             }}
             aria-label="F3"
           >
             F3
           </Button>
+          )}
         </div>
-      )}
       <SearchBar
         address={address}
         setAddress={setAddress}
@@ -499,5 +590,42 @@ export const Header: React.FC<HeaderProps> = ({
       <ThemeToggle />
     </div>
   </header>
+  {calibOpen && (
+    <CalibrationPanel
+      host={calibHost}
+      task={calibTask}
+      ruhsat={calibRuhsat}
+      candidates={calibCandidates}
+      darkMode={darkMode}
+      onClose={() => setCalibOpen(false)}
+      onSaveDraft={async (draft) => {
+        try {
+          const r = await saveCalibDraft(calibHost, calibTask, draft);
+          devLog('HD-CALIB-SAVE', `saved ${r?.path || ''}`);
+        } catch (e: any) {
+          devLog('HD-CALIB-SAVE-ERR', String(e?.message || e));
+        }
+      }}
+      onTestPlan={async () => {
+        try {
+          const rr = await fetch(`${BACKEND_URL}/api/calib`, { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ op: 'testFillPlan', mapping: { host: calibHost, task: calibTask } }) });
+          const jj = await rr.json();
+          devLog('HD-CALIB-TEST', `ok=${jj?.ok} count=${jj?.plan?.count}`);
+        } catch (e: any) {
+          devLog('HD-CALIB-TEST-ERR', String(e?.message || e));
+        }
+      }}
+      onFinalize={async () => {
+        try {
+          devLog('HD-CALIB-FINALIZE', `finalize host=${calibHost} task=${calibTask}`);
+          const res = await finalizeCalib(calibHost, calibTask);
+          devLog('HD-CALIB-FINALIZE-OK', `merged=${res?.merged ?? false}`);
+        } catch (e: any) {
+          devLog('HD-CALIB-FINALIZE-ERR', String(e?.message || e));
+        }
+      }}
+    />
+  )}
+  </>
   );
 }

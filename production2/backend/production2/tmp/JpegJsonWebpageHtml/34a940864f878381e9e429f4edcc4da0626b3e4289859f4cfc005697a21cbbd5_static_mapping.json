@@ -1,0 +1,32 @@
+{
+  "ok": true,
+  "page_kind": "fill_form",
+  "field_mapping": {
+    "plaka_no": "#plateNo"
+  },
+  "actions": [
+    "devam"
+  ],
+  "validation": {
+    "contexts": {
+      "plaka_no": {
+        "tag": "input",
+        "id": "plateNo",
+        "name": null
+      }
+    },
+    "counts": {
+      "mapped": 1
+    }
+  },
+  "mapping_source": {
+    "plaka_no": "static_synonym"
+  },
+  "fingerprint": "34a940864f878381e9e429f4edcc4da0626b3e4289859f4cfc005697a21cbbd5",
+  "debug_dumps": {
+    "used": "static",
+    "used_hints": {},
+    "used_sections": false
+  },
+  "used": "static"
+}
