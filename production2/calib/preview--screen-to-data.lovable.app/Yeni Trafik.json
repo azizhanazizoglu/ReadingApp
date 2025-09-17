@@ -1,8 +1,24 @@
 {
   "fieldSelectors": {
-    "plaka_no": "<input data-lov-id=\"src/pages/TrafficInsurance.tsx:148:16\" data-lov-name=\"Input\" data-component-path=\"src/pages/TrafficInsurance.tsx\" data-component-line=\"148\" data-component-file=\"TrafficInsurance.tsx\" data-component-name=\"Input\" data-component-content=\"%7B%22className%22%3A%22h-10%22%7D\" class=\"flex w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm h-10\" id=\"plateNo\" value=\"\">"
+    "plaka_no": "#plateNo",
+    "marka": "",
+    "motor_no": "[data-lov-id=\"src/pages/VehicleDetails.tsx:87:16\"]",
+    "sasi_no": "[data-lov-id=\"src/pages/VehicleDetails.tsx:95:16\"]",
+    "model_yili": "[data-lov-id=\"src/pages/VehicleDetails.tsx:104:16\"]"
   },
-  "actions": [],
+  "actions": [
+    "Action 1"
+  ],
+  "actionsDetail": [
+    {
+      "id": "a1",
+      "label": "Action 1",
+      "selector": ""
+    }
+  ],
+  "actionsExecutionOrder": [
+    "Action 1"
+  ],
   "executionOrder": [],
   "criticalFields": [
     "plaka_no",
@@ -12,6 +28,6 @@
   ],
   "host": "preview--screen-to-data.lovable.app",
   "task": "Yeni Trafik",
-  "updatedAt": "2025-09-17T21:01:57Z",
-  "createdAt": "2025-09-17T21:01:57Z"
+  "updatedAt": "2025-09-17T21:22:20Z",
+  "createdAt": "2025-09-17T21:22:20Z"
 }

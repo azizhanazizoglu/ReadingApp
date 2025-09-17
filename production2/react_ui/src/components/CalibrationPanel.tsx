@@ -15,7 +15,9 @@ type Props = {
 export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, candidates, darkMode = false, onClose, onSaveDraft, onTestPlan, onFinalize }) => {
   const [fieldSelectors, setFieldSelectors] = React.useState<Record<string, string>>({});
   const [executionOrder, setExecutionOrder] = React.useState<string[]>([]);
-  const [actions, setActions] = React.useState<string[]>([]);
+  // Actions as detailed list with label + selector (back-compat labels array is derived on save)
+  type ActionItem = { id: string; label: string; selector?: string };
+  const [actionsDetail, setActionsDetail] = React.useState<ActionItem[]>([{ id: 'a1', label: 'Action 1', selector: '' }]);
   const [criticalFields, setCriticalFields] = React.useState<string[]>(["plaka_no","model_yili","sasi_no","motor_no"]);
   const [liveAssignKey, setLiveAssignKey] = React.useState<string | null>(null);
 
@@ -25,6 +27,13 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, candidat
   const [status, setStatus] = React.useState<Record<string, 'unknown'|'checking'|'ok'|'missing'>>({});
   const [htmlSnippets, setHtmlSnippets] = React.useState<Record<string, string>>({});
   const [openHtml, setOpenHtml] = React.useState<Record<string, boolean>>({});
+  // Actions UI states
+  const [actStatus, setActStatus] = React.useState<Record<string, 'unknown'|'checking'|'ok'|'missing'>>({});
+  const [actPreviews, setActPreviews] = React.useState<Record<string, string>>({});
+  const [actHtmlSnippets, setActHtmlSnippets] = React.useState<Record<string, string>>({});
+  const [actOpenHtml, setActOpenHtml] = React.useState<Record<string, boolean>>({});
+  const [actDragIdx, setActDragIdx] = React.useState<number | null>(null);
+  const [actLiveAssignId, setActLiveAssignId] = React.useState<string | null>(null);
 
   // No entrance animation to keep it snappy
 
@@ -71,7 +80,15 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, candidat
   };
 
   const handleSave = () => {
-    onSaveDraft({ fieldSelectors, actions, executionOrder, criticalFields });
+    const actionLabels = actionsDetail.map(a => a.label).filter(Boolean);
+    onSaveDraft({
+      fieldSelectors,
+      actions: actionLabels,
+      actionsDetail,
+      actionsExecutionOrder: actionLabels,
+      executionOrder,
+      criticalFields,
+    });
   };
 
   const onDragStart = (idx: number) => setDragIdx(idx);
@@ -96,6 +113,63 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, candidat
   const chipBorder = darkMode ? 'rgba(99,102,241,0.6)' : '#94a3b8';
   const scrimBg = 'rgba(0,0,0,0.35)';
   const glassShadow = '0 20px 50px rgba(0,0,0,0.45)';
+
+  // Action helpers
+  const handleActionChange = (id: string, field: 'label'|'selector', value: string) => {
+    setActionsDetail(prev => prev.map(a => a.id === id ? { ...a, [field]: value } as ActionItem : a));
+    if (field === 'selector') {
+      setActStatus(s => ({ ...s, [id]: value ? 'checking' : 'unknown' }));
+      const current = value;
+      setTimeout(async () => {
+        const it = actionsDetail.find(a => a.id === id);
+        if (!it) return;
+        const still = (actionsDetail.find(a => a.id === id)?.selector) ?? '';
+        if (still !== current) return;
+        if (!current) { setActStatus(s => ({ ...s, [id]: 'unknown' })); return; }
+        try {
+          const ok = await (window as any).checkSelectorInWebview?.(current);
+          setActStatus(s => ({ ...s, [id]: ok ? 'ok' : 'missing' }));
+          if (ok) {
+            const info = await (window as any).previewSelectorInWebview?.(current);
+            if (info && typeof info === 'string') setActPreviews(p => ({ ...p, [id]: info }));
+            const html = await (window as any).getElementHtmlInWebview?.(current, 1600);
+            if (html && typeof html === 'string') setActHtmlSnippets(h => ({ ...h, [id]: html }));
+          }
+        } catch {
+          setActStatus(s => ({ ...s, [id]: 'missing' }));
+        }
+      }, 220);
+    }
+  };
+
+  const handlePickAction = async (id: string) => {
+    try {
+      const sel = await (window as any).pickSelectorFromWebview?.();
+      if (sel && typeof sel === 'string') {
+        handleActionChange(id, 'selector', sel);
+        try {
+          const info = await (window as any).previewSelectorInWebview?.(sel);
+          if (info && typeof info === 'string') setActPreviews((p) => ({ ...p, [id]: info }));
+        } catch {}
+      }
+    } catch {}
+  };
+
+  const addAction = () => {
+    const idx = actionsDetail.length + 1;
+    const id = `a${Date.now().toString(36)}_${idx}`;
+    setActionsDetail(prev => [...prev, { id, label: `Action ${idx}`, selector: '' }]);
+  };
+
+  const onActionDragStart = (idx: number) => setActDragIdx(idx);
+  const onActionDrop = (idx: number) => {
+    if (actDragIdx === null) return;
+    const arr = [...actionsDetail];
+    const [item] = arr.splice(actDragIdx, 1);
+    arr.splice(idx, 0, item);
+    setActionsDetail(arr);
+    setActDragIdx(null);
+  };
 
   return (
     <>
@@ -172,8 +246,58 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, candidat
           ))}
         </div>
   <div style={{ marginTop: 6, fontSize: 11, color: textSub }}>Note: Dragging directly onto the iframe isn’t supported. Use “Pick” or double-click a chip to assign a selector, and drag chips here to define order.</div>
-        <div style={{ marginTop: 10, fontSize: 12, color: textSub }}>Actions (comma-separated button texts):</div>
-        <input value={actions.join(',')} onChange={(e)=>setActions(e.target.value.split(',').map(s=>s.trim()).filter(Boolean))} placeholder="e.g. Devam,İleri" style={{ width: '100%', fontSize: 12, padding: '8px 10px', color: textMain, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10 }} />
+        <div style={{ marginTop: 14, fontSize: 12, color: textSub, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>Actions:</span>
+          <button onClick={addAction} title="Add another action" style={{ fontSize: 12, padding: '6px 10px', border: `1px solid ${chipBorder}`, borderRadius: 10, background: chipBg, color: textMain, cursor: 'pointer' }}>+ Add Action</button>
+        </div>
+        <div style={{ maxHeight: 220, overflowY: 'auto', border: `1px solid ${headerBorder}`, borderRadius: 10, padding: 10, background: darkMode ? 'rgba(2,6,23,0.35)' : '#ffffff' }}>
+          {actionsDetail.map((a, idx) => (
+            <div key={a.id} style={{ display: 'flex', alignItems: 'center', marginBottom: 6, gap: 6 }}>
+              <div style={{ width: 160, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <input value={a.label} onChange={(e)=>handleActionChange(a.id, 'label', e.target.value)} placeholder={`Action ${idx+1} label`} style={{ width: '100%', fontSize: 12, padding: '6px 8px', color: textMain, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10 }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: textSub }}>
+                  {actStatus[a.id] === 'ok' && <span title="Selector found" style={{ width: 8, height: 8, background: '#10b981', borderRadius: 9999, display: 'inline-block' }} />}
+                  {actStatus[a.id] === 'missing' && <span title="No match" style={{ width: 8, height: 8, background: '#ef4444', borderRadius: 9999, display: 'inline-block' }} />}
+                  {actStatus[a.id] === 'checking' && <span title="Checking…" style={{ width: 8, height: 8, background: '#f59e0b', borderRadius: 9999, display: 'inline-block' }} />}
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: 4 }}>
+                <input value={a.selector || ''} onChange={(e)=>handleActionChange(a.id, 'selector', e.target.value)} placeholder={`CSS selector for ${a.label || ('Action ' + (idx+1))}`} style={{ width: '100%', fontSize: 12, padding: '8px 10px', color: textMain, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10 }} />
+                {actPreviews[a.id] && <div style={{ fontSize: 11, color: textSub }}>{actPreviews[a.id]}</div>}
+                {actHtmlSnippets[a.id] && (
+                  <div style={{ fontSize: 11, color: textSub }}>
+                    <button onClick={()=>setActOpenHtml((o)=>({ ...o, [a.id]: !o[a.id] }))} style={{ fontSize: 11, padding: '2px 6px', marginRight: 6, borderRadius: 8, border: `1px solid ${inputBorder}`, background: 'transparent', color: textSub, cursor: 'pointer' }}>
+                      {actOpenHtml[a.id] ? '▾ HTML' : '▸ HTML'}
+                    </button>
+                    <button onClick={()=>{ try { navigator.clipboard.writeText(actHtmlSnippets[a.id]); } catch {} }} style={{ fontSize: 11, padding: '2px 6px', borderRadius: 8, border: `1px solid ${inputBorder}`, background: 'transparent', color: textSub, cursor: 'pointer' }}>Copy</button>
+                    {actOpenHtml[a.id] && (
+                      <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', marginTop: 6, padding: 8, border: `1px solid ${inputBorder}`, borderRadius: 8, background: darkMode ? 'rgba(2,6,23,0.5)' : '#f8fafc', color: textSub, maxHeight: 220, overflowY: 'auto' }}>{actHtmlSnippets[a.id]}</pre>
+                    )}
+                  </div>
+                )}
+              </div>
+              <button title="Pick an action element (button/link)" onClick={()=>handlePickAction(a.id)} style={{ fontSize: 12, padding: '8px 10px', border: `1px solid ${chipBorder}`, borderRadius: 10, background: chipBg, color: textMain, cursor: 'pointer' }}>Pick</button>
+              <button title="Enable live assign for this action" onClick={async ()=>{
+                setActLiveAssignId(a.id);
+                try { await handlePickAction(a.id); } finally { setActLiveAssignId(null); }
+              }} style={{ fontSize: 12, padding: '8px 10px', border: `1px solid ${chipBorder}`, borderRadius: 10, background: darkMode ? '#0b1220' : '#f8fafc', color: textMain, cursor: 'pointer' }}>Live</button>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: 6, fontSize: 12, color: textSub }}>Actions: drag to reorder</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', border: `1px dashed ${inputBorder}`, borderRadius: 10, padding: 8, minHeight: 44 }}>
+          {actionsDetail.map((a, idx) => (
+            <div key={`${a.id}-chip`} title="Drag to reorder. Double-click to pick selector." onDoubleClick={async ()=>{
+                try {
+                  const sel = await (window as any).pickSelectorFromWebview?.();
+                  if (sel && typeof sel === 'string') handleActionChange(a.id, 'selector', sel);
+                } catch {}
+              }} draggable onDragStart={()=>onActionDragStart(idx)} onDragOver={onDragOver} onDrop={()=>onActionDrop(idx)}
+              style={{ cursor: 'grab', fontSize: 11, padding: '6px 10px', border: `1px solid ${chipBorder}`, borderRadius: 16, background: chipBg, color: textMain }}>
+              ☰ {a.label || `Action ${idx+1}`}
+            </div>
+          ))}
+        </div>
         <div style={{ marginTop: 10, fontSize: 12, color: textSub }}>Critical fields (comma-separated):</div>
         <input value={criticalFields.join(',')} onChange={(e)=>setCriticalFields(e.target.value.split(',').map(s=>s.trim()).filter(Boolean))} placeholder="plaka_no,model_yili,sasi_no,motor_no" style={{ width: '100%', fontSize: 12, padding: '8px 10px', color: textMain, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10 }} />
         <div style={{ marginTop: 12, display: 'flex', gap: 10 }}>
