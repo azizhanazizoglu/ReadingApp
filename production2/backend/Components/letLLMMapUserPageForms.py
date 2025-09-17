@@ -299,7 +299,7 @@ _DEFAULT_SYNONYMS: Dict[str, List[str]] = {
 	'ad_soyad': ['ad soyad', 'ad/soyad', 'isim', 'name', 'full name', 'ad soyadı', 'ad soyadi'],
 	'tckimlik': ['tc', 'tc kimlik', 'kimlik', 'kimlik no', 'identity', 'national id', 'tckn', 't.c. kimlik'],
 	'dogum_tarihi': ['doğum tarihi', 'dogum tarihi', 'birth date', 'birthdate', 'dob'],
-	'model_yili': ['model yılı', 'model yili', 'model year', 'yil', 'yılı', 'yili'],
+	'model_yili': ['model yılı', 'model yili', 'model year', 'year', 'yil', 'yılı', 'yili', 'üretim yılı', 'üretim yili'],
 	'sasi_no': ['şasi', 'sasi', 'şasi no', 'sasi no', 'şasi numarası', 'sasi numarasi', 'şasi num', 'sasi num', 'şase', 'sase', 'chassis', 'vin'],
 	'motor_no': ['motor', 'motor no', 'motor no.', 'motor numarası', 'motor numarasi', 'engine', 'engine no', 'engine number'],
 }
@@ -523,6 +523,49 @@ def _heuristic_map_fields(html: str, keys: List[str], synonyms: Optional[Dict[st
 					ce = str(attrs.get('contenteditable', '')).lower() == 'true'
 					if not ce:
 						continue
+				
+				# Special handling for model_yili: prefer INPUT fields over SELECT dropdowns
+				# to avoid mapping to vehicle type dropdowns instead of year inputs
+				if key == 'model_yili' and tag == 'select':
+					# Check if this select seems to be for vehicle types rather than years
+					# by examining its options and nearby text
+					try:
+						options_text = []
+						for opt in n.find_all('option'):
+							opt_text = opt.get_text().strip()
+							if opt_text:
+								options_text.append(opt_text.lower())
+						options_str = ' '.join(options_text)
+						
+						# If options contain vehicle types, skip this select for model_yili
+						vehicle_type_indicators = ['otomobil', 'motorcycle', 'truck', 'vehicle', 'arac', 'tip', 'tur']
+						if any(indicator in options_str for indicator in vehicle_type_indicators):
+							continue  # Skip this select dropdown for model_yili
+							
+						# Also check nearby labels
+						try:
+							nearby_text = ""
+							# Get label text and parent text
+							idv = attrs.get('id')
+							if idv:
+								lab_el = soup.find('label', {'for': idv})
+								if lab_el and hasattr(lab_el, 'get_text'):
+									nearby_text += lab_el.get_text(" ")
+							
+							parent = n.find_parent() if hasattr(n, 'find_parent') else None
+							if parent and hasattr(parent, 'get_text'):
+								nearby_text += " " + parent.get_text(" ")
+							
+							nearby_text = nearby_text.lower()
+						except Exception:
+							nearby_text = ""
+						
+						usage_indicators = ['kullanım', 'kullanim', 'usage', 'type', 'tip', 'tur']
+						if any(indicator in nearby_text for indicator in usage_indicators):
+							continue  # Skip this select dropdown for model_yili
+					except Exception:
+						pass
+				
 				score = _score_element_text(soup, n, key, syns)
 				if score > best_score:
 					best_score = score
