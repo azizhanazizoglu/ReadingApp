@@ -11,7 +11,10 @@ Bu README ana giriş noktasıdır. Tüm ayrıntılı dokümantasyon profesyonel 
 - [API Özeti ve Sözleşmeler](#api-summary-contracts)
 - [Test, Raporlama ve İzlenebilirlik](#tests-traceability)
 - [Smoke Tests (Hızlı Sağlık Kontrolü)](#smoke-tests)
+- [Statik-Önce Akış ve LLM Fallback](#static-first)
+- [Kalibrasyon (C Modu) — Çok Sayfalı Eşleme](#calibration)
 - [TsX Orchestrator ve Entegrasyon Testleri](#tsx-orchestrator-tests)
+ - [Stateflows Hızlı Şema](#stateflows-cheatsheet)
 - [Loglama, Hata Kodları ve Geçici Klasörler](#logging-error-tmp)
 - [Güvenlik ve Emniyet Odaklı Gelişim (V-Model)](#safety-vmodel)
 - [Sorun Giderme (Troubleshooting)](#troubleshooting)
@@ -185,6 +188,12 @@ pnpm start
 Tüm .txt dokümanlar .md’ye taşındı. Detaylar ve derinlemesine anlatımlar için `docs/` klasörüne bakın.
 
 ### Neler Yeni (2025-09-05)
+### Neler Yeni (2025-09-17)
+- Kalibrasyon (C) paneli: Çok-sayfalı eşleme desteği eklendi. Her sayfa için: Page Name, URL Sample/Pattern, Ruhsat Alanları + Seçiciler, Actions listesi, sürükle-bırak sıralama.
+- İframe destekli seçici yakalama (Pick/Live): Aynı-origin iframe’ler için hover highlight + tıklama ile anında seçici doldurma.
+- HTML snippet görünümü: Seçilen elementin outerHTML’i panelde izlenebilir ve kopyalanabilir.
+- Finish Automation: Geçerli sayfayı “Last Page” olarak işaretleyip kaydetme için hızlı erişim.
+- Finalize to Config: Tüm sayfalar `config.json`’a multi-page yapı olarak kaydedilir (eski üst seviye alanlar korunur).
 - TsX Dev akışı: statik-önce gezinme, başarısız olursa LLM fallback (deneme sayısı: 4). Aşamalar: home → task → filling → final.
 - Yeni endpoint: `POST /api/tsx/dev-run` — adım adım orkestrasyon; parametreler: `user_command`, `html`, `prev_html?`, `executed_action?`, `force_llm?`, `current_url?`, `hard_reset?`. Çıktı: `phase`, `mapping_ready`, `details`, adım debug dump’ları.
 - Yeni endpoint: `POST /api/mapping/dump` — güncel mapping JSON’u backend loglarına (ve `memory/TmpData/json2mapping` altına) yazdırır.
@@ -329,6 +338,112 @@ Jenkins tecrübesi olanlar için GitHub Actions kullanım ipuçları
 - Sonuçları nasıl incelerim?
 	- Job loglarında pytest çıktıları ve “Smoke Mapping Output” özeti var.
 	- Artifacts bölümünden `json2mapping-<branch>-<sha>` paketini indir; içinde:
+
+<a id="static-first"></a>
+## Statik-Önce Akış ve LLM Fallback
+Amaç: Hızlı, deterministik ve log dostu bir otomasyon. Statik sezgisel eşleme yeterli değilse, LLM fallback devreye girer.
+
+- Kısayol/Trigger: F3 (Dev Mode)
+- Backend endpoint: `POST /api/f3-static` ve `POST /api/tsx/dev-run`
+- Davranış:
+	1) Statik analiz (etiket, eşanlamlılar, attribute skorlama) + varsa kalibrasyon kayıtlarını kullanır.
+	2) Yeterli alan bulunamazsa, TsX dev-run akışıyla LLM destekli gezinme/doldurma devreye alınır.
+	3) Doldurma planı üretildiğinde TS3 çalışır; final sayfa/PDF doğrulaması yapılır.
+
+Güçlü Yanlar:
+- Hızlı başarım (statik), düşük maliyet; başarısız olduğunda akıllı fallback (LLM).
+- Zengin loglar ve “dry-run plan” ile şeffaflık.
+
+<a id="calibration"></a>
+## Kalibrasyon (C Modu) — Çok Sayfalı Eşleme
+Kalibrasyon paneli, site/iş (host/task) için per-sayfa kalıcı ve deterministik mapping oluşturur. Statik-önce akışı besler; LLM’e daha az bağımlılık sağlar.
+
+Öne Çıkanlar:
+- İframe destekli Pick/Live: İmleçle highlight ve tek tıkla seçici yakalama.
+- Gerçek-zamanlı doğrulama: Girdi alanı geçerli mi? Anında renk/ikon ve kısa descriptor metni.
+- HTML Snippet: Seçilen elementin outerHTML’i panelde genişletilebilir ve kopyalanabilir.
+- Actions Listesi: Ruhsat alanlarına benzer arayüz; Label + Selector, Pick/Live, doğrulama, HTML, sürükle-bırak sıra.
+- Çok-Sayfa: Page Name, URL Sample (Capture URL), opsiyonel URL Pattern, Page chips (gezinme), “+ Add Next Page”, “Mark as Last Page”.
+- Finish Automation: Hızlı sonlandırma (current sayfayı last işaretle + kaydet).
+- Finalize to Config: Tüm sayfaları `config.json` → `staticFormMapping.sites[host][task]` altına yazar.
+
+Kaydetme Yapısı (özet):
+```jsonc
+{
+	// geriye dönük uyum için üst seviye alanlar: ilk sayfadan türetilir
+	"fieldSelectors": { "plaka_no": "#plateNo", "model_yili": "..." },
+	"actions": ["Devam"],
+	"executionOrder": ["sasi_no", "motor_no", "plaka_no", "model_yili"],
+	"criticalFields": ["plaka_no", "model_yili", "sasi_no", "motor_no"],
+
+	// yeni çok sayfa yapısı
+	"pages": [
+		{
+			"id": "p_...",
+			"name": "Form",
+			"urlSample": "https://.../traffic-insurance",
+			"urlPattern": "traffic-insurance",
+			"fieldSelectors": { "plaka_no": "#plateNo" },
+			"executionOrder": ["plaka_no"],
+			"actionsDetail": [ { "id": "a1", "label": "Devam", "selector": "button[type=submit]" } ],
+			"criticalFields": ["plaka_no"],
+			"isLast": false
+		},
+		{
+			"id": "p_...",
+			"name": "Özet",
+			"urlSample": "https://.../summary",
+			"fieldSelectors": {},
+			"executionOrder": [],
+			"actionsDetail": [ { "id": "a2", "label": "Teklif Al", "selector": "#quote" } ],
+			"criticalFields": [],
+			"isLast": true
+		}
+	],
+	"multiPage": true
+}
+```
+
+Panel Akışı (özet):
+- C butonu → startSession (host/task + ruhsat + adaylar)
+- Alan seçimi (Pick/Live) → preview + doğrulama + HTML
+- Actions seçimi (Pick/Live) + sıra
+- Capture URL, Page Name, Add Next Page / Mark Last Page
+- Save Draft → diske `calib/<host>/<task>.json`
+- Test Plan (opsiyonel) → “dry-run” doldurma planı
+- Finalize to Config → `config.json` altına merge (çok sayfa dahil)
+
+<a id="stateflows-cheatsheet"></a>
+## Stateflows Hızlı Şema
+Metin formatında özet akışlar ve sözleşme noktaları.
+
+1) F1 — FindHomePage
+- Input: current DOM/URL
+- Steps: home link/button tespiti → click → bekle
+- Output: home reached (heuristic)
+
+2) F2 — GoUserTaskPage (örn. "Yeni Trafik")
+- Input: label (task adı), current DOM/URL
+- Steps: menü/arama içinde task bağlantısını bul → click → bekle
+- Output: task page reached
+
+3) F3 — FillForms Static-First (+ LLM Fallback)
+- Input: ruhsat JSON, current DOM/URL, config.staticFormMapping
+- Steps:
+	- Static analyzer → selectors & order (use calibration if present)
+	- If insufficient → TsX dev-run (LLM-assisted) to navigate/fill
+	- When mapping ready → TS3 fill, then final check (PDF/summary)
+- Output: filled form or reason
+
+4) TsX Loop (Dev)
+- Input: command label, html snapshot, executed_action?
+- Steps: analyze → decide actions → optionally click one → wait → repeat
+- Output: phase, details (mapping_ready | actions list)
+
+5) Calibration (C)
+- Input: html/url snapshot, ruhsat JSON
+- Steps: startSession → human-guided mapping (fields + actions, multi-page) → save/test/finalize
+- Output: calib draft (disk) and config.json site mapping
 
 <a id="deep-links"></a>
 ## Hızlı Link Rehberi (Deep Links)

@@ -8,13 +8,16 @@ This README documents what we built in production2: the architecture, naming, co
   - StateFlow orchestrator: `react_ui/src/stateflows/findHomePageSF.ts`
   - Webview helpers: `react_ui/src/services/webviewDom.ts`
   - Behavior: capture → plan → click → wait → detect → LLM fallback
+  - Calibration UI: `react_ui/src/components/CalibrationPanel.tsx` (C button in `react_ui/src/components/Header.tsx`)
 - Backend (FastAPI)
   - Entrypoint & routing: `backend/main.py` (REST under `/api/*`)
   - Feature: `backend/Features/findHomePage.py`
+  - Calibration Feature: `backend/Features/calibFillUserTaskPageStatic.py`
   - Components:
     - `backend/Components/getHtml.py` (HTML filtering & snapshot saving)
     - `backend/Components/fillPageFromMapping.py` (plan builder)
     - `backend/Components/letLLMMap.py` (LLM prompt/parse + candidate plans)
+    - Calibration: `backend/Components/calibDomScan.py`, `calibRuntimeLookup.py`, `calibSelectorUtils.py`, `calibStorage.py`, `calibActionsPlanner.py`, `calibValidation.py`
     - `backend/logging_utils.py` (structured logs)
 - Config & Artifacts
   - Config knobs: `production2/config.json`
@@ -432,3 +435,39 @@ Backend exposes selected config to UI via `/api/config`.
 1) Start backend and the Electron app.
 2) Use the F3 flow in UI. Optionally upload a ruhsat image via `/api/upload` beforehand.
 3) Watch logs for sequential fill attempts, verification, gating, and final actions.
+
+---
+
+# Calibration (C Mode) — Multi-Page Static Mapping
+
+The Calibration panel lets you build a deterministic, per-site mapping used by the static-first F3 flow. It supports multi-page flows and works with same-origin iframes.
+
+## UI features
+- Ruhsat fields list: for each field, enter or Pick/Live a CSS selector; live status (ok/missing/checking), short descriptor preview, optional HTML snippet (expandable, copyable).
+- Actions list: label + selector rows with Pick/Live, status, descriptor, HTML snippet; drag chips to set execution order.
+- Multi-page controls:
+  - Page Name, URL Sample (Capture URL), optional URL Pattern
+  - + Add Next Page: commit current page and start a fresh page
+  - Mark as Last Page: mark current page as the final step in the flow
+  - Page chips to jump/edit pages
+- Finish Automation: mark current page as last and save immediately.
+- Save Draft, Test Plan (dry-run), Finalize to Config
+
+## Storage and config merge
+- Drafts are stored under `production2/calib/<host>/<task>.json` with a `pages` array; top-level fields mirror the first page for backward compatibility.
+- Finalize writes to `production2/config.json` under `staticFormMapping.sites[host][task]` with:
+  - fieldSelectors, actions, executionOrder, criticalFields, synonyms (compat)
+  - actionsDetail, actionsExecutionOrder, pages, multiPage (new)
+
+## Static-first summary (F3 + Calibration)
+1) Try static mapping first:
+   - Use `staticFormMapping` from config and any saved calibration for the current host/task/page.
+2) If insufficient, fall back to TsX dev-run with LLM assistance.
+3) When mapping is ready, execute TS3 fill and validate final state (e.g., PDF or summary page).
+
+## Stateflows cheatsheet (text)
+- F1 FindHomePage: capture → static plan → click → wait/detect → LLM fallback (if needed) → done
+- F2 GoUserTaskPage: capture → goUserPage (static or openSideMenu) → detect → loop / LLM fallback → done
+- F3 FillForms Static-First: ruhsat + DOM → static selectors (from calibration/config) → TS3 fill with verify → actions → final check
+- TsX Dev Loop: html snapshot → analyze → actions → click one → wait/recapture → repeat; signals phase/mapping_ready
+- Calibration: startSession (ruhsat + candidates) → human-guided mapping (fields + actions, per-page) → save/test/finalize
