@@ -83,12 +83,27 @@ def finalize_to_config(host: str, task: str) -> Dict[str, Any]:
     cfg = load_config()
     sites = cfg.setdefault("staticFormMapping", {}).setdefault("sites", {})
     site = sites.setdefault(host, {})
+    # Multi-page aware: keep backward-compat top-level based on first page if pages present
+    pages = calib.get("pages") or []
+    first = pages[0] if isinstance(pages, list) and pages else None
+    fieldSelectors = calib.get("fieldSelectors", first.get("fieldSelectors", {}) if isinstance(first, dict) else {})
+    actions = calib.get("actions", [a.get("label") for a in (first.get("actionsDetail", []) if isinstance(first, dict) else []) if a and isinstance(a, dict) and a.get("label")])
+    executionOrder = calib.get("executionOrder", first.get("executionOrder", []) if isinstance(first, dict) else [])
+    criticalFields = calib.get("criticalFields", first.get("criticalFields", []) if isinstance(first, dict) else [])
+    actionsDetail = calib.get("actionsDetail", first.get("actionsDetail", []) if isinstance(first, dict) else [])
+    actionsExecutionOrder = calib.get("actionsExecutionOrder", actions)
+
     site[task] = {
-        "fieldSelectors": calib.get("fieldSelectors", {}),
-        "actions": calib.get("actions", []),
-        "executionOrder": calib.get("executionOrder", []),
-        "criticalFields": calib.get("criticalFields", []),
+        "fieldSelectors": fieldSelectors,
+        "actions": actions,
+        "executionOrder": executionOrder,
+        "criticalFields": criticalFields,
         "synonyms": calib.get("synonyms", {}),
+        # New fields
+        "actionsDetail": actionsDetail,
+        "actionsExecutionOrder": actionsExecutionOrder,
+        "pages": pages,
+        "multiPage": bool(pages),
     }
     save_config(cfg)
     return {"ok": True, "merged": True, "site": host, "task": task}

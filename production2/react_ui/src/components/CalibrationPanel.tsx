@@ -1,4 +1,5 @@
 import React from "react";
+import { getDomAndUrlFromWebview } from "../services/webviewDom";
 
 type Props = {
   host: string;
@@ -20,6 +21,23 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, candidat
   const [actionsDetail, setActionsDetail] = React.useState<ActionItem[]>([{ id: 'a1', label: 'Action 1', selector: '' }]);
   const [criticalFields, setCriticalFields] = React.useState<string[]>(["plaka_no","model_yili","sasi_no","motor_no"]);
   const [liveAssignKey, setLiveAssignKey] = React.useState<string | null>(null);
+  // Multi-page support
+  type CalibPage = {
+    id: string;
+    name: string;
+    urlPattern?: string;
+    urlSample?: string;
+    fieldSelectors: Record<string, string>;
+    executionOrder: string[];
+    actionsDetail: { id: string; label: string; selector?: string }[];
+    criticalFields: string[];
+    isLast?: boolean;
+  };
+  const [pages, setPages] = React.useState<CalibPage[]>([]);
+  const [pageName, setPageName] = React.useState<string>("Page 1");
+  const [urlPattern, setUrlPattern] = React.useState<string>("");
+  const [urlSample, setUrlSample] = React.useState<string>("");
+  const [currentPageId, setCurrentPageId] = React.useState<string>(() => `p_${Date.now().toString(36)}`);
 
   const fields = React.useMemo(() => Object.keys(ruhsat || {}), [ruhsat]);
   // Persistent panel: Only X closes. No ESC to close.
@@ -79,16 +97,82 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, candidat
     } catch {}
   };
 
-  const handleSave = () => {
-    const actionLabels = actionsDetail.map(a => a.label).filter(Boolean);
-    onSaveDraft({
+  const commitCurrentPage = (overrides?: Partial<CalibPage>) => {
+    const current: CalibPage = {
+      id: currentPageId,
+      name: pageName,
+      urlPattern,
+      urlSample,
       fieldSelectors,
-      actions: actionLabels,
-      actionsDetail,
-      actionsExecutionOrder: actionLabels,
       executionOrder,
+      actionsDetail,
       criticalFields,
+      ...(overrides || {}),
+    };
+    setPages(prev => {
+      const idx = prev.findIndex(p => p.id === currentPageId);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = current;
+        return copy;
+      }
+      return [...prev, current];
     });
+    return current;
+  };
+
+  const switchToPage = (p: CalibPage) => {
+    setCurrentPageId(p.id);
+    setPageName(p.name || "");
+    setUrlPattern(p.urlPattern || "");
+    setUrlSample(p.urlSample || "");
+    setFieldSelectors(p.fieldSelectors || {});
+    setExecutionOrder(Array.isArray(p.executionOrder) ? p.executionOrder : []);
+    setActionsDetail(Array.isArray(p.actionsDetail) ? p.actionsDetail : []);
+    setCriticalFields(Array.isArray(p.criticalFields) ? p.criticalFields : []);
+  };
+
+  const handleSave = () => {
+    const committed = commitCurrentPage();
+    const ordered = pages.some(p => p.id === committed.id) ? pages.map(p => (p.id === committed.id ? committed : p)) : [...pages, committed];
+    const first = ordered[0] || committed;
+    onSaveDraft({
+      // Back-compat top-level derived from first page
+      fieldSelectors: first.fieldSelectors,
+      actions: first.actionsDetail.map(a => a.label).filter(Boolean),
+      actionsDetail: first.actionsDetail,
+      actionsExecutionOrder: first.actionsDetail.map(a => a.label).filter(Boolean),
+      executionOrder: first.executionOrder,
+      criticalFields: first.criticalFields,
+      // New multi-page payload
+      pages: ordered,
+      currentPageId: committed.id,
+    });
+  };
+
+  const handleAddNextPage = async () => {
+    const committed = commitCurrentPage();
+    // Prepare a fresh page
+    const id = `p_${Date.now().toString(36)}`;
+    setCurrentPageId(id);
+    setPageName(`Page ${pages.length + 2}`);
+    const info = await getDomAndUrlFromWebview();
+    setUrlSample(info.url || "");
+    setUrlPattern("");
+    setFieldSelectors({});
+    setExecutionOrder([]);
+    setActionsDetail([{ id: 'a1', label: 'Action 1', selector: '' }]);
+    // keep critical fields from previous page as default
+  };
+
+  const handleMarkLastPage = () => {
+    const committed = commitCurrentPage({ isLast: true });
+    setPages(prev => prev.map(p => p.id === committed.id ? { ...committed, isLast: true } : p));
+  };
+
+  const handleCaptureUrl = async () => {
+    const info = await getDomAndUrlFromWebview();
+    setUrlSample(info.url || "");
   };
 
   const onDragStart = (idx: number) => setDragIdx(idx);
@@ -177,13 +261,41 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, candidat
   {/* scrim overlay (visual only; does not block clicks to iframe) */}
   <div style={{ position: 'fixed', inset: 0, background: scrimBg, zIndex: 1999, pointerEvents: 'none' }} />
   <div style={{ position: 'fixed', right: 24, top: 80, width: 560, height: 620, background: bgPanel, backdropFilter: 'blur(12px)', border: `1px solid ${borderCol}`, borderRadius: 16, boxShadow: glassShadow, zIndex: 2000, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ padding: '12px 14px', borderBottom: `1px solid ${headerBorder}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ padding: '12px 14px', borderBottom: `1px solid ${headerBorder}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
           <div style={{ color: textMain, fontWeight: 600, letterSpacing: 0.2 }}>Calibration</div>
-          <button onClick={onClose} title="Close" style={{ color: textSub, background: 'transparent', border: 'none', fontSize: 18, padding: 6, borderRadius: 8, cursor: 'pointer' }}>✕</button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button onClick={()=>{ handleMarkLastPage(); handleSave(); }} title="Mark this page as last and save the mapping" style={{ fontSize: 12, padding: '6px 10px', border: `1px solid ${chipBorder}`, borderRadius: 10, background: chipBg, color: textMain, cursor: 'pointer' }}>Finish Automation</button>
+            <button onClick={onClose} title="Close" style={{ color: textSub, background: 'transparent', border: 'none', fontSize: 18, padding: 6, borderRadius: 8, cursor: 'pointer' }}>✕</button>
+          </div>
         </div>
         <div style={{ padding: 12, overflow: 'auto', color: textMain }}>
-          <div style={{ fontSize: 12, color: textSub, marginBottom: 8 }}>
-            Host: <b style={{ color: textMain }}>{host}</b> — Task: <b style={{ color: textMain }}>{task}</b>
+          {/* Page metadata / navigation */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: 12, color: textSub }}>Host: <b style={{ color: textMain }}>{host}</b> — Task: <b style={{ color: textMain }}>{task}</b></div>
+              <div style={{ marginLeft: 'auto', fontSize: 11, color: textSub }}>Page {Math.max(1, pages.findIndex(p=>p.id===currentPageId)+1)} of {Math.max(1, pages.length || 1)}</div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 6 }}>
+              <input value={pageName} onChange={(e)=>setPageName(e.target.value)} placeholder="Page name (e.g., Form, Review, Payment)" style={{ width: '100%', fontSize: 12, padding: '8px 10px', color: textMain, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10 }} />
+              <input value={urlPattern} onChange={(e)=>setUrlPattern(e.target.value)} placeholder="URL pattern (regex or part); optional" style={{ width: '100%', fontSize: 12, padding: '8px 10px', color: textMain, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10 }} />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input value={urlSample} onChange={(e)=>setUrlSample(e.target.value)} placeholder="URL sample (auto-captured)" style={{ flex: 1, fontSize: 12, padding: '8px 10px', color: textMain, background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10 }} />
+                <button onClick={handleCaptureUrl} title="Capture current page URL" style={{ fontSize: 12, padding: '8px 10px', border: `1px solid ${chipBorder}`, borderRadius: 10, background: chipBg, color: textMain, cursor: 'pointer' }}>Capture URL</button>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={handleAddNextPage} title="Commit current page and start next page calibration" style={{ fontSize: 12, padding: '8px 10px', border: `1px solid ${chipBorder}`, borderRadius: 10, background: chipBg, color: textMain, cursor: 'pointer' }}>+ Add Next Page</button>
+                <button onClick={handleMarkLastPage} title="Mark current page as LAST in the flow" style={{ fontSize: 12, padding: '8px 10px', border: `1px solid ${chipBorder}`, borderRadius: 10, background: darkMode ? '#052e2b' : '#ccfbf1', color: textMain, cursor: 'pointer' }}>Mark as Last Page</button>
+              </div>
+              {!!pages.length && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {pages.map((p, i) => (
+                    <button key={p.id} onClick={()=>{ commitCurrentPage(); switchToPage(p); }} style={{ fontSize: 11, padding: '6px 10px', border: `1px solid ${p.id===currentPageId? '#22d3ee' : chipBorder}`, borderRadius: 16, background: chipBg, color: textMain, cursor: 'pointer' }}>
+                      {i+1}. {p.name || `Page ${i+1}`}{p.isLast ? ' (last)' : ''}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <div style={{ fontSize: 12, marginBottom: 8, color: textSub, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>Ruhsat fields:</span>
