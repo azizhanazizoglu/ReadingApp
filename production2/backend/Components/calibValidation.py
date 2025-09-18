@@ -13,10 +13,16 @@ def get_critical_fields(task: str, config: Dict[str, Any], fallback: List[str]) 
     return list(fallback or [])
 
 
-def validate_mapping(field_selectors: Dict[str, str], critical_fields: List[str], threshold: float = 0.75) -> Dict[str, Any]:
+def validate_mapping(field_selectors: Dict[str, Any], critical_fields: List[str], threshold: float = 0.75) -> Dict[str, Any]:
     crit_set = set(critical_fields or [])
-    mapped = [k for k in crit_set if field_selectors.get(k)]
-    missing = [k for k in crit_set if not field_selectors.get(k)]
+    def _has_mapping(v: Any) -> bool:
+        if v is None:
+            return False
+        if isinstance(v, list):
+            return any(bool(str(x).strip()) for x in v)
+        return bool(str(v).strip())
+    mapped = [k for k in crit_set if _has_mapping(field_selectors.get(k))]
+    missing = [k for k in crit_set if not _has_mapping(field_selectors.get(k))]
     total = max(1, len(crit_set))
     success_rate = len(mapped) / total
     return {

@@ -91,6 +91,49 @@ def list_tasks(host: str) -> List[str]:
     return []
 
 
+def clear(host: Optional[str] = None, task: Optional[str] = None) -> Dict[str, Any]:
+    """Clear calibration data.
+
+    - No host/task: clear entire calib.json
+    - host only: remove that host subtree
+    - host + task: remove that specific draft; drop host key if empty afterwards
+    """
+    data = _read_all()
+    if not host:
+        _write_all({})
+        return {"ok": True, "cleared": "all"}
+    if not isinstance(data, dict):
+        return {"ok": True, "cleared": "none"}
+    site = data.get(host)
+    if not isinstance(site, dict):
+        return {"ok": True, "cleared": "none"}
+    if not task:
+        # remove entire host subtree
+        try:
+            del data[host]
+        except Exception:
+            pass
+        _write_all(data)
+        return {"ok": True, "cleared": {"host": host}}
+    # remove specific task under host
+    if task in site:
+        try:
+            del site[task]
+        except Exception:
+            pass
+        # drop host if empty
+        if not site:
+            try:
+                del data[host]
+            except Exception:
+                pass
+        else:
+            data[host] = site
+        _write_all(data)
+        return {"ok": True, "cleared": {"host": host, "task": task}}
+    return {"ok": True, "cleared": "none"}
+
+
 def finalize_to_config(host: str, task: str) -> Dict[str, Any]:
     # Merge calib/<host>/<task>.json into config.json runtime section
     from config import load_config, save_config  # type: ignore

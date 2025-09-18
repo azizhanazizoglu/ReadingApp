@@ -338,9 +338,7 @@
     "sites": {
       "preview--screen-to-data.lovable.app": {
         "Yeni Trafik": {
-          "fieldSelectors": {
-            "plaka_no": "[data-lov-id=\"src/pages/TrafficInsurance.tsx:191:10\"]"
-          },
+          "fieldSelectors": {},
           "actions": [
             "Action 1"
           ],
@@ -351,7 +349,51 @@
             "sasi_no",
             "motor_no"
           ],
-          "synonyms": {}
+          "synonyms": {},
+          "actionsDetail": [
+            {
+              "id": "a1",
+              "label": "Action 1",
+              "selector": ""
+            }
+          ],
+          "actionsExecutionOrder": [
+            "Action 1"
+          ],
+          "pages": [
+            {
+              "id": "p_mfpw4j1g",
+              "name": "Page 1",
+              "urlPattern": "",
+              "urlSample": "https://preview--screen-to-data.lovable.app/traffic-insurance",
+              "fieldSelectors": {},
+              "fieldKeys": [
+                "plaka_no",
+                "marka",
+                "model",
+                "model_yili",
+                "sasi_no",
+                "motor_no",
+                "yakit",
+                "renk"
+              ],
+              "executionOrder": [],
+              "actionsDetail": [
+                {
+                  "id": "a1",
+                  "label": "Action 1",
+                  "selector": ""
+                }
+              ],
+              "criticalFields": [
+                "plaka_no",
+                "model_yili",
+                "sasi_no",
+                "motor_no"
+              ]
+            }
+          ],
+          "multiPage": true
         }
       }
     }

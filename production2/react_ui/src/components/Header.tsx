@@ -591,43 +591,66 @@ export const Header: React.FC<HeaderProps> = ({
       <ThemeToggle />
     </div>
   </header>
-  {calibOpen && (
-    <CalibrationPanel
-      host={calibHost}
-      task={calibTask}
-      ruhsat={calibRuhsat}
-      candidates={calibCandidates}
-      darkMode={darkMode}
-      existingDraft={(window as any).__CALIB_EXISTING__}
-      onClose={() => setCalibOpen(false)}
-      onSaveDraft={async (draft) => {
-        try {
-          const r = await saveCalibDraft(calibHost, calibTask, draft);
-          devLog('HD-CALIB-SAVE', `saved ${r?.path || ''}`);
-        } catch (e: any) {
-          devLog('HD-CALIB-SAVE-ERR', String(e?.message || e));
-        }
-      }}
-      onTestPlan={async () => {
-        try {
-          const rr = await fetch(`${BACKEND_URL}/api/calib`, { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ op: 'testFillPlan', mapping: { host: calibHost, task: calibTask } }) });
-          const jj = await rr.json();
-          devLog('HD-CALIB-TEST', `ok=${jj?.ok} count=${jj?.plan?.count}`);
-        } catch (e: any) {
-          devLog('HD-CALIB-TEST-ERR', String(e?.message || e));
-        }
-      }}
-      onFinalize={async () => {
-        try {
-          devLog('HD-CALIB-FINALIZE', `finalize host=${calibHost} task=${calibTask}`);
-          const res = await finalizeCalib(calibHost, calibTask);
-          devLog('HD-CALIB-FINALIZE-OK', `merged=${res?.merged ?? false}`);
-        } catch (e: any) {
-          devLog('HD-CALIB-FINALIZE-ERR', String(e?.message || e));
-        }
-      }}
-    />
-  )}
+  { /* Sliding layout v2: iframe stays in normal flow; we wrap it so transform doesn't detach baseline; panel overlays on right. */ }
+  <div style={{ position:'relative', width:'100%', height:'calc(100vh - 64px)', overflow:'hidden' }}>
+    {/* Resizable container: width shrinks smoothly when panel opens */}
+    <div style={{ position:'absolute', top:0, left:0, bottom:0, right:0 }}>
+      <div
+        id="calibration-iframe-host"
+        style={{
+          position:'absolute',
+          top:0,
+          left:0,
+          bottom:0,
+          width: `calc(100% - ${calibOpen? 640: 0}px)`,
+          transition:'width 320ms cubic-bezier(0.4,0,0.2,1)',
+          willChange:'width',
+          overflow:'hidden'
+        }}
+      />
+    </div>
+    {/* Sliding panel anchored to right; no translate of iframe so left edge always visible */}
+    <div style={{ position:'absolute', top:0, right:0, width:640, height:'100%', pointerEvents: calibOpen? 'auto':'none' }}>
+      <div style={{ width:640, height:'100%', borderLeft: darkMode? '1px solid #1e293b':'1px solid #cbd5e1', background: darkMode? 'rgba(17,24,39,0.92)':'#ffffff', boxShadow:'-4px 0 24px -4px rgba(0,0,0,0.08)', transform:`translateX(${calibOpen? 0: 640}px)`, transition:'transform 320ms cubic-bezier(0.4,0,0.2,1)', display:'flex', flexDirection:'column' }}>
+        <CalibrationPanel
+          host={calibHost}
+          task={calibTask}
+          ruhsat={calibRuhsat}
+          candidates={calibCandidates}
+          darkMode={darkMode}
+          existingDraft={(window as any).__CALIB_EXISTING__}
+          docked
+          onClose={() => setCalibOpen(o=>!o)}
+          onSaveDraft={async (draft) => {
+            try {
+              const r = await saveCalibDraft(calibHost, calibTask, draft);
+              devLog('HD-CALIB-SAVE', `saved ${r?.path || ''}`);
+            } catch (e: any) {
+              devLog('HD-CALIB-SAVE-ERR', String(e?.message || e));
+            }
+          }}
+          onTestPlan={async () => {
+            try {
+              const rr = await fetch(`${BACKEND_URL}/api/calib`, { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ op: 'testFillPlan', mapping: { host: calibHost, task: calibTask } }) });
+              const jj = await rr.json();
+              devLog('HD-CALIB-TEST', `ok=${jj?.ok} count=${jj?.plan?.count}`);
+            } catch (e: any) {
+              devLog('HD-CALIB-TEST-ERR', String(e?.message || e));
+            }
+          }}
+          onFinalize={async () => {
+            try {
+              devLog('HD-CALIB-FINALIZE', `finalize host=${calibHost} task=${calibTask}`);
+              const res = await finalizeCalib(calibHost, calibTask);
+              devLog('HD-CALIB-FINALIZE-OK', `merged=${res?.merged ?? false}`);
+            } catch (e: any) {
+              devLog('HD-CALIB-FINALIZE-ERR', String(e?.message || e));
+            }
+          }}
+        />
+      </div>
+    </div>
+  </div>
   </>
   );
 }

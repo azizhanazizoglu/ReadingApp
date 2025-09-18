@@ -11,6 +11,7 @@ declare global {
   }
 }
 import React from "react";
+import { createPortal } from 'react-dom';
 // timeout overlay kaldırıldı; sürekli etkileşimli bir tarayıcı görünümü isteniyor
 
 
@@ -125,40 +126,47 @@ export const BrowserView: React.FC<BrowserViewProps & { style?: React.CSSPropert
       try { el.removeEventListener('did-stop-loading', onStop); } catch {}
     };
   }, [iframeUrl, handleIframeLoad, onUrlChange]);
-  return (
-    <div
-      className="flex-grow w-full rounded-3xl shadow-2xl border border-[#B3C7E6] dark:border-[#335C81] flex items-center justify-center transition-colors overflow-hidden"
-      style={{
-        minHeight: 520,
-        maxHeight: 1100,
-        height: 'calc(70vh + 80px)',
-        marginBottom: 8,
-        marginTop: 24,
-        position: "relative",
-        background: darkMode ? undefined : "rgba(238,245,255,0.97)",
-        ...style,
-      }}
-    >
-      {iframeUrl ? (
-        // Electron ortamında webview, cross-origin DOM etkileşimi için daha esnek
-        // Not: webview sadece Electron'da çalışır; tarayıcıda fall-back gerekebilir.
-        // Vite dev/preview yerine Electron build kullanıyoruz.
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore
-        <webview
-          id="app-webview"
-          key={iframeUrl}
-          src={iframeUrl}
-          className="w-full h-full min-h-[540px] rounded-3xl border-none"
-          style={{ background: "white" }}
-        />
-      ) : (
-        <span className="text-[#7B8FA1] dark:text-[#B3C7E6] text-xl select-none">
-          [ Web sitesi burada görünecek ]
-        </span>
-      )}
-  {/* Timeout overlay kaldırıldı: tarayıcı hep etkileşimde kalsın */}
-      {/* Info/result box removed as per user request. Browser always stays large. */}
-    </div>
+  const content = (
+      <div
+        className="flex-grow w-full rounded-3xl shadow-2xl border border-[#B3C7E6] dark:border-[#335C81] flex items-center justify-center transition-colors overflow-hidden"
+        style={{
+          minHeight: 520,
+          maxHeight: 1100,
+          height: 'calc(70vh + 80px)',
+          marginBottom: 8,
+          marginTop: 24,
+          position: "relative",
+          background: darkMode ? undefined : "rgba(238,245,255,0.97)",
+          ...style,
+        }}
+      >
+        {iframeUrl ? (
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore
+          <webview
+            id="app-webview"
+            key={iframeUrl}
+            src={iframeUrl}
+            className="w-full h-full min-h-[540px] rounded-3xl border-none"
+            style={{ background: "white" }}
+          />
+        ) : (
+          <span className="text-[#7B8FA1] dark:text-[#B3C7E6] text-xl select-none">
+            [ Web sitesi burada görünecek ]
+          </span>
+        )}
+      </div>
   );
+
+  // If calibration sliding host exists, mount there (removes margins & rounded mismatch if desired)
+  const hostEl = typeof document !== 'undefined' ? document.getElementById('calibration-iframe-host') : null;
+  if (hostEl) {
+    return createPortal(
+      <div style={{ position:'absolute', inset:0, padding:16, boxSizing:'border-box' }}>
+        {React.cloneElement(content, { style: { ...((content as any).props.style||{}), marginTop:0, marginBottom:0, height:'100%', maxHeight:'100%', borderRadius:24 } })}
+      </div>,
+      hostEl
+    );
+  }
+  return content;
 };

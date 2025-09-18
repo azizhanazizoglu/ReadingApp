@@ -13,7 +13,7 @@ export type FillOptions = {
   waitAfterFillMs?: number;
 };
 
-export async function runInPageFill(fieldMapping: Record<string, string>, dataResolved: Record<string, any>, opts: FillOptions, devLog?: (c: string, m: string) => void) {
+export async function runInPageFill(fieldMapping: Record<string, string | string[]>, dataResolved: Record<string, any>, opts: FillOptions, devLog?: (c: string, m: string) => void) {
   const webview = getWebview();
   if (!webview) throw new Error('Webview bulunamadı.');
   const fillScript = `(() => {
@@ -40,7 +40,7 @@ export async function runInPageFill(fieldMapping: Record<string, string>, dataRe
   const WIN = (DOC && DOC.defaultView) ? DOC.defaultView : window;
       const SRC = (DOC === document ? 'main' : 'iframe');
       
-      const mapping = ${JSON.stringify(fieldMapping)};
+  const mapping = ${JSON.stringify(fieldMapping)};
       const data = ${JSON.stringify(dataResolved)};
   const logs = [];
       logs.push('doc-source ' + SRC);
@@ -247,7 +247,7 @@ export async function runInPageFill(fieldMapping: Record<string, string>, dataRe
         }
         return false;
       };
-      let filled = 0;
+  let filled = 0;
       const entries = Object.entries(mapping);
       const details = [];
       try {
@@ -264,57 +264,60 @@ export async function runInPageFill(fieldMapping: Record<string, string>, dataRe
             const has = data && Object.prototype.hasOwnProperty.call(data, k);
             const val = has ? data[k] : '';
             if (val == null || String(val).trim() === '') { logs.push('skip-empty ' + k + ' (value empty)'); continue; }
-            let el = null;
-            try {
-              const sel = String(selector);
-      const els = Array.from(DOC.querySelectorAll(sel));
-              logs.push('selector-check '+k+' -> '+sel+' (count='+els.length+')');
-              if (els && els.length > 0) {
-                if (els.length === 1) {
-                  el = els[0];
-                } else {
-                  // choose best by scoring label/placeholder/name/title text against key synonyms
-                  const syns = (synonyms[k] || [k]).map(norm);
-                  let best = null;
-                  let bestScore = -1;
-                  for (const cand of els) {
-                    const t = textForEl(cand);
-                    const score = syns.reduce((acc, s) => acc + (t.includes(s) ? 1 : 0), 0);
-                    if (score > bestScore) { bestScore = score; best = cand; }
+            const selectors = Array.isArray(selector) ? selector : [String(selector)];
+            let anyOk = false;
+            for (const sel of selectors) {
+              let el = null;
+              try {
+                const s = String(sel);
+                const els = Array.from(DOC.querySelectorAll(s));
+                logs.push('selector-check '+k+' -> '+s+' (count='+els.length+')');
+                if (els && els.length > 0) {
+                  if (els.length === 1) {
+                    el = els[0];
+                  } else {
+                    const syns = (synonyms[k] || [k]).map(norm);
+                    let best = null; let bestScore = -1;
+                    for (const cand of els) {
+                      const t = textForEl(cand);
+                      const score = syns.reduce((acc, s2) => acc + (t.includes(s2) ? 1 : 0), 0);
+                      if (score > bestScore) { bestScore = score; best = cand; }
+                    }
+                    el = best || els[0];
+                    logs.push('multi-match choose '+k+' score='+bestScore);
                   }
-                  el = best || els[0];
-                  logs.push('multi-match choose '+k+' score='+bestScore);
                 }
-              }
-            } catch (e) { logs.push('selector-error '+k+' -> '+String(e)); }
-            if (!el) { el = findByKey(k); if (el) logs.push('fallback-selector '+k+' -> '+(el.id?('#'+el.id): (el.name?('name='+el.name): el.tagName))); }
-            if (!el) { logs.push('not-found ' + k + ' -> ' + selector); continue; }
-            if (el && highlight) {
-              try { el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' }); } catch {}
-            }
-            const before = getInfo(el);
-            const result = await setVal(el, val);
-            if (waitAfterFillMs && waitAfterFillMs > 0) { await delay(waitAfterFillMs); }
-            const after = getInfo(el);
-            if (result) {
-              filled++;
-              logs.push('filled ' + k + ' -> ' + selector + ' (chosen='+after.tag+(after.id?('#'+after.id):'')+(after.name?(' name='+after.name):'')+')');
-              details.push({ field: k, selector, before, desired: val, after });
+              } catch (e) { logs.push('selector-error '+k+' -> '+String(e)); }
+              if (!el) { el = findByKey(k); if (el) logs.push('fallback-selector '+k+' -> '+(el.id?('#'+el.id): (el.name?('name='+el.name): el.tagName))); }
+              if (!el) { logs.push('not-found ' + k + ' -> ' + sel); continue; }
               if (el && highlight) {
-                try {
-                  el.setAttribute('data-ts3-filled', '1');
-                  el.title = 'TS3: ' + k + ' = ' + String(val ?? '');
-                  const prevOutline = el.style.outline;
-                  const prevBg = el.style.backgroundColor;
-                  el.style.outline = '2px solid #22c55e';
-                  el.style.backgroundColor = 'rgba(34,197,94,0.12)';
-                  setTimeout(() => { try { el.style.outline = prevOutline; el.style.backgroundColor = prevBg; } catch {} }, Math.max(1200, stepDelayMs));
-                } catch {}
+                try { el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' }); } catch {}
               }
-            } else {
-              logs.push('skip ' + k + ' (not found or unsupported) -> ' + selector);
-              details.push({ field: k, selector, before, desired: val, after, error: 'not-found-or-unsupported' });
+              const before = getInfo(el);
+              const result = await setVal(el, val);
+              if (waitAfterFillMs && waitAfterFillMs > 0) { await delay(waitAfterFillMs); }
+              const after = getInfo(el);
+              if (result) {
+                anyOk = true; filled++;
+                logs.push('filled ' + k + ' -> ' + sel + ' (chosen='+after.tag+(after.id?('#'+after.id):'')+(after.name?(' name='+after.name):'')+')');
+                details.push({ field: k, selector: sel, before, desired: val, after });
+                if (el && highlight) {
+                  try {
+                    el.setAttribute('data-ts3-filled', '1');
+                    el.title = 'TS3: ' + k + ' = ' + String(val ?? '');
+                    const prevOutline = el.style.outline;
+                    const prevBg = el.style.backgroundColor;
+                    el.style.outline = '2px solid #22c55e';
+                    el.style.backgroundColor = 'rgba(34,197,94,0.12)';
+                    setTimeout(() => { try { el.style.outline = prevOutline; el.style.backgroundColor = prevBg; } catch {} }, Math.max(1200, stepDelayMs));
+                  } catch {}
+                }
+              } else {
+                logs.push('skip ' + k + ' (not found or unsupported) -> ' + sel);
+                details.push({ field: k, selector: sel, before, desired: val, after, error: 'not-found-or-unsupported' });
+              }
             }
+            if (!anyOk) { logs.push('no-success ' + k + ' for all selectors'); }
             if (stepDelayMs > 0) { await delay(stepDelayMs); }
           } catch (e) { logs.push('err '+String(e)); }
         }

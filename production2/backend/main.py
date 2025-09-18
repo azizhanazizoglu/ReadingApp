@@ -461,6 +461,8 @@ def calib(req: F3Request) -> Dict[str, Any]:
         plan_calib_finalize_to_config,
         plan_calib_test_fill_plan,
     )
+    # Directly import storage.clear for maintenance op
+    from Components.calibStorage import clear as calib_clear
 
     if op == "startSession":
         return plan_calib_start_session(req.html, req.current_url, req.task)
@@ -498,6 +500,12 @@ def calib(req: F3Request) -> Dict[str, Any]:
         if not host:
             raise HTTPException(status_code=422, detail="missing host")
         return plan_calib_test_fill_plan(host, task)
+    if op == "clear":
+        body = req.mapping or {}
+        host = body.get("host")
+        task = body.get("task")
+        res = calib_clear(host, task)
+        return res
     raise HTTPException(status_code=422, detail=f"invalid op: {op}")
 
 
