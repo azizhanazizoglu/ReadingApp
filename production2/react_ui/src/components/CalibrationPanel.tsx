@@ -274,6 +274,16 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, darkMode
 	};
 	const handlePickAssign = async (k:string, idx=0) => { try { const sel = await (window as any).pickSelectorFromWebview?.(); if(sel && typeof sel==='string'){ handleChange(k, sel, idx); if(!liteMode){ try { const info = await (window as any).previewSelectorInWebview?.(normalizeSelector(sel)); if(info && typeof info==='string') setPreviews(p=>({...p,[keyIdx(k,idx)]:info})); } catch {} } } } catch {} };
 	const handleShowField = async (k:string, idx=0) => { const cur=fieldSelectors[k]; const sel=Array.isArray(cur)?(cur[idx]||''):String(cur||''); if(!sel) return; try { const info= await (window as any).previewSelectorInWebview?.(sel); if(!liteMode && info && typeof info==='string') setPreviews(p=>({...p,[keyIdx(k,idx)]:info})); if(!liteMode){ const html= await (window as any).getElementHtmlInWebview?.(sel,1600); if(html && typeof html==='string') setHtmlSnippets(h=>({...h,[keyIdx(k,idx)]:html})); } } catch {} };
+	const handleShowElement = async (selector: string, fieldName: string) => { 
+		if (!selector.trim()) return; 
+		try { 
+			// Highlight the element on the page using the provided selector
+			await (window as any).highlightElementInWebview?.(selector);
+			logInfo(`Highlighting element: ${selector} for field: ${fieldName}`);
+		} catch (err) { 
+			logWarn(`Could not highlight element: ${selector} for field: ${fieldName}`);
+		} 
+	};
 	const commitCurrentPage = (overrides?: Partial<CalibPage>) => { const cleaned = cleanFieldSelectors(fieldSelectors); setFieldSelectors(cleaned); const current:CalibPage={ id: currentPageId, name: pageName, urlPattern, urlSample, fieldSelectors: cleaned, fieldKeys: fieldKeys.slice(), executionOrder, actionsDetail, criticalFields, ...(overrides||{}) }; setPages(prev=>{ const i=prev.findIndex(p=>p.id===currentPageId); if(i>=0){ const copy=[...prev]; copy[i]=current; return copy; } return [...prev,current]; }); return current; };
 	const switchToPage = (p:CalibPage) => { setCurrentPageId(p.id); setPageName(p.name||''); setUrlPattern(p.urlPattern||''); setUrlSample(p.urlSample||''); setFieldSelectors(p.fieldSelectors||{}); setExecutionOrder(Array.isArray(p.executionOrder)?p.executionOrder:[]); setActionsDetail(Array.isArray(p.actionsDetail)?p.actionsDetail:[]); setCriticalFields(Array.isArray(p.criticalFields)?p.criticalFields:[]); };
 	// Pure builder (does not call commitCurrentPage to avoid state changes during render/autosave diffing)
@@ -726,10 +736,18 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, darkMode
 						<input value={fieldFilter} onChange={e=>setFieldFilter(e.target.value)} placeholder="Search field or value" style={{ flex:1, fontSize:11, padding:'6px 8px', background: inputBg, border:`1px solid ${inputBorder}`, borderRadius:8 }} />
 						{fieldFilter && <button onClick={()=>setFieldFilter('')} style={{ fontSize:11, padding:'6px 10px', border:`1px solid ${chipBorder}`, borderRadius:8, background: 'transparent', color:textSub }}>Clear</button>}
 						<button onClick={()=>{
+							// Sync field keys
 							setFieldKeys(prev=>{
 								const set=new Set(prev);
 								for(const k of [...DEFAULT_RUHSAT_KEYS, ...Object.keys(ruhsat||{})]) set.add(k);
 								return Array.from(set);
+							});
+							// Auto-populate critical fields from available data
+							setCriticalFields(prev=>{
+								const availableFields = [...DEFAULT_RUHSAT_KEYS, ...Object.keys(ruhsat||{})];
+								// Use Set to ensure no duplicates - combine existing and new fields
+								const combinedFields = new Set([...prev, ...availableFields]);
+								return Array.from(combinedFields);
 							});
 							logInfo('Field list synchronized with defaults + current OCR values');
 						}} style={{ fontSize:11, padding:'6px 10px', border:`1px solid ${chipBorder}`, borderRadius:8, background:darkMode?'#1e1b4b':'#e0e7ff' }}>Sync</button>
@@ -754,6 +772,7 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, darkMode
 						onRenameFieldOccurrence={onRenameFieldOccurrence}
 						handleChange={handleChange}
 						handlePickAssign={handlePickAssign}
+						handleShowElement={handleShowElement}
 						keyIdx={keyIdx}
 					/>
 					<ExecutionOrderEditor
@@ -797,9 +816,12 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, darkMode
 					<CriticalFieldsEditor
 						criticalFields={criticalFields}
 						setCriticalFields={setCriticalFields}
+						availableFields={availableKeys}
 						inputBg={inputBg}
 						inputBorder={inputBorder}
+						chipBorder={chipBorder}
 						textSub={textSub}
+						darkMode={darkMode}
 					/>
 					<div style={{ marginTop:12, fontSize:11, color:textSub }}>Tip: Pick then click page element; Lite mode speeds editing by removing live checks.</div>
 					{showLogs && (

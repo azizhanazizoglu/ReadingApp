@@ -20,12 +20,13 @@ interface Props {
   onRenameFieldOccurrence: (rowIdx:number,newK:string)=>void; // renames only THIS row/occurrence
   handleChange: (k:string,v:string,idx:number)=>void; // idx = occurrence index of key
   handlePickAssign: (k:string,idx:number)=>void;
+  handleShowElement?: (selector:string, fieldName:string)=>void; // highlight element on page
   keyIdx: (k:string,idx:number)=>string;
 }
 
 // NOTE: Alias UI removed. Duplicate rows with the same field key now represent multiple selectors
 // (occurrences) for that key. Occurrence index maps into the underlying string|string[] in fieldSelectors.
-const FieldsExcelSimple: React.FC<Props> = ({ fieldKeys, fieldSelectors, values, availableKeys, readMode, liteMode, darkMode, status, inputBg, inputBorder, chipBorder, headerBorder, textSub, onAddField, onRemoveOccurrence, onRenameField, onRenameFieldOccurrence, handleChange, handlePickAssign, keyIdx }) => {
+const FieldsExcelSimple: React.FC<Props> = ({ fieldKeys, fieldSelectors, values, availableKeys, readMode, liteMode, darkMode, status, inputBg, inputBorder, chipBorder, headerBorder, textSub, onAddField, onRemoveOccurrence, onRenameField, onRenameFieldOccurrence, handleChange, handlePickAssign, handleShowElement, keyIdx }) => {
   // Pre-compute occurrence indices for each row
   const occurrenceCounter: Record<string, number> = {};
   const rows = fieldKeys.map(k => {
@@ -75,6 +76,26 @@ const FieldsExcelSimple: React.FC<Props> = ({ fieldKeys, fieldSelectors, values,
                   <input value={val} disabled={readMode} onChange={e=>handleChange(k,e.target.value,occIdx)} placeholder="#id or .cls" style={{ width:'100%', fontSize:11, padding:'4px 6px', background: inputBg, border:`1px solid ${inputBorder}`, borderRadius:6 }} />
                   {!liteMode && status[sk]==='ok' && <span style={{ position:'absolute', left:4, top:4, fontSize:9, color:'#10b981' }}>ok</span>}
                   {!liteMode && status[sk]==='missing' && <span style={{ position:'absolute', left:4, top:4, fontSize:9, color:'#ef4444' }}>missing</span>}
+                  {/* Show button to highlight element */}
+                  {!readMode && val.trim() && handleShowElement && (
+                    <button 
+                      onClick={() => handleShowElement(val, k)}
+                      style={{ 
+                        fontSize:12, 
+                        padding:'8px 10px', 
+                        border:`1px dashed ${chipBorder}`, 
+                        borderRadius:10, 
+                        background:'transparent', 
+                        color: darkMode ? 'rgb(230, 240, 250)' : 'rgb(99, 102, 241)',
+                        marginTop: 4,
+                        width: '100%',
+                        cursor: 'pointer'
+                      }}
+                      title={`Highlight element: ${val}`}
+                    >
+                      Show
+                    </button>
+                  )}
                 </td>
                 {!readMode && <td style={{ padding:4, display:'flex', flexDirection:'column', gap:4 }}>
                   <button onClick={()=>handlePickAssign(k,occIdx)} style={{ fontSize:10, padding:'4px 6px', border:`1px solid ${chipBorder}`, borderRadius:8, background: darkMode?'#0b1220':'#eef2ff' }}>Pick</button>
