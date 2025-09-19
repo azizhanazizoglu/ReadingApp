@@ -147,16 +147,7 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, darkMode
 	const keyIdx = (k: string, idx: number) => `${k}::${idx}`;
 	const focusFieldRow = (k: string, idx: number) => { try { document.querySelector<HTMLInputElement>(`input[data-field="${k}"][data-idx="${idx}"]`)?.focus(); } catch {} };
 	// Dynamic field list handlers
-	const onAddField = () => {
-		setFieldKeys(prev=>{
-			const used = new Set(prev);
-			const nextKey = availableKeys.find(k=> !used.has(k));
-			if(!nextKey){ logWarn('All available fields already added'); return prev; }
-			setFieldSelectors(fs=>{ const next={...fs,[nextKey]:''}; syncFieldSelectorsToPage(next); return next; });
-			logInfo(`Field added: ${nextKey}`);
-			return [...prev,nextKey];
-		});
-	};
+	// (Old onAddField removed; new duplicate-aware version defined later.)
 	const onRemoveField = (k:string) => {
 		setFieldKeys(prev=> prev.filter(f=>f!==k));
 		setFieldSelectors(fs=>{ const next={...fs}; delete next[k]; syncFieldSelectorsToPage(next); return next; });
@@ -189,34 +180,47 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, darkMode
 		setOpenHtml(o=>{ const n:any={}; for(const [kk,v] of Object.entries(o)) if(!kk.startsWith(pref)) n[kk]=v; return n; });
 	};
 	const syncFieldSelectorsToPage = (next: Record<string,string|string[]>) => setPages(prev=> prev.map(p=> p.id===currentPageId ? { ...p, fieldSelectors: next } : p));
-	const addRowEnd = (k: string) => setFieldSelectors(prev=>{ const cur = prev[k]; const arr = Array.isArray(cur)?[...cur]:[String(cur||'')]; arr.push(''); const next={...prev,[k]:arr}; setTimeout(()=>focusFieldRow(k,arr.length-1),0); syncFieldSelectorsToPage(next); logInfo(`Alias added (end) for ${k}; total=${arr.length}`); return next; });
-	const insertRowAfter = (k: string, idx:number) => setFieldSelectors(prev=>{ const cur=prev[k]; const arr=Array.isArray(cur)?[...cur]:[String(cur||'')]; const at=Math.max(0,Math.min(idx+1,arr.length)); arr.splice(at,0,''); const next={...prev,[k]:arr}; setTimeout(()=>focusFieldRow(k,at),0); syncFieldSelectorsToPage(next); logInfo(`Alias inserted after index ${idx} for ${k}; total=${arr.length}`); return next; });
-	// Clear semantics: collapse ALL aliases for field to a single empty string (intuitive reset)
-	const clearRow = (k:string, _idx:number) => { setFieldSelectors(prev=>{ const next={...prev,[k]:['']}; clearCachesForField(k); syncFieldSelectorsToPage(next); logInfo(`Field ${k} cleared (aliases collapsed to one empty)`); return next; }); };
-	const removeRow = (k:string, idx:number) => setFieldSelectors(prev=>{
-		const cur = prev[k];
-		let arr = Array.isArray(cur)? [...cur] : [String(cur||'')];
-		if(arr.length <= 1){
-			// Only one alias: blank it instead of removing field / other fields
-			arr = [''];
-			logWarn(`Single alias cleared for ${k}`);
-		} else {
-			if(idx >=0 && idx < arr.length){ arr.splice(idx,1); }
-			logInfo(`Alias ${idx} removed for ${k}; remaining=${arr.length}`);
-		}
-		clearCachesForField(k);
-		const next = { ...prev, [k]: arr };
-		syncFieldSelectorsToPage(next);
-		return next;
-	});
-	const moveRow = (k:string, idx:number, dir:-1|1) => setFieldSelectors(prev=>{ const cur=prev[k]; const arr=Array.isArray(cur)?[...cur]:[String(cur||'')]; const to=idx+dir; if(to<0||to>=arr.length) return prev; [arr[idx],arr[to]]=[arr[to],arr[idx]]; clearCachesForField(k); setTimeout(()=>focusFieldRow(k,to),0); const next={...prev,[k]:arr}; syncFieldSelectorsToPage(next); logInfo(`Alias moved for ${k}: ${idx} -> ${to}`); return next; });
+	// Alias management removed. We now treat duplicate field names as separate occurrences.
+	// Helper to ensure updating correct occurrence of k when multiple duplicates exist.
+	const ensureOccurrence = (k:string, occIdx:number, updater:(arr:string[])=>string[]) => {
+		setFieldSelectors(prev=>{
+			const cur = prev[k];
+			let arr: string[] = Array.isArray(cur)? [...cur] : [String(cur||'')];
+			// pad if needed
+			while(arr.length <= occIdx) arr.push('');
+			arr = updater(arr);
+			const cleaned = arr.length===1 ? (arr[0]||'') : arr;
+			const next = { ...prev, [k]: cleaned };
+			syncFieldSelectorsToPage(next);
+			return next;
+		});
+	};
 	const cleanFieldSelectors = (fs: Record<string,string|string[]>) => { const out:Record<string,string|string[]>={}; for(const [k,v] of Object.entries(fs)){ const add=(list:string[])=>{ const seen=new Set<string>(); const dedup:string[]=[]; for(const s of list){ const n=normalizeSelector(s); if(n && !seen.has(n)){ seen.add(n); dedup.push(n);} } if(!dedup.length) return ''; if(dedup.length===1) return dedup[0]; return dedup; }; out[k]=Array.isArray(v)?add(v):add([v]); } return out; };
-	const handleChange = (k:string, v:string, idx=0) => {
+	const handleChange = (k:string, v:string, occIdx=0) => {
 		const norm = normalizeSelector(v);
-		setFieldSelectors(prev=>{ const cur=prev[k]; if(Array.isArray(cur)){ const arr=[...cur]; arr[idx]=norm; const next={...prev,[k]:arr}; syncFieldSelectorsToPage(next); return next;} if(idx>0){ const base=String(cur||''); const pad=Array(Math.max(0,idx-1)).fill(''); const next={...prev,[k]:[base,...pad,norm]}; syncFieldSelectorsToPage(next); return next;} const next={...prev,[k]:norm}; syncFieldSelectorsToPage(next); return next; });
+		ensureOccurrence(k, occIdx, arr=>{ arr[occIdx]=norm; return arr; });
 		if(liteMode) return;
-		const statusKey=keyIdx(k,idx); setStatus(s=>({...s,[statusKey]:norm? 'checking':'unknown'})); const val=norm;
-		setTimeout(async ()=>{ const cur=fieldSelectors[k]; const currentVal=Array.isArray(cur)?(cur[idx]??''):(idx===0?String(cur||''):'' ); if(currentVal!==val) return; if(!val){ setStatus(s=>({...s,[statusKey]:'unknown'})); return;} try { const ok= await (window as any).checkSelectorInWebview?.(val); setStatus(s=>({...s,[statusKey]: ok?'ok':'missing'})); if(ok){ const info= await (window as any).previewSelectorInWebview?.(val); if(info && typeof info==='string') setPreviews(p=>({...p,[statusKey]:info})); const html= await (window as any).getElementHtmlInWebview?.(val,1600); if(html && typeof html==='string') setHtmlSnippets(h=>({...h,[statusKey]:html})); } } catch { setStatus(s=>({...s,[statusKey]:'missing'})); } },220);
+		const statusKey=keyIdx(k,occIdx); setStatus(s=>({...s,[statusKey]:norm? 'checking':'unknown'})); const val=norm;
+		setTimeout(async ()=>{ const cur=fieldSelectors[k]; const currentVal=Array.isArray(cur)?(cur[occIdx]??''):(occIdx===0?String(cur||''):'' ); if(currentVal!==val) return; if(!val){ setStatus(s=>({...s,[statusKey]:'unknown'})); return;} try { const ok= await (window as any).checkSelectorInWebview?.(val); setStatus(s=>({...s,[statusKey]: ok?'ok':'missing'})); if(ok){ const info= await (window as any).previewSelectorInWebview?.(val); if(info && typeof info==='string') setPreviews(p=>({...p,[statusKey]:info})); const html= await (window as any).getElementHtmlInWebview?.(val,1600); if(html && typeof html==='string') setHtmlSnippets(h=>({...h,[statusKey]:html})); } } catch { setStatus(s=>({...s,[statusKey]:'missing'})); } },220);
+	};
+	// When adding a field that already exists, we treat it as a new occurrence.
+	const onAddField = () => {
+		setFieldKeys(prev=>{
+			// Just push the first available key (even if duplicate) for fast workflow
+			const candidate = availableKeys[0] || 'field';
+			const nextKeys = [...prev, candidate];
+			// ensure underlying array size for occurrences if duplicate
+			const occCount = nextKeys.filter(k=>k===candidate).length - 1; // index of new occ
+			ensureOccurrence(candidate, occCount, arr=>{ while(arr.length<=occCount) arr.push(''); return arr; });
+			logInfo(`Field occurrence added: ${candidate} (#${occCount+1})`);
+			return nextKeys;
+		});
+	};
+	// Remove ALL occurrences of field key from UI and selectors
+	const onRemoveFieldWrapper = (k:string) => {
+		setFieldKeys(prev=> prev.filter(f=>f!==k));
+		setFieldSelectors(fs=>{ const next={...fs}; delete next[k]; syncFieldSelectorsToPage(next); return next; });
+		logWarn(`All occurrences removed for field ${k}`);
 	};
 	const handlePickAssign = async (k:string, idx=0) => { try { const sel = await (window as any).pickSelectorFromWebview?.(); if(sel && typeof sel==='string'){ handleChange(k, sel, idx); if(!liteMode){ try { const info = await (window as any).previewSelectorInWebview?.(normalizeSelector(sel)); if(info && typeof info==='string') setPreviews(p=>({...p,[keyIdx(k,idx)]:info})); } catch {} } } } catch {} };
 	const handleShowField = async (k:string, idx=0) => { const cur=fieldSelectors[k]; const sel=Array.isArray(cur)?(cur[idx]||''):String(cur||''); if(!sel) return; try { const info= await (window as any).previewSelectorInWebview?.(sel); if(!liteMode && info && typeof info==='string') setPreviews(p=>({...p,[keyIdx(k,idx)]:info})); if(!liteMode){ const html= await (window as any).getElementHtmlInWebview?.(sel,1600); if(html && typeof html==='string') setHtmlSnippets(h=>({...h,[keyIdx(k,idx)]:html})); } } catch {} };
@@ -696,27 +700,24 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, darkMode
 					</div>
 					<FieldsExcelSimple
 						fieldKeys={filteredFieldKeys}
-							fieldSelectors={fieldSelectors}
+						fieldSelectors={fieldSelectors}
 						values={ruhsat}
 						availableKeys={availableKeys}
-							readMode={readMode}
-							liteMode={liteMode}
-							darkMode={darkMode}
-							status={status}
-							inputBg={inputBg}
-							inputBorder={inputBorder}
-							chipBorder={chipBorder}
-							headerBorder={headerBorder}
-							textSub={textSub}
-							onAddField={onAddField}
-							onRemoveField={onRemoveField}
-							onRenameField={onRenameField}
-							handleChange={handleChange}
-							addRowEnd={addRowEnd}
-							clearRow={clearRow}
-							removeRow={removeRow}
-							handlePickAssign={handlePickAssign}
-							keyIdx={keyIdx}
+						readMode={readMode}
+						liteMode={liteMode}
+						darkMode={darkMode}
+						status={status}
+						inputBg={inputBg}
+						inputBorder={inputBorder}
+						chipBorder={chipBorder}
+						headerBorder={headerBorder}
+						textSub={textSub}
+						onAddField={onAddField}
+						onRemoveField={onRemoveFieldWrapper}
+						onRenameField={onRenameField}
+						handleChange={handleChange}
+						handlePickAssign={handlePickAssign}
+						keyIdx={keyIdx}
 					/>
 					<ExecutionOrderEditor
 							executionOrder={executionOrder}

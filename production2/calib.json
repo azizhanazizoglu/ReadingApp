@@ -1,8 +1,16 @@
 {
   "preview--screen-to-data.lovable.app": {
     "Yeni Trafik": {
-      "fieldSelectors": {},
-      "fieldKeys": [],
+      "fieldSelectors": {
+        "plaka_no": [
+          "#plateNo",
+          ""
+        ]
+      },
+      "fieldKeys": [
+        "plaka_no",
+        "plaka_no"
+      ],
       "actions": [
         "Action 1"
       ],
@@ -24,60 +32,16 @@
           "name": "Page 1",
           "urlPattern": "",
           "urlSample": "",
-          "fieldSelectors": {},
-          "fieldKeys": [],
-          "executionOrder": [],
-          "actionsDetail": [
-            {
-              "id": "a1",
-              "label": "Action 1",
-              "selector": ""
-            }
+          "fieldSelectors": {
+            "plaka_no": [
+              "#plateNo",
+              ""
+            ]
+          },
+          "fieldKeys": [
+            "plaka_no",
+            "plaka_no"
           ],
-          "criticalFields": []
-        },
-        {
-          "id": "p_mfqi9860",
-          "name": "Page 2",
-          "urlPattern": "",
-          "urlSample": "https://preview--screen-to-data.lovable.app/traffic-insurance",
-          "fieldSelectors": {},
-          "fieldKeys": [],
-          "executionOrder": [],
-          "actionsDetail": [
-            {
-              "id": "a1",
-              "label": "Action 1",
-              "selector": ""
-            }
-          ],
-          "criticalFields": []
-        },
-        {
-          "id": "p_mfqi9fji",
-          "name": "Page 3",
-          "urlPattern": "",
-          "urlSample": "",
-          "fieldSelectors": {},
-          "fieldKeys": [],
-          "executionOrder": [],
-          "actionsDetail": [
-            {
-              "id": "a1",
-              "label": "Action 1",
-              "selector": ""
-            }
-          ],
-          "criticalFields": [],
-          "isLast": false
-        },
-        {
-          "id": "p_mfqi9juk",
-          "name": "Page 4",
-          "urlPattern": "",
-          "urlSample": "https://preview--screen-to-data.lovable.app/insurance-quote",
-          "fieldSelectors": {},
-          "fieldKeys": [],
           "executionOrder": [],
           "actionsDetail": [
             {
@@ -89,11 +53,11 @@
           "criticalFields": []
         }
       ],
-      "currentPageId": "p_mfqi9fji",
+      "currentPageId": "p_mfqi93or",
       "host": "preview--screen-to-data.lovable.app",
       "task": "Yeni Trafik",
-      "updatedAt": "2025-09-19T07:15:47Z",
-      "createdAt": "2025-09-19T07:15:47Z"
+      "updatedAt": "2025-09-19T13:25:37Z",
+      "createdAt": "2025-09-19T13:25:37Z"
     }
   }
 }
