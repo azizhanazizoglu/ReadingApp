@@ -8,19 +8,13 @@
     "devam"
   ],
   "validation": {
-    "contexts": {
-      "plaka_no": {
-        "tag": "input",
-        "id": "plateNo",
-        "name": null
-      }
-    },
+    "contexts": {},
     "counts": {
       "mapped": 1
     }
   },
   "mapping_source": {
-    "plaka_no": "static_synonym"
+    "plaka_no": "calib_site"
   },
   "fingerprint": "34a940864f878381e9e429f4edcc4da0626b3e4289859f4cfc005697a21cbbd5",
   "debug_dumps": {

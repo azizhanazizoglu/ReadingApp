@@ -496,8 +496,21 @@ export const Header: React.FC<HeaderProps> = ({
                   devLog('HD-F3-READY', `F3: Static form filling ready (${details?.total_fields || 0} fields, ${details?.success_rate || 0}% critical)`);
                 } else if (state === 'need_llm_fallback') {
                   devLog('HD-F3-FALLBACK', `F3: Static insufficient (${details?.success_rate || 0}% < ${details?.threshold || 75}%) - requires LLM fallback`);
-                  if (details?.should_go_home) {
-                    devLog('HD-F3-HOME', 'F3: Returning to start page for LLM fallback');
+                  
+                  // Perform LLM fallback using the dedicated LLM stateflow
+                  try {
+                    devLog('HD-F3-LLM-START', 'F3: Starting LLM fallback via stateflow');
+                    const llmResult = await runFillFormsUserTaskPageSF({
+                      log: (m) => devLog('HD-F3-LLM-SF', `LLM SF: ${m}`)
+                    });
+                    
+                    if (llmResult?.ok) {
+                      devLog('HD-F3-LLM-RESULT', `F3: LLM fallback completed successfully - step: ${llmResult.step || 'unknown'}`);
+                    } else {
+                      devLog('HD-F3-LLM-ERR', `F3: LLM fallback failed - step: ${llmResult?.step || 'unknown'}, error: ${llmResult?.error || 'unknown'}`);
+                    }
+                  } catch (llmError: any) {
+                    devLog('HD-F3-LLM-CATCH', `F3: LLM fallback error: ${String(llmError?.message || llmError)}`);
                   }
                 } else if (state === 'no_forms_detected') {
                   devLog('HD-F3-NOFORMS', 'F3: No form fields detected on this page');
