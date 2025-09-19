@@ -1,0 +1,142 @@
+{
+  "preview--screen-to-data.lovable.app": {
+    "Yeni Trafik": {
+      "fieldSelectors": {
+        "plaka_no": "#plateNo"
+      },
+      "fieldKeys": [
+        "plaka_no",
+        "marka",
+        "model",
+        "model_yili",
+        "sasi_no",
+        "motor_no",
+        "yakit",
+        "renk"
+      ],
+      "actions": [
+        "Action 1"
+      ],
+      "actionsDetail": [
+        {
+          "id": "a1",
+          "label": "Action 1",
+          "selector": ""
+        }
+      ],
+      "actionsExecutionOrder": [
+        "Action 1"
+      ],
+      "executionOrder": [],
+      "criticalFields": [],
+      "pages": [
+        {
+          "id": "p_mfqi93or",
+          "name": "Page 1",
+          "urlPattern": "",
+          "urlSample": "https://preview--screen-to-data.lovable.app/traffic-insurance",
+          "fieldSelectors": {
+            "plaka_no": "#plateNo"
+          },
+          "fieldKeys": [
+            "plaka_no",
+            "marka",
+            "model",
+            "model_yili",
+            "sasi_no",
+            "motor_no",
+            "yakit",
+            "renk"
+          ],
+          "executionOrder": [],
+          "actionsDetail": [
+            {
+              "id": "a1",
+              "label": "Action 1",
+              "selector": ""
+            }
+          ],
+          "criticalFields": []
+        },
+        {
+          "id": "p_mfqy4ped",
+          "name": "Page 2",
+          "urlPattern": "",
+          "urlSample": "https://preview--screen-to-data.lovable.app/traffic-insurance2",
+          "fieldSelectors": {
+            "plaka_no": "#plateNo",
+            "marka": "#plateNo"
+          },
+          "fieldKeys": [
+            "plaka_no",
+            "marka",
+            "model",
+            "model_yili",
+            "sasi_no",
+            "motor_no",
+            "yakit",
+            "renk"
+          ],
+          "executionOrder": [],
+          "actionsDetail": [
+            {
+              "id": "a1",
+              "label": "Action 1",
+              "selector": ""
+            }
+          ],
+          "criticalFields": []
+        },
+        {
+          "id": "p_mfqy53od",
+          "name": "Page 3",
+          "urlPattern": "",
+          "urlSample": "https://preview--screen-to-data.lovable.app/traffic-insurance",
+          "fieldSelectors": {},
+          "fieldKeys": [
+            "plaka_no",
+            "marka",
+            "model",
+            "model_yili",
+            "sasi_no",
+            "motor_no",
+            "yakit",
+            "renk"
+          ],
+          "executionOrder": [],
+          "actionsDetail": [
+            {
+              "id": "a1",
+              "label": "Action 1",
+              "selector": ""
+            }
+          ],
+          "criticalFields": []
+        }
+      ],
+      "currentPageId": "p_mfqy4ped",
+      "host": "preview--screen-to-data.lovable.app",
+      "task": "Yeni Trafik",
+      "updatedAt": "2025-09-19T14:42:58Z",
+      "createdAt": "2025-09-19T14:42:58Z"
+    }
+  },
+  "test-host": {
+    "test-task": {
+      "test": "data",
+      "host": "test-host",
+      "task": "test-task",
+      "updatedAt": "2025-09-19T14:47:08Z",
+      "createdAt": "2025-09-19T14:47:08Z"
+    }
+  },
+  "test-host2": {
+    "test-task2": {
+      "test": "data2",
+      "host": "test-host2",
+      "task": "test-task2",
+      "updatedAt": "2025-09-19T14:47:21Z",
+      "createdAt": "2025-09-19T14:47:21Z"
+    }
+  }
+}

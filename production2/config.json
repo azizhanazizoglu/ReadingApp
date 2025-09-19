@@ -345,12 +345,7 @@
             "Action 1"
           ],
           "executionOrder": [],
-          "criticalFields": [
-            "plaka_no",
-            "model_yili",
-            "sasi_no",
-            "motor_no"
-          ],
+          "criticalFields": [],
           "synonyms": {},
           "actionsDetail": [
             {
@@ -364,22 +359,16 @@
           ],
           "pages": [
             {
-              "id": "p_mfpywzs0",
+              "id": "p_mfqi93or",
               "name": "Page 1",
               "urlPattern": "",
-              "urlSample": "https://preview--screen-to-data.lovable.app/traffic-insurance",
+              "urlSample": "",
               "fieldSelectors": {
                 "plaka_no": ""
               },
               "fieldKeys": [
                 "plaka_no",
-                "marka",
-                "model",
-                "model_yili",
-                "sasi_no",
-                "motor_no",
-                "yakit",
-                "renk"
+                "plaka_no"
               ],
               "executionOrder": [],
               "actionsDetail": [
@@ -389,35 +378,7 @@
                   "selector": ""
                 }
               ],
-              "criticalFields": [
-                "plaka_no",
-                "model_yili",
-                "sasi_no",
-                "motor_no"
-              ]
-            },
-            {
-              "id": "p_mfpznk2u",
-              "name": "Page 2",
-              "urlPattern": "",
-              "urlSample": "",
-              "fieldSelectors": {},
-              "fieldKeys": [],
-              "executionOrder": [],
-              "actionsDetail": [
-                {
-                  "id": "a1",
-                  "label": "Action 1",
-                  "selector": ""
-                }
-              ],
-              "criticalFields": [
-                "plaka_no",
-                "model_yili",
-                "sasi_no",
-                "motor_no"
-              ],
-              "isLast": false
+              "criticalFields": []
             }
           ],
           "multiPage": true
