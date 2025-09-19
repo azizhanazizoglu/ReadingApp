@@ -1,0 +1,53 @@
+{
+  "ok": true,
+  "page_kind": "fill_form",
+  "field_mapping": {
+    "plaka_no": "[data-lov-id='src/pages/VehicleDetails.tsx:79:16']",
+    "motor_no": "[data-lov-id='src/pages/VehicleDetails.tsx:87:16']",
+    "sasi_no": "[data-lov-id='src/pages/VehicleDetails.tsx:95:16']",
+    "model_yili": "[data-lov-id='src/pages/VehicleDetails.tsx:104:16']"
+  },
+  "actions": [
+    "devam"
+  ],
+  "validation": {
+    "contexts": {
+      "plaka_no": {
+        "tag": "input",
+        "id": null,
+        "name": null
+      },
+      "motor_no": {
+        "tag": "input",
+        "id": null,
+        "name": null
+      },
+      "sasi_no": {
+        "tag": "input",
+        "id": null,
+        "name": null
+      },
+      "model_yili": {
+        "tag": "input",
+        "id": null,
+        "name": null
+      }
+    },
+    "counts": {
+      "mapped": 4
+    }
+  },
+  "mapping_source": {
+    "plaka_no": "static_synonym",
+    "motor_no": "static_synonym",
+    "sasi_no": "static_synonym",
+    "model_yili": "static_synonym"
+  },
+  "fingerprint": "e9c6b2c08500042e0fd6f4ffef82c65a4eeb5a27c0ab8f8be61992e1603fd832",
+  "debug_dumps": {
+    "used": "static",
+    "used_hints": {},
+    "used_sections": false
+  },
+  "used": "static"
+}

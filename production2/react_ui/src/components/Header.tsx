@@ -12,6 +12,7 @@ import { BACKEND_URL } from "@/config";
 import { runFindHomePageSF } from "@/stateflows/findHomePageSF";
 import { runGoUserTaskPageSF } from "@/stateflows/goUserTaskPageSF";
 import { runFillFormsUserTaskPageSF } from "@/stateflows/fillFormsUserTaskPageSF";
+import { runFillFormsUserTaskPageSF as runFillFormsUserTaskPageStaticSF } from "@/stateflows/fillFormsUserTaskPageStaticSF";
 import { runMasterSF } from "@/stateflows/masterSF";
 import { runCalibStart, saveCalibDraft, finalizeCalib } from "@/stateflows/calibFillUserTaskPageStaticSF";
 import { CalibrationPanel } from "@/components/CalibrationPanel";
@@ -338,9 +339,16 @@ export const Header: React.FC<HeaderProps> = ({
             style={{ fontFamily: fontStack, minWidth: 52, minHeight: 40, fontWeight: 700 }}
             onClick={async () => {
               try {
-                devLog('HD-TSX-CLICK', 'TsX button clicked');
-                await runTsxLoop();
-                devLog('HD-TSX-COMPLETE', 'TsX loop completed');
+                devLog('HD-TSX-CLICK', 'TsX button clicked - starting static stateflow');
+                const result = await runFillFormsUserTaskPageStaticSF({
+                  log: (m) => devLog('HD-TSX-SF', `Static SF: ${m}`)
+                });
+                
+                if (result?.ok) {
+                  devLog('HD-TSX-SUCCESS', `TsX static stateflow completed - step: ${result.step || 'unknown'}`);
+                } else {
+                  devLog('HD-TSX-ERROR', `TsX static stateflow failed - step: ${result?.step || 'unknown'}, error: ${result?.error || 'unknown'}`);
+                }
               } catch (e: any) {
                 devLog('HD-TSX-CLICK-ERR', `TsX button error: ${String(e?.message || e)}`);
               }

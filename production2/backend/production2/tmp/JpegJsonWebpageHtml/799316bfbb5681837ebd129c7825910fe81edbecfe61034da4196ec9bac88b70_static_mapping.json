@@ -22,7 +22,7 @@
   "mapping_source": {
     "plaka_no": "static_synonym"
   },
-  "fingerprint": "34a940864f878381e9e429f4edcc4da0626b3e4289859f4cfc005697a21cbbd5",
+  "fingerprint": "799316bfbb5681837ebd129c7825910fe81edbecfe61034da4196ec9bac88b70",
   "debug_dumps": {
     "used": "static",
     "used_hints": {},
