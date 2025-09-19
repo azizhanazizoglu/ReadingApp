@@ -277,11 +277,15 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, darkMode
 	const handleShowElement = async (selector: string, fieldName: string) => { 
 		if (!selector.trim()) return; 
 		try { 
-			// Highlight the element on the page using the provided selector
-			await (window as any).highlightElementInWebview?.(selector);
-			logInfo(`Highlighting element: ${selector} for field: ${fieldName}`);
+			// Use the same preview functionality as Actions - this highlights/previews the element
+			const info = await (window as any).previewSelectorInWebview?.(selector);
+			if (!liteMode && info && typeof info === 'string') {
+				logInfo(`Previewing element: ${selector} for field: ${fieldName} - ${info}`);
+			} else {
+				logInfo(`Previewing element: ${selector} for field: ${fieldName}`);
+			}
 		} catch (err) { 
-			logWarn(`Could not highlight element: ${selector} for field: ${fieldName}`);
+			logWarn(`Could not preview element: ${selector} for field: ${fieldName}`);
 		} 
 	};
 	const commitCurrentPage = (overrides?: Partial<CalibPage>) => { const cleaned = cleanFieldSelectors(fieldSelectors); setFieldSelectors(cleaned); const current:CalibPage={ id: currentPageId, name: pageName, urlPattern, urlSample, fieldSelectors: cleaned, fieldKeys: fieldKeys.slice(), executionOrder, actionsDetail, criticalFields, ...(overrides||{}) }; setPages(prev=>{ const i=prev.findIndex(p=>p.id===currentPageId); if(i>=0){ const copy=[...prev]; copy[i]=current; return copy; } return [...prev,current]; }); return current; };

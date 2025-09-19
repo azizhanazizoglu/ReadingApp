@@ -80,8 +80,8 @@
           "fieldSelectors": {
             "plaka_no": "[data-lov-id=\"src/pages/VehicleDetails.tsx:79:16\"]",
             "motor_no": "[data-lov-id=\"src/pages/VehicleDetails.tsx:87:16\"]",
-            "sasi_no": "[data-lov-id=\"src/pages/VehicleDetails.tsx:87:16\"]",
-            "model_yili": "[data-lov-id=\"src/pages/VehicleDetails.tsx:95:16\"]"
+            "sasi_no": "[data-lov-id=\"src/pages/VehicleDetails.tsx:95:16\"]",
+            "model_yili": "[data-lov-id=\"src/pages/VehicleDetails.tsx:104:16\"]"
           },
           "fieldKeys": [
             "plaka_no",
@@ -132,11 +132,11 @@
           ]
         }
       ],
-      "currentPageId": "p_mfr5evup",
+      "currentPageId": "p_mfr5hlpa",
       "host": "preview--screen-to-data.lovable.app",
       "task": "Yeni Trafik",
-      "updatedAt": "2025-09-19T18:10:04Z",
-      "createdAt": "2025-09-19T18:10:04Z"
+      "updatedAt": "2025-09-19T18:26:27Z",
+      "createdAt": "2025-09-19T18:26:27Z"
     }
   }
 }
