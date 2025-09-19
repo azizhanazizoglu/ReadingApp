@@ -51,12 +51,35 @@ def _write_all(data: Dict[str, Any]) -> None:
 
 
 def load(host: str, task: str) -> Dict[str, Any]:
+    from backend.logging_utils import log  # type: ignore
+    
     data = _read_all()
     site = data.get(host) if isinstance(data, dict) else None
     if not isinstance(site, dict):
+        log("INFO", "CALIB-LOAD", f"No calibration data found for host={host}", component="CalibStorage", extra={
+            "host": host,
+            "task": task,
+            "calib_file_exists": _CALIB_FILE.exists(),
+            "available_hosts": list(data.keys()) if isinstance(data, dict) else []
+        })
         return {}
+    
     t = site.get(task)
-    return t if isinstance(t, dict) else {}
+    result = t if isinstance(t, dict) else {}
+    
+    log("INFO", "CALIB-LOAD", f"Calibration data loaded for {host}/{task}", component="CalibStorage", extra={
+        "host": host,
+        "task": task,
+        "calib_file": str(_CALIB_FILE),
+        "has_field_selectors": bool(result.get("fieldSelectors")),
+        "field_count": len(result.get("fieldSelectors", {})),
+        "field_keys": list(result.get("fieldSelectors", {}).keys()),
+        "has_actions": bool(result.get("actions")),
+        "action_count": len(result.get("actions", [])),
+        "updated_at": result.get("updatedAt", "never")
+    })
+    
+    return result
 
 
 def save(host: str, task: str, data: Dict[str, Any]) -> Dict[str, Any]:

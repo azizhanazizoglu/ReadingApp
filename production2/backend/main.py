@@ -327,6 +327,8 @@ class F3Request(BaseModel):
     task: Optional[str] = None
     validation_result: Optional[Dict[str, Any]] = None
     min_filled: Optional[int] = None
+    # For critical fields validation
+    critical_fields_override: Optional[List[str]] = None
     # For page change detection
     current_html: Optional[str] = None
     prev_html: Optional[str] = None
@@ -602,7 +604,7 @@ def f3_static(req: F3Request) -> Dict[str, Any]:
     if op == "validateCriticalFields":
         if not req.mapping or not req.ruhsat_json:
             raise HTTPException(status_code=422, detail="missing field_mapping or ruhsat_json")
-        return plan_validate_critical_fields(req.mapping, req.ruhsat_json, req.task)
+        return plan_validate_critical_fields(req.mapping, req.ruhsat_json, req.task, req.critical_fields_override)
 
     if op == "detectFinalPage":
         if not req.html:

@@ -94,33 +94,6 @@
             {
               "id": "a1",
               "label": "Action 1",
-              "selector": "[data-lov-id=\"src/pages/VehicleDetails.tsx:104:16\"]"
-            }
-          ],
-          "criticalFields": [
-            "plaka_no",
-            "model_yili",
-            "sasi_no",
-            "motor_no"
-          ]
-        },
-        {
-          "id": "p_mfr5hlpa",
-          "name": "Page 3",
-          "urlPattern": "",
-          "urlSample": "https://preview--screen-to-data.lovable.app/insurance-quote",
-          "fieldSelectors": {},
-          "fieldKeys": [
-            "plaka_no",
-            "motor_no",
-            "sasi_no",
-            "model_yili"
-          ],
-          "executionOrder": [],
-          "actionsDetail": [
-            {
-              "id": "a1",
-              "label": "Action 1",
               "selector": "[data-lov-id=\"src/pages/VehicleDetails.tsx:189:10\"]"
             }
           ],
@@ -132,11 +105,11 @@
           ]
         }
       ],
-      "currentPageId": "p_mfr5evup",
+      "currentPageId": "p_mfr5hhv8",
       "host": "preview--screen-to-data.lovable.app",
       "task": "Yeni Trafik",
-      "updatedAt": "2025-09-19T20:06:48Z",
-      "createdAt": "2025-09-19T20:06:48Z"
+      "updatedAt": "2025-09-19T21:59:44Z",
+      "createdAt": "2025-09-19T21:59:44Z"
     },
     "jhkfg": {
       "fieldSelectors": {

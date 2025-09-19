@@ -248,16 +248,86 @@ def static_analyze_page(html: str, url: str, task: str, cfg: Dict[str, Any]) -> 
         host = urlparse(url or "").hostname or ""
     except Exception:
         host = ""
+    calib_page_match = None
+    calib_page_actions: List[str] = []              # text labels (for text-based clicking)
+    calib_page_action_selectors: List[str] = []      # css selectors for deterministic clicking
     if host:
         site_map = resolve_site_mapping(host, task, cfg) or {}
         seeded = site_map.get("fieldSelectors") or {}
         if isinstance(seeded, dict) and seeded:
+            from backend.logging_utils import log  # type: ignore
+            log("INFO", "CALIB-MAPPING", f"Applying calib.json mappings for {host}/{task}", component="StaticAnalyze", extra={
+                "host": host,
+                "task": task,
+                "calib_fields": list(seeded.keys()),
+                "calib_selectors": {k: v for k, v in seeded.items() if v}
+            })
+            
             for k, sel in seeded.items():
                 if sel:
                     mapping[k] = sel
                     mapping_src[k] = "calib_site"
-            # Prefer site-provided actions
-            if isinstance(site_map.get("actions"), list) and site_map.get("actions"):
+            
+            log("INFO", "CALIB-APPLIED", f"Applied {len(seeded)} calib mappings", component="StaticAnalyze", extra={
+                "applied_mappings": {k: v for k, v in mapping.items() if mapping_src.get(k) == "calib_site"},
+                "mapping_sources": {k: v for k, v in mapping_src.items()}
+            })
+            
+            # Page-level resolution: find matching page by urlSample prefix or simple containment
+            try:
+                pages = site_map.get("pages") or []
+                if isinstance(pages, list):
+                    for pg in pages:
+                        if not isinstance(pg, dict):
+                            continue
+                        u_sample = pg.get("urlSample") or ""
+                        if u_sample and url and (url.startswith(u_sample) or u_sample.startswith(url)):
+                            calib_page_match = pg
+                            break
+                    if calib_page_match is None and url:
+                        # fallback: substring match
+                        for pg in pages:
+                            if not isinstance(pg, dict):
+                                continue
+                            u_sample = pg.get("urlSample") or ""
+                            if u_sample and u_sample.split("//")[-1].split("/")[0] in url:
+                                calib_page_match = pg
+                                break
+                if calib_page_match:
+                    from backend.logging_utils import log  # type: ignore
+                    log("INFO", "CALIB-PAGE-MATCH", f"Matched calib page {calib_page_match.get('id')} ({calib_page_match.get('name')})", component="StaticAnalyze", extra={
+                        "page_id": calib_page_match.get("id"),
+                        "page_name": calib_page_match.get("name"),
+                        "page_fields": list((calib_page_match.get("fieldSelectors") or {}).keys()),
+                        "critical_fields": calib_page_match.get("criticalFields"),
+                        "actions_detail": calib_page_match.get("actionsDetail"),
+                    })
+                    # Override seeded mapping with page-specific fieldSelectors if present
+                    psel = calib_page_match.get("fieldSelectors") or {}
+                    if isinstance(psel, dict):
+                        for k,v in psel.items():
+                            if v:
+                                mapping[k] = v
+                                # keep original source if existed, otherwise tag as calib_page
+                                mapping_src[k] = mapping_src.get(k) or "calib_page"
+                    # Extract actions from page actionsDetail if any
+                    acts_det = calib_page_match.get("actionsDetail") or []
+                    if isinstance(acts_det, list):
+                        for ad in acts_det:
+                            if isinstance(ad, dict):
+                                lbl = ad.get("label") or ad.get("id") or "Action"
+                                sel = ad.get("selector") or ""
+                                if lbl and lbl not in calib_page_actions:
+                                    calib_page_actions.append(str(lbl))
+                                if sel:
+                                    calib_page_action_selectors.append(sel)
+            except Exception as _e:
+                pass
+
+            # Prefer site-provided global actions if page did not define any labels
+            if calib_page_actions:
+                actions_found.extend(calib_page_actions)
+            elif isinstance(site_map.get("actions"), list) and site_map.get("actions"):
                 actions_found.extend([str(x) for x in site_map.get("actions") if isinstance(x, str)])
             # Allow per-site synonyms override
             site_syn = site_map.get("synonyms")
@@ -414,6 +484,41 @@ def static_analyze_page(html: str, url: str, task: str, cfg: Dict[str, Any]) -> 
             json.dump(out, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
+
+    # Log final mapping summary
+    from backend.logging_utils import log  # type: ignore
+    calib_mappings = {k: v for k, v in mapping.items() if mapping_src.get(k) == "calib_site"}
+    other_mappings = {k: v for k, v in mapping.items() if mapping_src.get(k) != "calib_site"}
+    
+    # If we had page-level action selectors, expose them as css# actions first & log presence
+    if calib_page_action_selectors:
+        from backend.logging_utils import log  # type: ignore
+        missing = [s for s in calib_page_action_selectors if s not in html]
+        present = [s for s in calib_page_action_selectors if s in html]
+        css_actions = [f"css#{s}" for s in calib_page_action_selectors]
+        new_actions: List[str] = []
+        for a in css_actions + actions_found:
+            if a not in new_actions:
+                new_actions.append(a)
+        actions_found = new_actions
+        log("INFO", "CALIB-PAGE-ACTIONS", f"Page action selectors resolved ({len(calib_page_action_selectors)})", component="StaticAnalyze", extra={
+            "present": present,
+            "missing": missing,
+            "labels": calib_page_actions,
+            "css_actions_injected": css_actions
+        })
+
+    log("INFO", "STATIC-MAPPING-FINAL", f"Static analysis complete for {host}/{task}", component="StaticAnalyze", extra={
+        "total_mappings": len(mapping),
+        "calib_mappings": calib_mappings,
+        "calib_count": len(calib_mappings),
+        "other_mappings": other_mappings,
+        "other_count": len(other_mappings),
+        "mapping_sources": mapping_src,
+        "actions_found": actions_found,
+        "url": url or "",
+        "fingerprint": fp[:8] if fp else None
+    })
 
     return out
 

@@ -42,15 +42,56 @@ def _fingerprint(html: Optional[str]) -> Optional[str]:
 # ------------------------- loadRuhsatFromTmp -------------------------
 
 def plan_load_ruhsat_json() -> Dict[str, Any]:
-    """Return ruhsat JSON via ingest pipeline."""
+    """Return ruhsat JSON via ingest pipeline with richer diagnostics.
+
+    Always returns a structured { ok, data?, error?, meta? } object – never raises – so
+    the /api/f3-static caller should not surface http_500 unless FastAPI itself fails.
+    """
+    from backend.logging_utils import log  # type: ignore
     try:
-        prep = ensure_f3_data_ready()
-        res = read_input_and_convert_to_json()
-        if isinstance(res, dict):
-            res.setdefault("prep", prep)
-        return res
-    except Exception as e:
-        return {"ok": False, "error": f"ingest_failed: {e}"}
+        log("INFO", "RUHSAT-LOAD", "starting ensure_f3_data_ready", component="F3-Static")
+        prep = ensure_f3_data_ready()  # { ok, prepared, meta?, error? }
+        log("INFO", "RUHSAT-LOAD", "ensure_f3_data_ready done", component="F3-Static", extra={
+            "prepared": prep.get("prepared"),
+            "meta": prep.get("meta"),
+            "error": prep.get("error")
+        })
+        res = read_input_and_convert_to_json()  # { ok, data?, error, meta }
+        # Normalise legacy structure
+        ok = bool(res.get("ok")) if isinstance(res, dict) else False
+        error = res.get("error") if isinstance(res, dict) else "unknown"
+        data = res.get("data") if isinstance(res, dict) else None
+        meta = res.get("meta") if isinstance(res, dict) else {}
+        if ok and not data:
+            # Unexpected – treat as error
+            ok = False
+            error = error or "no_data"
+        out: Dict[str, Any] = {"ok": ok, "data": data, "error": error if not ok else None, "meta": meta, "prep": prep}
+        code = "RUHSAT-OK" if ok else "RUHSAT-ERR"
+        log("INFO" if ok else "WARN", code, "ruhsat load result", component="F3-Static", extra={
+            "ok": ok,
+            "error": error,
+            "source": (meta or {}).get("source"),
+            "ingest_error": error,
+            "has_keys": list((data or {}).keys())[:10] if isinstance(data, dict) else [],
+        })
+        # Provide explicit error codes UI can branch on instead of generic http_500
+        if not ok and isinstance(error, str):
+            # Map underlying errors to stable short codes
+            if error.startswith("no_image_dir"):
+                out["error_code"] = "no_image_dir"
+            elif error.startswith("no_images_found"):
+                out["error_code"] = "no_images"
+            elif error.startswith("no_key_for_vision"):
+                out["error_code"] = "missing_api_key"
+            elif "vision_extract_failed" in error:
+                out["error_code"] = "vision_failed"
+            else:
+                out["error_code"] = "ingest_failed"
+        return out
+    except Exception as e:  # Final safety net – never raise
+        log("ERROR", "RUHSAT-EXC", f"unexpected exception: {e}", component="F3-Static")
+        return {"ok": False, "error": f"ingest_exception: {e}", "error_code": "ingest_exception"}
 
 
 # ------------------------- analyzePageStaticFillForms (STATIC ONLY) -------------------------
@@ -93,18 +134,40 @@ def plan_analyze_page_static_fill_forms(filtered_html: Optional[str], url: Optio
         return {"ok": False, "error": f"analyze_static_failed: {e}"}
 
 
-def plan_validate_critical_fields(field_mapping: Dict[str, str], ruhsat_json: Dict[str, Any], task: Optional[str] = None) -> Dict[str, Any]:
-    """Validate that critical fields from config were successfully mapped and have data."""
+def plan_validate_critical_fields(field_mapping: Dict[str, str], ruhsat_json: Dict[str, Any], task: Optional[str] = None, critical_fields_override: Optional[List[str]] = None) -> Dict[str, Any]:
+    """Validate that critical fields from config were successfully mapped and have data.
+    
+    Args:
+        field_mapping: Field to selector mapping from static analysis
+        ruhsat_json: Extracted ruhsat data
+        task: Task name (e.g., "Yeni Trafik")
+        critical_fields_override: Dynamic critical fields from calib.json page (preferred over config)
+    """
+    from backend.logging_utils import log  # type: ignore
+    
     try:
         import config  # type: ignore
         cfg = config.load_config()
         t = task or "Yeni Trafik"
         
-        # Get critical fields from config
-        critical_fields = cfg.get("goFillForms", {}).get("static", {}).get("criticalFields", {}).get(t, [])
-        if not critical_fields:
-            # Default critical fields
-            critical_fields = ["plaka_no", "model_yili", "sasi_no", "motor_no"]
+        # Use dynamic critical fields from calib.json if provided, otherwise fall back to config
+        if critical_fields_override:
+            critical_fields = critical_fields_override
+            source = "calib_page"
+        else:
+            critical_fields = cfg.get("goFillForms", {}).get("static", {}).get("criticalFields", {}).get(t, [])
+            source = "config"
+            if not critical_fields:
+                # Default critical fields
+                critical_fields = ["plaka_no", "model_yili", "sasi_no", "motor_no"]
+                source = "default"
+        
+        log("INFO", "CRITICAL-VALIDATION", f"Validating critical fields from {source}", component="F3-Static", extra={
+            "critical_fields": critical_fields,
+            "field_mapping_keys": list(field_mapping.keys()),
+            "ruhsat_keys": list(ruhsat_json.keys()),
+            "source": source
+        })
         
         mapped_critical = []
         missing_critical = []
@@ -113,6 +176,14 @@ def plan_validate_critical_fields(field_mapping: Dict[str, str], ruhsat_json: Di
         for field in critical_fields:
             has_data = field in ruhsat_json and str(ruhsat_json.get(field, "")).strip() != ""
             has_mapping = field in field_mapping and field_mapping[field]
+            
+            log("INFO", "CRITICAL-FIELD-CHECK", f"Field {field}: data={has_data}, mapping={has_mapping}", component="F3-Static", extra={
+                "field": field,
+                "has_data": has_data,
+                "has_mapping": has_mapping,
+                "data_value": str(ruhsat_json.get(field, ""))[:50] if has_data else "",
+                "mapping_selector": field_mapping.get(field, "") if has_mapping else ""
+            })
             
             if has_data and has_mapping:
                 mapped_critical.append(field)
@@ -124,7 +195,7 @@ def plan_validate_critical_fields(field_mapping: Dict[str, str], ruhsat_json: Di
         success_rate = len(mapped_critical) / len(critical_fields) if critical_fields else 1.0
         is_success = success_rate >= 0.75  # 75% of critical fields must be mapped
         
-        return {
+        result = {
             "ok": True,
             "is_success": is_success,
             "success_rate": success_rate,
@@ -133,9 +204,15 @@ def plan_validate_critical_fields(field_mapping: Dict[str, str], ruhsat_json: Di
             "missing_critical": missing_critical,
             "unmapped_critical": unmapped_critical,
             "total_critical": len(critical_fields),
-            "total_mapped": len(mapped_critical)
+            "total_mapped": len(mapped_critical),
+            "source": source
         }
+        
+        log("INFO", "CRITICAL-VALIDATION-RESULT", f"Critical validation: {len(mapped_critical)}/{len(critical_fields)} success={is_success}", component="F3-Static", extra=result)
+        
+        return result
     except Exception as e:
+        log("ERROR", "CRITICAL-VALIDATION-ERROR", f"Critical validation failed: {e}", component="F3-Static")
         return {"ok": False, "error": f"validation_failed: {e}"}
 
 

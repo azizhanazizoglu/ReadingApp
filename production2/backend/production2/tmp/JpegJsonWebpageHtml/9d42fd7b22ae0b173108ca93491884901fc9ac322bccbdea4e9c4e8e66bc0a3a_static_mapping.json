@@ -5,7 +5,7 @@
     "plaka_no": "#plateNo"
   },
   "actions": [
-    "devam"
+    "poliçeyi aktifleştir"
   ],
   "validation": {
     "contexts": {},
@@ -16,7 +16,7 @@
   "mapping_source": {
     "plaka_no": "calib_site"
   },
-  "fingerprint": "34a940864f878381e9e429f4edcc4da0626b3e4289859f4cfc005697a21cbbd5",
+  "fingerprint": "9d42fd7b22ae0b173108ca93491884901fc9ac322bccbdea4e9c4e8e66bc0a3a",
   "debug_dumps": {
     "used": "static",
     "used_hints": {},
