@@ -24,9 +24,10 @@ export interface ActionsEditorProps {
   onDrop: (i:number)=>void;
   onDragOver: (e:React.DragEvent)=>void;
   addAction: ()=>void;
+  deleteAction: (id:string)=>void;
 }
 
-export const ActionsEditor: React.FC<ActionsEditorProps> = ({ actions, liteMode, readMode, darkMode, actStatus, actPreviews, actHtmlSnippets, actOpenHtml, inputBg, inputBorder, chipBorder, textSub, textMain, headerBorder, onActionChange, onPick, onShow, onDragStart, onDrop, onDragOver, addAction }) => {
+export const ActionsEditor: React.FC<ActionsEditorProps> = ({ actions, liteMode, readMode, darkMode, actStatus, actPreviews, actHtmlSnippets, actOpenHtml, inputBg, inputBorder, chipBorder, textSub, textMain, headerBorder, onActionChange, onPick, onShow, onDragStart, onDrop, onDragOver, addAction, deleteAction }) => {
   return (
     <>
       <div style={{ marginTop:14, fontSize:12, color:textSub, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
@@ -53,6 +54,7 @@ export const ActionsEditor: React.FC<ActionsEditorProps> = ({ actions, liteMode,
           </div>
           {!readMode && <button onClick={()=>onPick(a.id)} style={{ fontSize:12, padding:'8px 10px', border:`1px solid ${chipBorder}`, borderRadius:10, background:darkMode? '#0b1220':'#eef2ff' }}>Pick</button>}
           <button onClick={()=>onShow(a.id)} style={{ fontSize:12, padding:'8px 10px', border:`1px dashed ${chipBorder}`, borderRadius:10, background:'transparent', color:textMain }}>Show</button>
+          {!readMode && actions.length > 1 && <button onClick={()=>deleteAction(a.id)} style={{ fontSize:12, padding:'8px 10px', border:`1px solid ${inputBorder}`, borderRadius:10, background:'transparent', color:'#ef4444' }}>Del</button>}
         </div>))}
       </div>
       {!readMode ? (

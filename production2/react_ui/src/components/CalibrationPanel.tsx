@@ -171,6 +171,19 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, darkMode
 		}
 		logInfo(`Field renamed: ${oldK} -> ${newK}`);
 	};
+	
+	// Rename only a specific occurrence by row index (for individual field freedom)
+	const onRenameFieldOccurrence = (rowIdx:number, newK:string) => {
+		if(!newK) return;
+		setFieldKeys(prev=> {
+			const next = [...prev];
+			const oldK = next[rowIdx];
+			if(oldK === newK) return prev; // no change
+			next[rowIdx] = newK;
+			logInfo(`Field occurrence renamed: ${oldK} -> ${newK} (row ${rowIdx})`);
+			return next;
+		});
+	};
 	const clearCachesForField = (k: string) => {
 		if (liteMode) return; // skip heavy cleanup in lite
 		const pref = `${k}::`;
@@ -506,6 +519,7 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, darkMode
 	const handlePickAction = async (id:string) => { try { const sel = await (window as any).pickSelectorFromWebview?.(); if(sel && typeof sel==='string'){ handleActionChange(id,'selector',sel); if(!liteMode){ try { const info= await (window as any).previewSelectorInWebview?.(sel); if(info && typeof info==='string') setActPreviews(p=>({...p,[id]:info})); } catch {} } } } catch {} };
 	const handleShowAction = async (id:string) => { const cur=actionsDetail.find(a=>a.id===id)?.selector||''; if(!cur) return; try { const info= await (window as any).previewSelectorInWebview?.(cur); if(!liteMode && info && typeof info==='string') setActPreviews(p=>({...p,[id]:info})); if(!liteMode){ const html= await (window as any).getElementHtmlInWebview?.(cur,1600); if(html && typeof html==='string') setActHtmlSnippets(h=>({...h,[id]:html})); } } catch {} };
 	const addAction = () => { const idx=actionsDetail.length+1; const id=`a${Date.now().toString(36)}_${idx}`; setActionsDetail(prev=>{ const next=[...prev,{ id, label:`Action ${idx}`, selector:'' }]; syncActionsToPage(next); logInfo(`Action added (${id})`); return next; }); };
+	const deleteAction = (id:string) => { setActionsDetail(prev=>{ const next=prev.filter(a=>a.id!==id); syncActionsToPage(next); logInfo(`Action deleted (${id})`); return next; }); };
 	const onActionDragStart=(i:number)=> setActDragIdx(i); const onActionDrop=(i:number)=>{ if(actDragIdx===null) return; const arr=[...actionsDetail]; const [item]=arr.splice(actDragIdx,1); arr.splice(i,0,item); setActionsDetail(arr); syncActionsToPage(arr); setActDragIdx(null); };
 	
 	// Use ref to avoid dependency cycles that cause excessive applyDraft calls
@@ -619,7 +633,6 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, darkMode
 						loadTaskSuggestions={loadTaskSuggestions}
 						onPush={pushDraft}
 						onUpdate={updateFromServer}
-						onRevert={revertToLastPulled}
 						onClear={async ()=>{ 
 						try { 
 							logInfo('Manual clear: clearing backend AND frontend completely');
@@ -752,6 +765,7 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, darkMode
 						onAddField={onAddField}
 						onRemoveOccurrence={removeOccurrence}
 						onRenameField={onRenameField}
+						onRenameFieldOccurrence={onRenameFieldOccurrence}
 						handleChange={handleChange}
 						handlePickAssign={handlePickAssign}
 						keyIdx={keyIdx}
@@ -792,6 +806,7 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, darkMode
 						onDrop={onActionDrop}
 						onDragOver={onDragOver}
 						addAction={addAction}
+						deleteAction={deleteAction}
 					/>
 					<CriticalFieldsEditor
 						criticalFields={criticalFields}

@@ -16,7 +16,8 @@ interface Props {
   textSub: string;
   onAddField: ()=>void;
   onRemoveOccurrence: (k:string, occIdx:number)=>void; // remove only this occurrence
-  onRenameField: (oldK:string,newK:string)=>void; // renames THIS row's key (may create duplicates)
+  onRenameField: (oldK:string,newK:string)=>void; // renames ALL occurrences of oldK to newK
+  onRenameFieldOccurrence: (rowIdx:number,newK:string)=>void; // renames only THIS row/occurrence
   handleChange: (k:string,v:string,idx:number)=>void; // idx = occurrence index of key
   handlePickAssign: (k:string,idx:number)=>void;
   keyIdx: (k:string,idx:number)=>string;
@@ -24,7 +25,7 @@ interface Props {
 
 // NOTE: Alias UI removed. Duplicate rows with the same field key now represent multiple selectors
 // (occurrences) for that key. Occurrence index maps into the underlying string|string[] in fieldSelectors.
-const FieldsExcelSimple: React.FC<Props> = ({ fieldKeys, fieldSelectors, values, availableKeys, readMode, liteMode, darkMode, status, inputBg, inputBorder, chipBorder, headerBorder, textSub, onAddField, onRemoveOccurrence, onRenameField, handleChange, handlePickAssign, keyIdx }) => {
+const FieldsExcelSimple: React.FC<Props> = ({ fieldKeys, fieldSelectors, values, availableKeys, readMode, liteMode, darkMode, status, inputBg, inputBorder, chipBorder, headerBorder, textSub, onAddField, onRemoveOccurrence, onRenameField, onRenameFieldOccurrence, handleChange, handlePickAssign, keyIdx }) => {
   // Pre-compute occurrence indices for each row
   const occurrenceCounter: Record<string, number> = {};
   const rows = fieldKeys.map(k => {
@@ -60,7 +61,7 @@ const FieldsExcelSimple: React.FC<Props> = ({ fieldKeys, fieldSelectors, values,
                   {readMode ? (
                     <div style={{ fontSize:11 }}>{k}{occIdx>0 && <span style={{ opacity:0.6 }}> #{occIdx+1}</span>}</div>
                   ) : (
-                    <select defaultValue={k} onChange={e=>{ const nv=e.target.value; if(nv && nv!==k) onRenameField(k,nv); }} style={{ width:'100%', fontSize:11, padding:'4px 6px', background: inputBg, border:`1px solid ${inputBorder}`, borderRadius:6 }}>
+                    <select defaultValue={k} onChange={e=>{ const nv=e.target.value; if(nv && nv!==k) onRenameFieldOccurrence(rowIdx,nv); }} style={{ width:'100%', fontSize:11, padding:'4px 6px', background: inputBg, border:`1px solid ${inputBorder}`, borderRadius:6 }}>
                       {[...new Set([k,...availableKeys])].map(opt=> (
                         <option key={opt} value={opt}>{opt}</option>
                       ))}
