@@ -493,22 +493,8 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, darkMode
 			setActionsDetail(firstPage.actionsDetail || [{ id: 'a1', label: 'Action 1', selector: '' }]);
 		}
 		
-		// IMMEDIATELY save to backend
-		try {
-			if (host && host !== 'unknown') {
-				const currentDraft = buildDraftPayload();
-				const newCurrentId = currentPageId === pageId ? renumberedPages[0]?.id : currentPageId;
-				const draft = { ...currentDraft, pages: renumberedPages, currentPageId: newCurrentId };
-				await fetch(`${BACKEND_URL}/api/calib`, { 
-					method: 'POST', 
-					headers: { 'Content-Type': 'application/json' }, 
-					body: JSON.stringify({ op: 'saveDraft', mapping: { host, task: selectedTask, draft } }) 
-				});
-				logInfo(`${pageToDelete.name} deleted and calib.json updated`);
-			}
-		} catch (e) {
-			logError(`Failed to save after page deletion: ${e}`);
-		}
+		// LOCAL ONLY - no automatic save, wait for Push button
+		logInfo(`${pageToDelete.name} deleted - local only (push to save)`);
 	};
 	const handleMarkLastPage = () => { const committed = commitCurrentPage({ isLast:true }); logInfo(`Marked page as last: ${committed.name}`); setPages(prev=> prev.map(p=> p.id===committed.id ? { ...committed, isLast:true } : p)); };
 	const handleCaptureUrl = async () => { const info= await getDomAndUrlFromWebview(); setUrlSample(info.url||''); };
