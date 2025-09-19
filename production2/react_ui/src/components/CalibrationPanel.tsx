@@ -193,14 +193,22 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, darkMode
 	const insertRowAfter = (k: string, idx:number) => setFieldSelectors(prev=>{ const cur=prev[k]; const arr=Array.isArray(cur)?[...cur]:[String(cur||'')]; const at=Math.max(0,Math.min(idx+1,arr.length)); arr.splice(at,0,''); const next={...prev,[k]:arr}; setTimeout(()=>focusFieldRow(k,at),0); syncFieldSelectorsToPage(next); logInfo(`Alias inserted after index ${idx} for ${k}; total=${arr.length}`); return next; });
 	// Clear semantics: collapse ALL aliases for field to a single empty string (intuitive reset)
 	const clearRow = (k:string, _idx:number) => { setFieldSelectors(prev=>{ const next={...prev,[k]:['']}; clearCachesForField(k); syncFieldSelectorsToPage(next); logInfo(`Field ${k} cleared (aliases collapsed to one empty)`); return next; }); };
-	const removeRow = (k:string, idx:number) => setFieldSelectors(prev=>{ const cur=prev[k]; let arr=Array.isArray(cur)?[...cur]:[String(cur||'')]; if(arr.length<=1){ // if last, just clear
-		arr=[''];
-		logWarn(`Attempted remove on single alias for ${k}; reset to empty`);
-	}else{
-		arr.splice(idx,1);
-		logInfo(`Alias ${idx} removed for ${k}; remaining=${arr.length}`);
-	}
-	clearCachesForField(k); const next={...prev,[k]:arr}; syncFieldSelectorsToPage(next); return next; });
+	const removeRow = (k:string, idx:number) => setFieldSelectors(prev=>{
+		const cur = prev[k];
+		let arr = Array.isArray(cur)? [...cur] : [String(cur||'')];
+		if(arr.length <= 1){
+			// Only one alias: blank it instead of removing field / other fields
+			arr = [''];
+			logWarn(`Single alias cleared for ${k}`);
+		} else {
+			if(idx >=0 && idx < arr.length){ arr.splice(idx,1); }
+			logInfo(`Alias ${idx} removed for ${k}; remaining=${arr.length}`);
+		}
+		clearCachesForField(k);
+		const next = { ...prev, [k]: arr };
+		syncFieldSelectorsToPage(next);
+		return next;
+	});
 	const moveRow = (k:string, idx:number, dir:-1|1) => setFieldSelectors(prev=>{ const cur=prev[k]; const arr=Array.isArray(cur)?[...cur]:[String(cur||'')]; const to=idx+dir; if(to<0||to>=arr.length) return prev; [arr[idx],arr[to]]=[arr[to],arr[idx]]; clearCachesForField(k); setTimeout(()=>focusFieldRow(k,to),0); const next={...prev,[k]:arr}; syncFieldSelectorsToPage(next); logInfo(`Alias moved for ${k}: ${idx} -> ${to}`); return next; });
 	const cleanFieldSelectors = (fs: Record<string,string|string[]>) => { const out:Record<string,string|string[]>={}; for(const [k,v] of Object.entries(fs)){ const add=(list:string[])=>{ const seen=new Set<string>(); const dedup:string[]=[]; for(const s of list){ const n=normalizeSelector(s); if(n && !seen.has(n)){ seen.add(n); dedup.push(n);} } if(!dedup.length) return ''; if(dedup.length===1) return dedup[0]; return dedup; }; out[k]=Array.isArray(v)?add(v):add([v]); } return out; };
 	const handleChange = (k:string, v:string, idx=0) => {
@@ -246,51 +254,144 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, darkMode
 	const handleTestPlanInternal = React.useCallback(async ()=>{ try { await fetch(`${BACKEND_URL}/api/calib`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ op:'testFillPlan', mapping:{ host, task: selectedTask } }) }); flash('Planned'); logInfo(`Test plan triggered for ${selectedTask}`); onTestPlan?.(); } catch { flash('Error'); logError(`Test plan failed for ${selectedTask}`); } }, [host, selectedTask, onTestPlan]);
 	const handleFinalizeInternal = React.useCallback(async ()=>{ try { await fetch(`${BACKEND_URL}/api/calib`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ op:'finalizeToConfig', mapping:{ host, task: selectedTask } }) }); flash('Finalized'); logInfo(`Finalize requested for ${selectedTask}`); onFinalize?.(); } catch { flash('Error'); logError(`Finalize failed for ${selectedTask}`); } }, [host, selectedTask, onFinalize]);
 
-	// Autosave (draft -> finalize) whenever calibration data changes
+	// Manual save mode: remove autosave; expose explicit Save / Finalize / Load buttons
 	const [autoStatus, setAutoStatus] = React.useState<'idle'|'saving'|'saved'|'error'>('idle');
-	const lastSavedRef = React.useRef<any>(null);
-	const pendingSaveRef = React.useRef<number | null>(null);
-	const buildSnapshot = () => {
-		const draft = buildDraftPayload();
-		return JSON.stringify({ host, task: selectedTask, draft });
-	};
-	const performAutosave = React.useCallback(async () => {
-		// Guard: avoid backend 422 spam if host missing
-		if(!host || host==='unknown') { logWarn('Autosave skipped: missing host'); return; }
-		try {
+	const performManualSave = React.useCallback(async (finalize=false) => {
+		if(!host || host==='unknown'){ logWarn('Save skipped: missing host'); return; }
+		try{
 			setAutoStatus('saving');
+			// Commit current page before saving to make sure currentPageId is included
+			commitCurrentPage();
 			const draft = buildDraftPayload();
+			console.log('Manual save - current state:', {currentPageId, pages: pages.length, draft});
 			await fetch(`${BACKEND_URL}/api/calib`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ op:'saveDraft', mapping:{ host, task: selectedTask, draft } }) });
-			// Immediately finalize to config for real-time behavior
-			await fetch(`${BACKEND_URL}/api/calib`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ op:'finalizeToConfig', mapping:{ host, task: selectedTask } }) });
-			lastSavedRef.current = buildSnapshot();
+			if(finalize){
+				await fetch(`${BACKEND_URL}/api/calib`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ op:'finalizeToConfig', mapping:{ host, task: selectedTask } }) });
+			}
 			setAutoStatus('saved');
-			logInfo('Autosave+Finalize completed');
-			setTimeout(()=>{ if(autoStatus==='saved') setAutoStatus('idle'); }, 2000);
-		} catch (e) {
-			setAutoStatus('error');
-			logError('Autosave failed');
-		}
-	}, [buildDraftPayload, host, selectedTask]);
-
-	// Debounce autosave on significant state changes
-	React.useEffect(()=>{
-		// skip initial mount until draft loaded
-		const snap = buildSnapshot();
-		if(lastSavedRef.current === null){
-			lastSavedRef.current = snap; // initial baseline
-			return;
-		}
-		if(snap === lastSavedRef.current) return; // no change
-		if(pendingSaveRef.current) window.clearTimeout(pendingSaveRef.current);
-		pendingSaveRef.current = window.setTimeout(()=>{ performAutosave(); }, 700);
-		return ()=>{ if(pendingSaveRef.current) window.clearTimeout(pendingSaveRef.current); };
-	// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [fieldSelectors, fieldKeys, executionOrder, actionsDetail, criticalFields, pages, selectedTask]);
+			flash(finalize? 'Saved+Finalized':'Saved');
+			logInfo(finalize? 'Manual save + finalize completed':'Manual save completed');
+			setTimeout(()=> setAutoStatus('idle'), 1600);
+		}catch(e){ setAutoStatus('error'); flash('Save Error'); logError('Manual save failed'); }
+	}, [buildDraftPayload, host, selectedTask, commitCurrentPage, currentPageId, pages]);
 
 	// Memo current draft snapshot for render-safe usage (avoid calling buildDraftPayload inside JSX repeatedly)
 	const currentDraft = React.useMemo(()=> buildDraftPayload(), [buildDraftPayload]);
-	const handleAddNextPage = async () => { const committed = commitCurrentPage(); logInfo(`Committed page ${committed.name} (${committed.id}); adding new page`); const id = `p_${Date.now().toString(36)}`; setCurrentPageId(id); setPageName(`Page ${pages.length + 2}`); const info = await getDomAndUrlFromWebview(); setUrlSample(info.url||''); setUrlPattern(''); setFieldSelectors({}); setExecutionOrder([]); setActionsDetail([{ id:'a1', label:'Action 1', selector:'' }]); };
+	const handleAddNextPage = async () => {
+		// First, commit current page to save any pending changes
+		commitCurrentPage();
+		
+		// Calculate the next page number automatically
+		const nextPageNumber = pages.length + 1;
+		const newPageName = `Page ${nextPageNumber}`;
+		const newId = `p_${Date.now().toString(36)}`;
+		
+		// Create the new blank page template
+		const newPage: CalibPage = { 
+			id: newId, 
+			name: newPageName, 
+			urlPattern: '', 
+			urlSample: '', 
+			fieldSelectors: {}, 
+			fieldKeys: [], 
+			executionOrder: [], 
+			actionsDetail: [{ id: 'a1', label: 'Action 1', selector: '' }], 
+			criticalFields: criticalFields.slice(), // Inherit current critical fields
+			isLast: false 
+		};
+		
+		// Add the new page to the pages array
+		const updatedPages = [...pages, newPage];
+		setPages(updatedPages);
+		
+		// Switch UI to the new page and completely reset the view
+		setCurrentPageId(newId);
+		setPageName(newPageName);
+		setUrlPattern('');
+		setUrlSample('');
+		setFieldSelectors({});
+		setFieldKeys([]);
+		setExecutionOrder([]);
+		setActionsDetail([{ id: 'a1', label: 'Action 1', selector: '' }]);
+		
+		// Try to get current URL from webview
+		try { 
+			const info = await getDomAndUrlFromWebview(); 
+			setUrlSample(info.url || ''); 
+		} catch { 
+			setUrlSample(''); 
+		}
+		
+		// IMMEDIATELY save to backend (auto-save the new page template)
+		try {
+			if (host && host !== 'unknown') {
+				const currentDraft = buildDraftPayload();
+				const draft = { ...currentDraft, pages: updatedPages, currentPageId: newId };
+				await fetch(`${BACKEND_URL}/api/calib`, { 
+					method: 'POST', 
+					headers: { 'Content-Type': 'application/json' }, 
+					body: JSON.stringify({ op: 'saveDraft', mapping: { host, task: selectedTask, draft } }) 
+				});
+				logInfo(`${newPageName} created and saved to calib.json`);
+			}
+		} catch (e) {
+			logError(`Failed to save new page: ${e}`);
+		}
+		
+		logInfo(`Added ${newPageName} with ID ${newId} - view cleared`);
+	};
+
+	// New function: Delete individual page
+	const handleDeletePage = async (pageId: string) => {
+		if (pages.length <= 1) {
+			logWarn('Cannot delete the last page');
+			return;
+		}
+		
+		const pageToDelete = pages.find(p => p.id === pageId);
+		if (!pageToDelete) return;
+		
+		// Remove the page from array
+		const updatedPages = pages.filter(p => p.id !== pageId);
+		
+		// Renumber remaining pages
+		const renumberedPages = updatedPages.map((p, index) => ({
+			...p,
+			name: `Page ${index + 1}`
+		}));
+		
+		setPages(renumberedPages);
+		
+		// If we deleted the current page, switch to first page
+		if (currentPageId === pageId) {
+			const firstPage = renumberedPages[0];
+			setCurrentPageId(firstPage.id);
+			setPageName(firstPage.name);
+			setUrlPattern(firstPage.urlPattern || '');
+			setUrlSample(firstPage.urlSample || '');
+			setFieldSelectors(firstPage.fieldSelectors || {});
+			setFieldKeys(firstPage.fieldKeys || []);
+			setExecutionOrder(firstPage.executionOrder || []);
+			setActionsDetail(firstPage.actionsDetail || [{ id: 'a1', label: 'Action 1', selector: '' }]);
+		}
+		
+		// IMMEDIATELY save to backend
+		try {
+			if (host && host !== 'unknown') {
+				const currentDraft = buildDraftPayload();
+				const newCurrentId = currentPageId === pageId ? renumberedPages[0]?.id : currentPageId;
+				const draft = { ...currentDraft, pages: renumberedPages, currentPageId: newCurrentId };
+				await fetch(`${BACKEND_URL}/api/calib`, { 
+					method: 'POST', 
+					headers: { 'Content-Type': 'application/json' }, 
+					body: JSON.stringify({ op: 'saveDraft', mapping: { host, task: selectedTask, draft } }) 
+				});
+				logInfo(`${pageToDelete.name} deleted and calib.json updated`);
+			}
+		} catch (e) {
+			logError(`Failed to save after page deletion: ${e}`);
+		}
+	};
 	const handleMarkLastPage = () => { const committed = commitCurrentPage({ isLast:true }); logInfo(`Marked page as last: ${committed.name}`); setPages(prev=> prev.map(p=> p.id===committed.id ? { ...committed, isLast:true } : p)); };
 	const handleCaptureUrl = async () => { const info= await getDomAndUrlFromWebview(); setUrlSample(info.url||''); };
 	const onDragStart = (i:number)=> setDragIdx(i); const onDragOver=(e:React.DragEvent)=> e.preventDefault(); const onDrop=(i:number)=>{ if(dragIdx===null) return; const arr=[...displayedOrder]; const [item]=arr.splice(dragIdx,1); arr.splice(i,0,item); setExecutionOrder(arr); setDragIdx(null); };
@@ -302,12 +403,118 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, darkMode
 	const addAction = () => { const idx=actionsDetail.length+1; const id=`a${Date.now().toString(36)}_${idx}`; setActionsDetail(prev=>{ const next=[...prev,{ id, label:`Action ${idx}`, selector:'' }]; syncActionsToPage(next); logInfo(`Action added (${id})`); return next; }); };
 	const onActionDragStart=(i:number)=> setActDragIdx(i); const onActionDrop=(i:number)=>{ if(actDragIdx===null) return; const arr=[...actionsDetail]; const [item]=arr.splice(actDragIdx,1); arr.splice(i,0,item); setActionsDetail(arr); syncActionsToPage(arr); setActDragIdx(null); };
 	// Draft apply / load
-	const applyDraft = React.useCallback((draft:any, opts?:{preservePage?:boolean}) => { if(!draft|| typeof draft!=='object') return; try { const pagesArr=Array.isArray(draft.pages)?draft.pages:[]; if(pagesArr.length){ setPages(pagesArr); const preserve=!!opts?.preservePage; const keep = preserve? pagesArr.find((p:any)=>p && p.id===currentPageId) : null; const chosen:any = keep || pagesArr[0]; setCurrentPageId(chosen.id||`p_${Date.now().toString(36)}`); setPageName(chosen.name||'Page 1'); setUrlPattern(chosen.urlPattern||''); setUrlSample(chosen.urlSample||''); setFieldSelectors(chosen.fieldSelectors||{}); setFieldKeys(Array.isArray(chosen.fieldKeys)? chosen.fieldKeys : Object.keys(chosen.fieldSelectors||{})); setExecutionOrder(Array.isArray(chosen.executionOrder)?chosen.executionOrder:[]); const acts = Array.isArray(chosen.actionsDetail)?chosen.actionsDetail:[]; setActionsDetail(acts.length? acts : (Array.isArray(draft.actions)? draft.actions.map((lbl:string,i:number)=>({ id:`a${i+1}`, label:String(lbl), selector:'' })) : [{ id:'a1', label:'Action 1', selector:'' }])); setCriticalFields(Array.isArray(chosen.criticalFields)?chosen.criticalFields:(Array.isArray(draft.criticalFields)?draft.criticalFields:criticalFields)); logInfo(`Draft with ${pagesArr.length} page(s) applied`); } else { const fs = (draft.fieldSelectors && typeof draft.fieldSelectors==='object')? draft.fieldSelectors : {}; const fks = Array.isArray(draft.fieldKeys)? draft.fieldKeys : Object.keys(fs); const eo = Array.isArray(draft.executionOrder)?draft.executionOrder:[]; const actsL: string[] = Array.isArray(draft.actions)?draft.actions:[]; const actsD: any[] = Array.isArray(draft.actionsDetail)?draft.actionsDetail:(actsL.length? actsL.map((lbl:string,i:number)=>({id:`a${i+1}`, label:String(lbl), selector:''})):[]); const crit = Array.isArray(draft.criticalFields)?draft.criticalFields:criticalFields; const pgId=`p_${Date.now().toString(36)}`; const one:CalibPage={ id:pgId, name:'Page 1', fieldSelectors: fs, fieldKeys: fks, executionOrder: eo, actionsDetail: actsD, criticalFields: crit }; setPages([one]); setCurrentPageId(pgId); setPageName(one.name); setFieldSelectors(fs); setFieldKeys(fks); setExecutionOrder(eo); setActionsDetail(actsD.length?actsD:[{ id:'a1', label:'Action 1', selector:'' }]); setCriticalFields(crit); logInfo('Single-page draft applied'); } } catch { logError('Failed applying draft'); } }, [criticalFields, currentPageId]);
+	const applyDraft = React.useCallback((draft:any, opts?:{preservePage?:boolean}) => {
+		if(!draft|| typeof draft!=='object') return;
+		try {
+			const incomingPages = Array.isArray(draft.pages)? draft.pages : [];
+			if(incomingPages.length){
+				// Merge strategy: if we currently have more pages than backend (e.g. user just added a new blank page not yet saved) don't drop them.
+				setPages(prev => {
+					if(prev.length > incomingPages.length && incomingPages.length === 1){
+						// Update first page data only, keep extra pages (optimistic UI)
+						const updated = prev.map((p,i)=> i===0 ? { ...p, ...incomingPages[0] } : p);
+						logInfo(`Draft merged (kept ${updated.length} local pages, backend had 1)`);
+						return updated;
+					}
+					logInfo(`Draft with ${incomingPages.length} page(s) applied`);
+					return incomingPages;
+				});
+				const preserve = !!opts?.preservePage;
+				// Don't force switch to page if preservePage=true
+				if (!preserve) {
+					const chosenRaw:any = incomingPages.find(p=>p && p.id===currentPageId) || incomingPages[0];
+					const chosen:any = chosenRaw || incomingPages[0];
+					if(chosen){
+						setCurrentPageId(chosen.id||`p_${Date.now().toString(36)}`);
+						setPageName(chosen.name||'Page 1');
+						setUrlPattern(chosen.urlPattern||'');
+						setUrlSample(chosen.urlSample||'');
+						setFieldSelectors(chosen.fieldSelectors||{});
+						setFieldKeys(Array.isArray(chosen.fieldKeys)? chosen.fieldKeys : Object.keys(chosen.fieldSelectors||{}));
+						setExecutionOrder(Array.isArray(chosen.executionOrder)? chosen.executionOrder : []);
+						const actsArr = Array.isArray(chosen.actionsDetail)? chosen.actionsDetail : [];
+						setActionsDetail(actsArr.length? actsArr : (Array.isArray(draft.actions)? draft.actions.map((lbl:string,i:number)=>({ id:`a${i+1}`, label:String(lbl), selector:'' })) : [{ id:'a1', label:'Action 1', selector:'' }]));
+						setCriticalFields(Array.isArray(chosen.criticalFields)? chosen.criticalFields : (Array.isArray(draft.criticalFields)? draft.criticalFields : criticalFields));
+					}
+				}
+			} else {
+				// Single-page legacy shape
+				const fs = (draft.fieldSelectors && typeof draft.fieldSelectors==='object')? draft.fieldSelectors : {};
+				const fks = Array.isArray(draft.fieldKeys)? draft.fieldKeys : Object.keys(fs);
+				const eo = Array.isArray(draft.executionOrder)? draft.executionOrder : [];
+				const actsL: string[] = Array.isArray(draft.actions)? draft.actions : [];
+				const actsD: any[] = Array.isArray(draft.actionsDetail)? draft.actionsD : (actsL.length? actsL.map((lbl:string,i:number)=>({id:`a${i+1}`, label:String(lbl), selector:''})) : []);
+				const crit = Array.isArray(draft.criticalFields)? draft.criticalFields : criticalFields;
+				const pgId = `p_${Date.now().toString(36)}`;
+				const one:CalibPage = { id:pgId, name:'Page 1', fieldSelectors: fs, fieldKeys: fks, executionOrder: eo, actionsDetail: actsD, criticalFields: crit };
+				setPages([one]);
+				setCurrentPageId(pgId);
+				setPageName(one.name);
+				setFieldSelectors(fs);
+				setFieldKeys(fks);
+				setExecutionOrder(eo);
+				setActionsDetail(actsD.length?actsD:[{ id:'a1', label:'Action 1', selector:'' }]);
+				setCriticalFields(crit);
+				logInfo('Single-page draft applied');
+			}
+		} catch { logError('Failed applying draft'); }
+	}, [criticalFields, currentPageId]);
 	React.useEffect(()=>{ if(existingDraft) applyDraft(existingDraft); }, [existingDraft, applyDraft]);
 	const lastLoadRef = React.useRef<number>(0);
-	const loadLatestDraft = React.useCallback(async ()=>{ try { const now=Date.now(); if(now - lastLoadRef.current < 500) return; lastLoadRef.current = now; const r= await fetch(`${BACKEND_URL}/api/calib`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ op:'load', mapping:{ host, task: selectedTask } }) }); const j= await r.json(); if(j?.ok && j?.data){ applyDraft(j.data,{preservePage:true}); logInfo('Latest draft loaded'); } else { logWarn('No draft found to load'); } } catch { logError('Error loading latest draft'); } }, [host, selectedTask, applyDraft]);
-	// Load latest draft once on mount (removing readMode dependency to avoid spam logs)
-	React.useEffect(()=>{ loadLatestDraft(); }, [loadLatestDraft]);
+	const loadLatestDraft = React.useCallback(async ()=>{ 
+		try { 
+			const now=Date.now(); 
+			if(now - lastLoadRef.current < 500) return; 
+			lastLoadRef.current = now; 
+			
+			const r= await fetch(`${BACKEND_URL}/api/calib`, { 
+				method:'POST', 
+				headers:{'Content-Type':'application/json'}, 
+				body: JSON.stringify({ op:'load', mapping:{ host, task: selectedTask } }) 
+			}); 
+			const j= await r.json(); 
+			
+			if(j?.ok && j?.data){ 
+				// COMPLETE RESET: Apply draft data from calib.json as single source of truth
+				applyDraft(j.data, {preservePage: false}); // Force reset, don't preserve page
+				logInfo('Latest draft loaded from calib.json - complete reset'); 
+			} else { 
+				// calib.json is empty or no data - reset to single blank page
+				logWarn('No draft found in calib.json - resetting to blank state');
+				const cleanPageId = `p_${Date.now().toString(36)}`;
+				const cleanPage: CalibPage = {
+					id: cleanPageId,
+					name: 'Page 1',
+					urlPattern: '',
+					urlSample: '',
+					fieldSelectors: {},
+					fieldKeys: [],
+					executionOrder: [],
+					actionsDetail: [{ id: 'a1', label: 'Action 1', selector: '' }],
+					criticalFields: [],
+					isLast: false
+				};
+				
+				// COMPLETE STATE RESET
+				setPages([cleanPage]);
+				setCurrentPageId(cleanPageId);
+				setPageName('Page 1');
+				setUrlPattern('');
+				setUrlSample('');
+				setFieldSelectors({});
+				setFieldKeys([]);
+				setExecutionOrder([]);
+				setActionsDetail([{ id: 'a1', label: 'Action 1', selector: '' }]);
+				setCriticalFields([]);
+				
+				logInfo('Reset to single blank Page 1 - no data in calib.json');
+			} 
+		} catch { 
+			logError('Error loading latest draft'); 
+		} 
+	}, [host, selectedTask, applyDraft]);
+	// REMOVED: Auto-loading on mount to prevent page switching issues
+	// React.useEffect(()=>{ loadLatestDraft(); }, [loadLatestDraft]);
 	// Theming
 	const bgPanel = darkMode ? 'rgba(17,24,39,0.85)' : '#ffffff';
 	const borderCol = darkMode ? 'rgba(148,163,184,0.25)' : '#cbd5e1';
@@ -353,11 +560,72 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, darkMode
 					onTaskMenu={()=> setTaskMenuOpen(v=>!v)}
 					taskMenuOpen={taskMenuOpen}
 					loadTaskSuggestions={loadTaskSuggestions}
-					onClear={async ()=>{ try { await fetch(`${BACKEND_URL}/api/calib`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ op:'clear', mapping:{ host, task: selectedTask } }) }); flash('Cleared'); } catch { flash('Error'); } }}
+					onClear={async ()=>{ 
+						try { 
+							logInfo('Manual clear: clearing backend AND frontend completely');
+							
+							// Clear backend
+							await fetch(`${BACKEND_URL}/api/calib`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ op:'clear', mapping:{ host, task: selectedTask } }) }); 
+							
+							// COMPLETE FRONTEND RESET - ignore any cached data
+							const cleanPageId = `p_${Date.now().toString(36)}`;
+							const cleanPage: CalibPage = {
+								id: cleanPageId,
+								name: 'Page 1',
+								urlPattern: '',
+								urlSample: '',
+								fieldSelectors: {},
+								fieldKeys: [],
+								executionOrder: [],
+								actionsDetail: [{ id: 'a1', label: 'Action 1', selector: '' }],
+								criticalFields: [],
+								isLast: false
+							};
+							
+							// Reset ALL state completely
+							setPages([cleanPage]);
+							setCurrentPageId(cleanPageId);
+							setPageName('Page 1');
+							setUrlPattern('');
+							setUrlSample('');
+							setFieldSelectors({});
+							setFieldKeys([]);
+							setExecutionOrder([]);
+							setActionsDetail([{ id: 'a1', label: 'Action 1', selector: '' }]);
+							setCriticalFields([]);
+							
+							// Clear any additional caches
+							setPreviews({});
+							setStatus({});
+							setHtmlSnippets({});
+							setActPreviews({});
+							setActStatus({});
+							setActHtmlSnippets({});
+							
+							flash('Cleared - both backend and frontend reset'); 
+							logInfo('Complete clear: backend + frontend reset to single Page 1');
+						} catch { 
+							flash('Clear error'); 
+							logError('Clear operation failed');
+						} 
+					}}
 					onToggleLogs={()=> setShowLogs(v=>!v)}
 					showLogs={showLogs}
 					onClose={onClose}
 					docked={docked}
+					onRefresh={async ()=> {
+						try {
+							logInfo('Manual refresh: clearing all caches and reloading from calib.json');
+							
+							// Force reload latest draft with complete reset
+							await loadLatestDraft();
+							
+							flash('Refreshed - calib.json is source of truth');
+						} catch (e) {
+							logError(`Refresh failed: ${e}`);
+							flash('Refresh error');
+						}
+					}}
 					/>
 				{flashMsg && <div style={{ position:'absolute', top:52, right:28, fontSize:12, padding:'6px 10px', borderRadius:999, border:`1px solid ${chipBorder}`, background: darkMode? '#052e2b':'#ccfbf1', color:textMain }}>{flashMsg}</div>}
 				<div style={{ padding:12, overflow:'auto', color:textMain }}>
@@ -366,8 +634,15 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, darkMode
 							<div style={{ fontSize:12, color:textSub }}>Host: <b>{host}</b> — Task: <b>{selectedTask}</b></div>
 							<div style={{ marginLeft:'auto', fontSize:11, color:textSub }}>Page {Math.max(1, pages.findIndex(p=>p.id===currentPageId)+1)} of {Math.max(1,pages.length||1)}</div>
 						</div>
+						{/* Manual Save / Load Controls */}
+						<div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+							<button onClick={()=>performManualSave(false)} style={{ fontSize:11, padding:'6px 10px', border:`1px solid ${chipBorder}`, borderRadius:8, background: darkMode?'#1e293b':'#e2e8f0' }}>Save</button>
+							<button onClick={()=>performManualSave(true)} style={{ fontSize:11, padding:'6px 10px', border:`1px solid ${chipBorder}`, borderRadius:8, background: darkMode?'#064e3b':'#d1fae5' }}>Save & Finalize</button>
+							<button onClick={()=> loadLatestDraft()} style={{ fontSize:11, padding:'6px 10px', border:`1px solid ${chipBorder}`, borderRadius:8, background: darkMode?'#312e81':'#ede9fe' }}>Load Draft</button>
+							<button onClick={()=> { applyDraft(currentDraft,{preservePage:true}); flash('Applied local'); }} style={{ fontSize:11, padding:'6px 10px', border:`1px solid ${chipBorder}`, borderRadius:8, background: darkMode?'#3f3f46':'#f4f4f5' }}>Reapply Local</button>
+							<span style={{ fontSize:11, alignSelf:'center', color: autoStatus==='saving'? '#f59e0b': autoStatus==='error'? '#dc2626': '#10b981' }}>{autoStatus}</span>
+						</div>
 						<div style={{ display:'grid', gridTemplateColumns:'1fr', gap:6 }}>
-							<input value={pageName} onChange={e=>setPageName(e.target.value)} placeholder="Page name" style={{ fontSize:12, padding:'8px 10px', background: inputBg, border:`1px solid ${inputBorder}`, borderRadius:10 }} />
 							<input value={urlPattern} onChange={e=>setUrlPattern(e.target.value)} placeholder="URL pattern (optional)" style={{ fontSize:12, padding:'8px 10px', background: inputBg, border:`1px solid ${inputBorder}`, borderRadius:10 }} />
 							<div style={{ display:'flex', gap:8 }}>
 								<input value={urlSample} onChange={e=>setUrlSample(e.target.value)} placeholder="URL sample" style={{ flex:1, fontSize:12, padding:'8px 10px', background: inputBg, border:`1px solid ${inputBorder}`, borderRadius:10 }} />
@@ -377,7 +652,27 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, darkMode
 								<button onClick={handleAddNextPage} style={{ fontSize:12, padding:'8px 10px', border:`1px solid ${chipBorder}`, borderRadius:10, background:chipBg }}>+ Add Next Page</button>
 								<button onClick={handleMarkLastPage} style={{ fontSize:12, padding:'8px 10px', border:`1px solid ${chipBorder}`, borderRadius:10, background: darkMode?'#052e2b':'#ccfbf1' }}>Mark Last</button>
 							</div>
-							<div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>{pages.map((p,i)=> <button key={p.id} onClick={()=>{ commitCurrentPage(); switchToPage(p); }} style={{ fontSize:11, padding:'6px 10px', border:`1px solid ${p.id===currentPageId?'#22d3ee':chipBorder}`, borderRadius:16, background:chipBg }}>{i+1}. {p.name||`Page ${i+1}`}{p.isLast?' (last)':''}</button>)}</div>
+							<div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+								{pages.map((p,i)=> (
+									<div key={p.id} style={{ display:'flex', alignItems:'center', gap:2 }}>
+										<button 
+											onClick={()=>{ logInfo(`Page click: switching to ${p.name} (${p.id}), current=${currentPageId}`); commitCurrentPage(); switchToPage(p); }} 
+											style={{ fontSize:11, padding:'6px 10px', border:`1px solid ${p.id===currentPageId?'#22d3ee':chipBorder}`, borderRadius:16, background:chipBg }}
+										>
+											{i+1}. {p.name||`Page ${i+1}`}{p.isLast?' (last)':''}
+										</button>
+										{pages.length > 1 && (
+											<button 
+												onClick={(e) => { e.stopPropagation(); handleDeletePage(p.id); }} 
+												style={{ fontSize:10, padding:'4px 6px', border:`1px solid #dc2626`, borderRadius:12, background:'#dc2626', color:'white', cursor:'pointer' }}
+												title={`Delete ${p.name}`}
+											>
+												×
+											</button>
+										)}
+									</div>
+								))}
+							</div>
 							</div>
 					</div>
 					<div style={{ fontSize:12, color:textSub, marginBottom:8, display:'flex', justifyContent:'space-between', alignItems:'center' }}>

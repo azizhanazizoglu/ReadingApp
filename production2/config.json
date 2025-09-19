@@ -338,7 +338,9 @@
     "sites": {
       "preview--screen-to-data.lovable.app": {
         "Yeni Trafik": {
-          "fieldSelectors": {},
+          "fieldSelectors": {
+            "plaka_no": ""
+          },
           "actions": [
             "Action 1"
           ],
@@ -362,11 +364,13 @@
           ],
           "pages": [
             {
-              "id": "p_mfpw4j1g",
+              "id": "p_mfpywzs0",
               "name": "Page 1",
               "urlPattern": "",
               "urlSample": "https://preview--screen-to-data.lovable.app/traffic-insurance",
-              "fieldSelectors": {},
+              "fieldSelectors": {
+                "plaka_no": ""
+              },
               "fieldKeys": [
                 "plaka_no",
                 "marka",
@@ -391,6 +395,29 @@
                 "sasi_no",
                 "motor_no"
               ]
+            },
+            {
+              "id": "p_mfpznk2u",
+              "name": "Page 2",
+              "urlPattern": "",
+              "urlSample": "",
+              "fieldSelectors": {},
+              "fieldKeys": [],
+              "executionOrder": [],
+              "actionsDetail": [
+                {
+                  "id": "a1",
+                  "label": "Action 1",
+                  "selector": ""
+                }
+              ],
+              "criticalFields": [
+                "plaka_no",
+                "model_yili",
+                "sasi_no",
+                "motor_no"
+              ],
+              "isLast": false
             }
           ],
           "multiPage": true

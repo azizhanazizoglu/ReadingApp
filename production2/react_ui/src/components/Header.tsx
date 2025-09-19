@@ -133,12 +133,37 @@ export const Header: React.FC<HeaderProps> = ({
   const [calibCandidates, setCalibCandidates] = React.useState<any[]>([]);
   const [calibRuhsat, setCalibRuhsat] = React.useState<Record<string, string>>({});
 
+  const [calibLoadedOnce, setCalibLoadedOnce] = React.useState(false);
   const onCalibClick = async () => {
+    // Toggle close if already open (no fresh backend call)
+    if (calibOpen) {
+      setCalibOpen(false);
+      devLog('HD-CALIB-TOGGLE', 'Panel closed');
+      return;
+    }
+    // If we have already loaded once, just reopen and (optionally) refresh latest draft without re-extracting image/LLM every time
+    if (calibLoadedOnce) {
+      setCalibOpen(true);
+      devLog('HD-CALIB-REOPEN', 'Panel reopened (cached data)');
+      // Soft refresh existing draft & ruhsat in background
+      try {
+        const hostVal = calibHost || 'unknown';
+        if (hostVal !== 'unknown') {
+          const r = await fetch(`${BACKEND_URL}/api/calib`, { method: 'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ op:'load', mapping:{ host: hostVal, task: calibTask || 'Yeni Trafik' } }) });
+          const j = await r.json();
+          if (j?.ok && j?.data) {
+            try { (window as any).__CALIB_EXISTING__ = j.data; } catch {}
+            devLog('HD-CALIB-RELOAD', 'Draft reloaded on reopen');
+          }
+        }
+      } catch {}
+      return;
+    }
     try {
-      devLog('HD-CALIB-CLICK', 'Calibration button clicked');
-      devLog('HD-CALIB', 'Preparing to start session (collecting DOM)');
+      devLog('HD-CALIB-CLICK', 'Calibration button clicked (initial load)');
+      devLog('HD-CALIB', 'Starting session: DOM capture + OCR/LLM extraction');
       const res = await runCalibStart('Yeni Trafik', (m)=>devLog('HD-CALIB', m));
-      devLog('HD-CALIB', `StartSession returned ok=${res?.ok} host=${res?.host||''} inputs_found=${res?.inputs_found ?? 'n/a'}`);
+      devLog('HD-CALIB', `StartSession returned ok=${res?.ok} host=${res?.host||''} inputs_found=${res?.inputs_found ?? 'n/a'} ruhsat_keys=${Object.keys(res?.ruhsat||{}).length}`);
       if (!res?.ok) { devLog('HD-CALIB-ERR', res?.error || 'start_failed'); return; }
       try { (window as any).__CALIB_EXISTING__ = res?.existing || null; } catch {}
       setCalibHost(res.host || 'unknown');
@@ -146,7 +171,8 @@ export const Header: React.FC<HeaderProps> = ({
       setCalibCandidates(res.candidates_preview || []);
       setCalibRuhsat((res.ruhsat as any) || {});
       setCalibOpen(true);
-      devLog('HD-CALIB-OK', `host=${res.host} inputs=${res.inputs_found}`);
+      setCalibLoadedOnce(true);
+      devLog('HD-CALIB-OK', `Session ready host=${res.host}`);
     } catch (e: any) {
       devLog('HD-CALIB-ERR', String(e?.message || e));
     }
