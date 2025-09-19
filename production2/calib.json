@@ -51,13 +51,67 @@
             }
           ],
           "criticalFields": []
+        },
+        {
+          "id": "p_mfqvu0nj",
+          "name": "Page 2",
+          "urlPattern": "",
+          "urlSample": "",
+          "fieldSelectors": {},
+          "fieldKeys": [],
+          "executionOrder": [],
+          "actionsDetail": [
+            {
+              "id": "a1",
+              "label": "Action 1",
+              "selector": ""
+            }
+          ],
+          "criticalFields": [],
+          "isLast": false
+        },
+        {
+          "id": "p_mfqvuakz",
+          "name": "Page 3",
+          "urlPattern": "",
+          "urlSample": "",
+          "fieldSelectors": {},
+          "fieldKeys": [],
+          "executionOrder": [],
+          "actionsDetail": [
+            {
+              "id": "a1",
+              "label": "Action 1",
+              "selector": ""
+            }
+          ],
+          "criticalFields": [],
+          "isLast": false
+        },
+        {
+          "id": "p_mfqvui2s",
+          "name": "Page 4",
+          "urlPattern": "",
+          "urlSample": "",
+          "fieldSelectors": {},
+          "fieldKeys": [],
+          "executionOrder": [],
+          "actionsDetail": [
+            {
+              "id": "a1",
+              "label": "Action 1",
+              "selector": ""
+            }
+          ],
+          "criticalFields": [],
+          "isLast": false
         }
       ],
-      "currentPageId": "p_mfqi93or",
+      "currentPageId": "p_mfqvui2s",
       "host": "preview--screen-to-data.lovable.app",
       "task": "Yeni Trafik",
-      "updatedAt": "2025-09-19T13:25:37Z",
-      "createdAt": "2025-09-19T13:25:37Z"
+      "updatedAt": "2025-09-19T13:35:56Z",
+      "createdAt": "2025-09-19T13:35:56Z"
     }
   }
 }

@@ -15,7 +15,7 @@ interface Props {
   headerBorder: string;
   textSub: string;
   onAddField: ()=>void;
-  onRemoveField: (k:string)=>void; // removes ALL occurrences of k (simple impl)
+  onRemoveOccurrence: (k:string, occIdx:number)=>void; // remove only this occurrence
   onRenameField: (oldK:string,newK:string)=>void; // renames THIS row's key (may create duplicates)
   handleChange: (k:string,v:string,idx:number)=>void; // idx = occurrence index of key
   handlePickAssign: (k:string,idx:number)=>void;
@@ -24,7 +24,7 @@ interface Props {
 
 // NOTE: Alias UI removed. Duplicate rows with the same field key now represent multiple selectors
 // (occurrences) for that key. Occurrence index maps into the underlying string|string[] in fieldSelectors.
-const FieldsExcelSimple: React.FC<Props> = ({ fieldKeys, fieldSelectors, values, availableKeys, readMode, liteMode, darkMode, status, inputBg, inputBorder, chipBorder, headerBorder, textSub, onAddField, onRemoveField, onRenameField, handleChange, handlePickAssign, keyIdx }) => {
+const FieldsExcelSimple: React.FC<Props> = ({ fieldKeys, fieldSelectors, values, availableKeys, readMode, liteMode, darkMode, status, inputBg, inputBorder, chipBorder, headerBorder, textSub, onAddField, onRemoveOccurrence, onRenameField, handleChange, handlePickAssign, keyIdx }) => {
   // Pre-compute occurrence indices for each row
   const occurrenceCounter: Record<string, number> = {};
   const rows = fieldKeys.map(k => {
@@ -78,7 +78,7 @@ const FieldsExcelSimple: React.FC<Props> = ({ fieldKeys, fieldSelectors, values,
                 {!readMode && <td style={{ padding:4, display:'flex', flexDirection:'column', gap:4 }}>
                   <button onClick={()=>handlePickAssign(k,occIdx)} style={{ fontSize:10, padding:'4px 6px', border:`1px solid ${chipBorder}`, borderRadius:8, background: darkMode?'#0b1220':'#eef2ff' }}>Pick</button>
                   <button onClick={()=>handleChange(k,'',occIdx)} style={{ fontSize:10, padding:'4px 6px', border:`1px solid ${inputBorder}`, borderRadius:8, background:'transparent', color:textSub }}>Clear</button>
-                  <button onClick={()=>onRemoveField(k)} style={{ fontSize:10, padding:'4px 6px', border:`1px solid ${inputBorder}`, borderRadius:8, background:'transparent', color:'#ef4444' }}>Del</button>
+                  <button onClick={()=>onRemoveOccurrence(k,occIdx)} style={{ fontSize:10, padding:'4px 6px', border:`1px solid ${inputBorder}`, borderRadius:8, background:'transparent', color:'#ef4444' }}>Del</button>
                 </td>}
               </tr>
             );

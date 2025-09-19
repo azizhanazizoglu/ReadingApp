@@ -222,6 +222,43 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, darkMode
 		setFieldSelectors(fs=>{ const next={...fs}; delete next[k]; syncFieldSelectorsToPage(next); return next; });
 		logWarn(`All occurrences removed for field ${k}`);
 	};
+	// Remove only a single occurrence (occIdx) of field key k
+	const removeOccurrence = (k:string, occIdx:number) => {
+		setFieldKeys(prev=>{
+			// Build new list by walking and skipping only the target occurrence instance
+			let seen = 0;
+			const next: string[] = [];
+			for(const fk of prev){
+				if(fk===k){
+					if(seen===occIdx){ seen++; continue; } // skip this one
+					seen++;
+				}
+				next.push(fk);
+			}
+			// Update selector storage array
+			setFieldSelectors(fs=>{
+				const cur = fs[k];
+				if(cur===undefined) return fs; // nothing to do
+				let arr = Array.isArray(cur)? [...cur] : [String(cur||'')];
+				if(occIdx < arr.length){
+					arr.splice(occIdx,1);
+				}
+				const nextSelectors = { ...fs } as Record<string,string|string[]>;
+				if(arr.length===0 || (arr.length===1 && !arr[0])){
+					// no meaningful occurrences left -> blank it instead of delete to keep possible future duplicates stable
+					nextSelectors[k] = '';
+				}else if(arr.length===1){
+					nextSelectors[k] = arr[0];
+				}else{
+					nextSelectors[k] = arr;
+				}
+				syncFieldSelectorsToPage(nextSelectors);
+				return nextSelectors;
+			});
+			logInfo(`Occurrence removed for ${k} (index ${occIdx})`);
+			return next;
+		});
+	};
 	const handlePickAssign = async (k:string, idx=0) => { try { const sel = await (window as any).pickSelectorFromWebview?.(); if(sel && typeof sel==='string'){ handleChange(k, sel, idx); if(!liteMode){ try { const info = await (window as any).previewSelectorInWebview?.(normalizeSelector(sel)); if(info && typeof info==='string') setPreviews(p=>({...p,[keyIdx(k,idx)]:info})); } catch {} } } } catch {} };
 	const handleShowField = async (k:string, idx=0) => { const cur=fieldSelectors[k]; const sel=Array.isArray(cur)?(cur[idx]||''):String(cur||''); if(!sel) return; try { const info= await (window as any).previewSelectorInWebview?.(sel); if(!liteMode && info && typeof info==='string') setPreviews(p=>({...p,[keyIdx(k,idx)]:info})); if(!liteMode){ const html= await (window as any).getElementHtmlInWebview?.(sel,1600); if(html && typeof html==='string') setHtmlSnippets(h=>({...h,[keyIdx(k,idx)]:html})); } } catch {} };
 	const commitCurrentPage = (overrides?: Partial<CalibPage>) => { const cleaned = cleanFieldSelectors(fieldSelectors); setFieldSelectors(cleaned); const current:CalibPage={ id: currentPageId, name: pageName, urlPattern, urlSample, fieldSelectors: cleaned, fieldKeys: fieldKeys.slice(), executionOrder, actionsDetail, criticalFields, ...(overrides||{}) }; setPages(prev=>{ const i=prev.findIndex(p=>p.id===currentPageId); if(i>=0){ const copy=[...prev]; copy[i]=current; return copy; } return [...prev,current]; }); return current; };
@@ -281,68 +318,52 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, darkMode
 
 	// Memo current draft snapshot for render-safe usage (avoid calling buildDraftPayload inside JSX repeatedly)
 	const currentDraft = React.useMemo(()=> buildDraftPayload(), [buildDraftPayload]);
-	const handleAddNextPage = async () => {
-		// First, commit current page to save any pending changes
-		commitCurrentPage();
-		
-		// Calculate the next page number automatically
-		const nextPageNumber = pages.length + 1;
-		const newPageName = `Page ${nextPageNumber}`;
-		const newId = `p_${Date.now().toString(36)}`;
-		
-		// Create the new blank page template
-		const newPage: CalibPage = { 
-			id: newId, 
-			name: newPageName, 
-			urlPattern: '', 
-			urlSample: '', 
-			fieldSelectors: {}, 
-			fieldKeys: [], 
-			executionOrder: [], 
-			actionsDetail: [{ id: 'a1', label: 'Action 1', selector: '' }], 
-			criticalFields: criticalFields.slice(), // Inherit current critical fields
-			isLast: false 
-		};
-		
-		// Add the new page to the pages array
-		const updatedPages = [...pages, newPage];
-		setPages(updatedPages);
-		
-		// Switch UI to the new page and completely reset the view
-		setCurrentPageId(newId);
-		setPageName(newPageName);
-		setUrlPattern('');
-		setUrlSample('');
-		setFieldSelectors({});
-		setFieldKeys([]);
-		setExecutionOrder([]);
-		setActionsDetail([{ id: 'a1', label: 'Action 1', selector: '' }]);
-		
-		// Try to get current URL from webview
-		try { 
-			const info = await getDomAndUrlFromWebview(); 
-			setUrlSample(info.url || ''); 
-		} catch { 
-			setUrlSample(''); 
-		}
-		
-		// IMMEDIATELY save to backend (auto-save the new page template)
-		try {
-			if (host && host !== 'unknown') {
-				const currentDraft = buildDraftPayload();
-				const draft = { ...currentDraft, pages: updatedPages, currentPageId: newId };
-				await fetch(`${BACKEND_URL}/api/calib`, { 
-					method: 'POST', 
-					headers: { 'Content-Type': 'application/json' }, 
-					body: JSON.stringify({ op: 'saveDraft', mapping: { host, task: selectedTask, draft } }) 
-				});
-				logInfo(`${newPageName} created and saved to calib.json`);
-			}
-		} catch (e) {
-			logError(`Failed to save new page: ${e}`);
-		}
-		
-		logInfo(`Added ${newPageName} with ID ${newId} - view cleared`);
+	const handleAddNextPage = () => {
+		// Build/commit current page inline using freshest state to avoid stale closure issues
+		setPages(prev => {
+			const existingIdx = prev.findIndex(p=>p.id===currentPageId);
+			const cleaned = cleanFieldSelectors(fieldSelectors);
+			const current: CalibPage = {
+				id: currentPageId,
+				name: pageName,
+				urlPattern,
+				urlSample,
+				fieldSelectors: cleaned,
+				fieldKeys: fieldKeys.slice(),
+				executionOrder: executionOrder.slice(),
+				actionsDetail: actionsDetail.slice(),
+				criticalFields: criticalFields.slice(),
+				isLast: prev[existingIdx]?.isLast
+			};
+			let base = existingIdx>=0 ? prev.map(p=> p.id===current.id? current : p) : [...prev, current];
+			const newId = `p_${Date.now().toString(36)}`;
+			const newPageName = `Page ${base.length+1}`; // after adding current (maybe) base length is page count so next index = length+1
+			const newPage: CalibPage = {
+				id: newId,
+				name: newPageName,
+				urlPattern: '',
+				urlSample: '',
+				fieldSelectors: {},
+				fieldKeys: [],
+				executionOrder: [],
+				actionsDetail: [{ id: 'a1', label: 'Action 1', selector: ''}],
+				criticalFields: criticalFields.slice(),
+				isLast: false
+			};
+			// Update local state for new page (outside setPages via side-effects after return)
+			setCurrentPageId(newPage.id);
+			setPageName(newPage.name);
+			setUrlPattern('');
+			setUrlSample('');
+			setFieldSelectors({});
+			setFieldKeys([]);
+			setExecutionOrder([]);
+			setActionsDetail([{ id: 'a1', label: 'Action 1', selector: '' }]);
+			// Try capturing URL asynchronously (non-blocking)
+			getDomAndUrlFromWebview().then(info=>{ try { setUrlSample(info.url||''); } catch {} }).catch(()=>{});
+			logInfo(`Added ${newPage.name} (ID ${newPage.id}) - local only (push with Save)`);
+			return [...base, newPage];
+		});
 	};
 
 	// New function: Delete individual page
@@ -713,7 +734,7 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, darkMode
 						headerBorder={headerBorder}
 						textSub={textSub}
 						onAddField={onAddField}
-						onRemoveField={onRemoveFieldWrapper}
+						onRemoveOccurrence={removeOccurrence}
 						onRenameField={onRenameField}
 						handleChange={handleChange}
 						handlePickAssign={handlePickAssign}
