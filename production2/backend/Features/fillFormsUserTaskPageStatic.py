@@ -221,6 +221,12 @@ def plan_detect_final_page(filtered_html: Optional[str]) -> Dict[str, Any]:
         return {"ok": True, "is_final": False, "reason": "no_html"}
     try:
         out = detect_final_page_arrived(filtered_html)
+        from backend.logging_utils import log  # type: ignore
+        log("INFO", "PDF-DETECT", f"pdf_found={out.get('pdf_found')} cta_present={out.get('cta_present')} reason={out.get('reason')}", component="F3-Static", extra={
+            "pdf_links": out.get("pdf_links", [])[:3],
+            "pdf_embeds": out.get("pdf_embeds", [])[:2],
+            "hits": out.get("hits", []),
+        })
         return {"ok": True, **out, "fingerprint": _fingerprint(filtered_html)}
     except Exception as e:
         return {"ok": False, "error": f"detect_failed: {e}"}

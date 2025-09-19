@@ -98,7 +98,7 @@ export async function runFillFormsUserTaskPageSF(opts?: F3Options) {
   for (let i=0; i<maxLoops; i++) {
     log(`SF-F3-Static loop ${i+1}/${maxLoops} url=${prevUrl}`);
 
-    // Analyze (or reuse) to obtain mapping + page fingerprint + actions
+  // Analyze (or reuse) to obtain mapping + page fingerprint + actions
     let ana: any;
     if (lastAnaHtml === prevHtml && lastAna) {
       ana = lastAna;
@@ -117,22 +117,23 @@ export async function runFillFormsUserTaskPageSF(opts?: F3Options) {
   log(`SF-F3-Static page id (url)=${prevUrl} processed=${alreadyProcessed}`);
 
     // Final page detection (only if analysis says final OR backend op confirms)
-    if (ana.is_final) {
-      log(`SF-F3-Static detected final page via analysis`);
-      return { ok:true, final:true, last_url: prevUrl };
-    }
+  let finalCandidate = !!ana.is_final; // now means pdf_found backend side
+    // Defer early return until after we optionally run actions on a final page.
     const fin = await postF3Static('detectFinalPage', { html: prevHtml, current_url: prevUrl, task: domainTask }, log);
-    if (fin?.ok && fin.is_final) {
-      log(`SF-F3-Static detectFinalPage indicates final page`);
-      return { ok:true, final:true, last_url: prevUrl };
-    }
+  let backendFinalCandidate = !!(fin?.ok && fin.is_final);
+  const ctaPresent = !!(fin?.hits?.length || ana?.hits?.length || fin?.cta_present || ana?.cta_present);
+
+  // Track CTA presence & pdf status across loops for fallback
+  (window as any).__STATIC_LAST_CTA__ = ctaPresent || (window as any).__STATIC_LAST_CTA__;
+  (window as any).__STATIC_LAST_PDF__ = (fin?.pdf_found || ana?.pdf_found) || (window as any).__STATIC_LAST_PDF__;
 
     if (alreadyProcessed) {
       // Avoid re-filling: just quick final page check then exit loop if still same and maxLoops not exceeded.
       await new Promise(r=>setTimeout(r, Math.min(waitMs, 400)));
     } else {
-      const fieldMapping: Record<string,string> = ana.field_mapping || {};
-      if (fieldMapping && Object.keys(fieldMapping).length) {
+  const fieldMapping: Record<string,string> = ana.field_mapping || {};
+  const hasMapping = fieldMapping && Object.keys(fieldMapping).length > 0;
+  if (hasMapping) {
         // Validation & fallback gate
         // Determine critical fields: try calibration-provided (ana.validation?.critical_fields or ana.critical_fields) fallback to default list.
         const critical = Array.isArray(ana?.critical_fields) && ana.critical_fields.length
@@ -225,9 +226,31 @@ export async function runFillFormsUserTaskPageSF(opts?: F3Options) {
           await new Promise(r=>setTimeout(r, waitMs));
         }
       } else {
-        log(`SF-F3-Static no field mapping returned for page; marking processed to avoid loop`);
-        processedUrls.add(prevUrl);
-        await new Promise(r=>setTimeout(r, waitMs));
+        // No fields to fill – but we may still have actions (e.g. final activation button)
+        const acts: string[] = Array.isArray(ana.actions) ? ana.actions : [];
+        if (acts.length && !alreadyProcessed) {
+          const clickActs = acts.map(a => a.startsWith('css#') ? a : `click#${a}`);
+          log(`SF-F3-Static actions(no-mapping): attempting ${clickActs.join(',')}`);
+          await runActions(clickActs, true, (c,m)=>log(`${c} ${m}`));
+          processedUrls.add(prevUrl);
+          // After action attempt, allow navigation polling like normal branch
+          const navTimeoutMs = Math.max(waitMs, 1200);
+          const pollInterval = 300;
+          const polls = Math.ceil(navTimeoutMs / pollInterval);
+          let navigated = false;
+          for (let p=0; p<polls; p++) {
+            await new Promise(r=>setTimeout(r, pollInterval));
+            const snap = await getDomAndUrlFromWebview((m)=>log(`[WV] ${m}`));
+            if (snap.url && snap.url !== prevUrl) { navigated = true; prevHtml = snap.html || prevHtml; prevUrl = snap.url; log(`SF-F3-Static navigation detected post-action -> ${prevUrl}`); break; }
+          }
+          if (!navigated) {
+            log(`SF-F3-Static note: action(no-mapping) did not cause navigation (url stayed ${prevUrl})`);
+          }
+        } else {
+          log(`SF-F3-Static no field mapping & no actions; marking processed`);
+          processedUrls.add(prevUrl);
+          await new Promise(r=>setTimeout(r, waitMs));
+        }
       }
     }
 
@@ -239,7 +262,22 @@ export async function runFillFormsUserTaskPageSF(opts?: F3Options) {
   if (urlChanged) log(`SF-F3-Static navigation detected loop-scan prev=${prevUrl} new=${newUrl}`);
   prevHtml = newHtml; prevUrl = newUrl;
     lastUrl = prevUrl;
+    // If after processing we are still on this URL and it was a final candidate, return final.
+    if ((finalCandidate || backendFinalCandidate) && processedUrls.has(prevUrl)) {
+      log(`SF-F3-Static detected final page via ${finalCandidate ? 'analysis' : backendFinalCandidate ? 'backend-detect' : 'unknown'} (post-actions)`);
+      return { ok:true, final:true, step:'final_page', last_url: prevUrl };
+    }
   }
+
+  // Fallback if we saw CTA but never saw pdf evidence
+  try {
+    const hadCta = !!(window as any).__STATIC_LAST_CTA__;
+    const hadPdf = !!(window as any).__STATIC_LAST_PDF__;
+    if (hadCta && !hadPdf) {
+      log(`SF-F3-Static fallback: CTA seen but no PDF generated after ${maxLoops} loops`);
+      return { ok:false, step:'pdf_missing', should_fallback:true, reason:'pdf_not_generated', last_url: lastUrl };
+    }
+  } catch {}
 
   return { ok:true, step:'completed', last_url: lastUrl };
 }

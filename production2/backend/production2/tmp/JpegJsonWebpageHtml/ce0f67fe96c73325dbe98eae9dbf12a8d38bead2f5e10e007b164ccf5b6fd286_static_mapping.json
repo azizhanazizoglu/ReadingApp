@@ -2,41 +2,25 @@
   "ok": true,
   "page_kind": "fill_form",
   "field_mapping": {
-    "plaka_no": "#plateNo",
-    "motor_no": "[data-lov-id='src/pages/VehicleDetails.tsx:87:16']",
-    "sasi_no": "[data-lov-id='src/pages/VehicleDetails.tsx:95:16']",
-    "model_yili": "[data-lov-id='src/pages/VehicleDetails.tsx:104:16']"
+    "plaka_no": "[data-lov-id=\"src/pages/VehicleDetails.tsx:79:16\"]",
+    "motor_no": "[data-lov-id=\"src/pages/VehicleDetails.tsx:87:16\"]",
+    "sasi_no": "[data-lov-id=\"src/pages/VehicleDetails.tsx:95:16\"]",
+    "model_yili": "[data-lov-id=\"src/pages/VehicleDetails.tsx:104:16\"]"
   },
   "actions": [
     "devam"
   ],
   "validation": {
-    "contexts": {
-      "motor_no": {
-        "tag": "input",
-        "id": null,
-        "name": null
-      },
-      "sasi_no": {
-        "tag": "input",
-        "id": null,
-        "name": null
-      },
-      "model_yili": {
-        "tag": "input",
-        "id": null,
-        "name": null
-      }
-    },
+    "contexts": {},
     "counts": {
       "mapped": 4
     }
   },
   "mapping_source": {
     "plaka_no": "calib_site",
-    "motor_no": "static_synonym",
-    "sasi_no": "static_synonym",
-    "model_yili": "static_synonym"
+    "motor_no": "calib_page",
+    "sasi_no": "calib_page",
+    "model_yili": "calib_page"
   },
   "fingerprint": "ce0f67fe96c73325dbe98eae9dbf12a8d38bead2f5e10e007b164ccf5b6fd286",
   "debug_dumps": {
