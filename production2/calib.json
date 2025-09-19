@@ -132,11 +132,94 @@
           ]
         }
       ],
-      "currentPageId": "p_mfr5hlpa",
+      "currentPageId": "p_mfr5evup",
       "host": "preview--screen-to-data.lovable.app",
       "task": "Yeni Trafik",
-      "updatedAt": "2025-09-19T18:26:27Z",
-      "createdAt": "2025-09-19T18:26:27Z"
+      "updatedAt": "2025-09-19T18:36:09Z",
+      "createdAt": "2025-09-19T18:36:09Z"
+    },
+    "jhkfg": {
+      "fieldSelectors": {
+        "plaka_no": "#name"
+      },
+      "fieldKeys": [
+        "plaka_no",
+        "marka",
+        "model",
+        "model_yili",
+        "sasi_no",
+        "motor_no",
+        "yakit",
+        "renk"
+      ],
+      "actions": [
+        "Action 1"
+      ],
+      "actionsDetail": [
+        {
+          "id": "a1",
+          "label": "Action 1",
+          "selector": ""
+        }
+      ],
+      "actionsExecutionOrder": [
+        "Action 1"
+      ],
+      "executionOrder": [],
+      "criticalFields": [
+        "plaka_no",
+        "marka",
+        "model",
+        "model_yili",
+        "sasi_no",
+        "motor_no",
+        "yakit",
+        "renk"
+      ],
+      "pages": [
+        {
+          "id": "p_mfr9loir",
+          "name": "Page 1",
+          "urlPattern": "",
+          "urlSample": "https://preview--screen-to-data.lovable.app/life-insurance",
+          "fieldSelectors": {
+            "plaka_no": "#name"
+          },
+          "fieldKeys": [
+            "plaka_no",
+            "marka",
+            "model",
+            "model_yili",
+            "sasi_no",
+            "motor_no",
+            "yakit",
+            "renk"
+          ],
+          "executionOrder": [],
+          "actionsDetail": [
+            {
+              "id": "a1",
+              "label": "Action 1",
+              "selector": ""
+            }
+          ],
+          "criticalFields": [
+            "plaka_no",
+            "marka",
+            "model",
+            "model_yili",
+            "sasi_no",
+            "motor_no",
+            "yakit",
+            "renk"
+          ]
+        }
+      ],
+      "currentPageId": "p_mfr9loir",
+      "host": "preview--screen-to-data.lovable.app",
+      "task": "jhkfg",
+      "updatedAt": "2025-09-19T20:01:25Z",
+      "createdAt": "2025-09-19T20:01:25Z"
     }
   }
 }

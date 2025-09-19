@@ -40,20 +40,65 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, darkMode
 	const [showLogs, setShowLogs] = React.useState<boolean>(false);
 	// Task selection
 	const [selectedTask, setSelectedTask] = React.useState<string>(task || "Yeni Trafik");
-	const [taskMenuOpen, setTaskMenuOpen] = React.useState<boolean>(false);
 	const [taskInput, setTaskInput] = React.useState<string>(task || "Yeni Trafik");
 	const [taskSuggestions, setTaskSuggestions] = React.useState<string[]>([]);
+	const [taskMenuOpen, setTaskMenuOpen] = React.useState<boolean>(false);
+	const [showNewTaskInput, setShowNewTaskInput] = React.useState<boolean>(false);
+	const [newTaskInput, setNewTaskInput] = React.useState<string>('');
+	const [editingTaskId, setEditingTaskId] = React.useState<string | null>(null);
+	const [editingTaskName, setEditingTaskName] = React.useState<string>('');
 	const loadTaskSuggestions = React.useCallback(async () => {
 		try {
-			const r = await fetch(`${BACKEND_URL}/api/calib`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'list', mapping: { host } }) });
-			const j = await r.json();
-			const items = Array.isArray(j?.items) ? j.items : [];
-			setTaskSuggestions(items.filter((s: any) => typeof s === 'string'));
+			// First get all sites
+			const sitesResponse = await fetch(`${BACKEND_URL}/api/calib`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'list' }) });
+			const sitesJson = await sitesResponse.json();
+			const sites = Array.isArray(sitesJson?.sites) ? sitesJson.sites : [];
+			
+			// Then get tasks for each site
+			const allTaskCombinations: string[] = [];
+			for (const site of sites) {
+				try {
+					const tasksResponse = await fetch(`${BACKEND_URL}/api/calib`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'list', mapping: { host: site } }) });
+					const tasksJson = await tasksResponse.json();
+					const tasks = Array.isArray(tasksJson?.items) ? tasksJson.items : [];
+					for (const task of tasks) {
+						allTaskCombinations.push(`${site}:${task}`);
+					}
+				} catch {
+					// Skip this site if error
+				}
+			}
+			
+			// Filter to just tasks for current host, but also include current selection
+			const currentHostTasks = allTaskCombinations
+				.filter(combo => combo.startsWith(`${host}:`))
+				.map(combo => combo.split(':')[1]);
+			
+			setTaskSuggestions([...new Set(currentHostTasks)]);
 		} catch {
 			setTaskSuggestions([]);
 		}
 	}, [host]);
 	React.useEffect(() => { setSelectedTask(task || "Yeni Trafik"); setTaskInput(task || "Yeni Trafik"); }, [task]);
+	
+	// Load task suggestions on mount
+	React.useEffect(() => {
+		loadTaskSuggestions();
+	}, [loadTaskSuggestions]);
+	
+	// Close task menu when clicking outside
+	React.useEffect(() => {
+		const handleClickOutside = (event: MouseEvent) => {
+			if (taskMenuOpen) {
+				setTaskMenuOpen(false);
+			}
+		};
+		if (taskMenuOpen) {
+			document.addEventListener('click', handleClickOutside);
+			return () => document.removeEventListener('click', handleClickOutside);
+		}
+	}, [taskMenuOpen]);
+	
 	// Field selectors / pages
 	const [fieldSelectors, setFieldSelectors] = React.useState<Record<string, string | string[]>>({});
 	const [executionOrder, setExecutionOrder] = React.useState<string[]>([]);
@@ -628,8 +673,6 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, darkMode
 						textMain={textMain}
 						textSub={textSub}
 						statusLabel={autoStatus==='saving'? 'Saving': autoStatus==='saved'? 'Saved': autoStatus==='error'? 'Error':'Manual'}
-						onTaskMenu={()=> setTaskMenuOpen(v=>!v)}
-						taskMenuOpen={taskMenuOpen}
 						loadTaskSuggestions={loadTaskSuggestions}
 						onPush={pushDraft}
 						onUpdate={updateFromServer}
@@ -691,8 +734,304 @@ export const CalibrationPanel: React.FC<Props> = ({ host, task, ruhsat, darkMode
 				<div style={{ padding:12, overflow:'auto', color:textMain }}>
 					<div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:10 }}>
 						<div style={{ display:'flex', alignItems:'center', gap:8 }}>
-							<div style={{ fontSize:12, color:textSub }}>Host: <b>{host}</b> — Task: <b>{selectedTask}</b></div>
+							<div style={{ fontSize:12, color:textSub }}>Host: <b>{host}</b></div>
+							
+							{/* Task Selection Dropdown */}
+							<div style={{ display:'flex', alignItems:'center', gap:6, position:'relative' }}>
+								<div style={{ fontSize:11, color:textSub }}>Task:</div>
+								<button
+									onClick={(e) => {
+										e.stopPropagation();
+										setTaskMenuOpen(!taskMenuOpen);
+									}}
+									style={{
+										fontSize:11,
+										padding:'4px 8px',
+										border:`1px solid ${chipBorder}`,
+										borderRadius:8,
+										background: darkMode ? '#374151' : '#f1f5f9',
+										color: darkMode ? 'rgb(230, 240, 250)' : '#1e1b4b',
+										cursor:'pointer'
+									}}
+									title={`Current task: ${selectedTask}`}
+								>
+									{selectedTask}
+								</button>
+								{taskMenuOpen && (
+									<div style={{
+										position:'absolute',
+										top:'100%',
+										left:0,
+										zIndex:1000,
+										background: darkMode ? '#1e293b' : '#ffffff',
+										border:`1px solid ${inputBorder}`,
+										borderRadius:6,
+										padding:4,
+										minWidth:150,
+										boxShadow:'0 4px 6px rgba(0,0,0,0.1)',
+										marginTop:4
+									}}>
+										{/* Show all available tasks */}
+										{Array.from(new Set([selectedTask, ...taskSuggestions])).map(task => (
+											<div
+												key={task}
+												onClick={async (e) => {
+													e.stopPropagation();
+													setSelectedTask(task);
+													setTaskInput(task);
+													setTaskMenuOpen(false);
+													await updateFromServer();
+													logInfo(`Switched to task: ${task}`);
+												}}
+												style={{
+													padding:'6px 8px',
+													fontSize:11,
+													cursor:'pointer',
+													background: task === selectedTask ? (darkMode ? '#374151' : '#f1f5f9') : 'transparent',
+													borderRadius:4,
+													color: darkMode ? 'rgb(230, 240, 250)' : '#1e1b4b'
+												}}
+											>
+												{task}
+											</div>
+										))}
+									</div>
+								)}
+							</div>
+							
 							<div style={{ marginLeft:'auto', fontSize:11, color:textSub }}>Page {Math.max(1, pages.findIndex(p=>p.id===currentPageId)+1)} of {Math.max(1,pages.length||1)}</div>
+						</div>
+						{/* Task Management Section - Simplified (Add/Rename/Delete only) */}
+						<div style={{ display:'flex', flexDirection:'column', gap:6, padding:8, border:`1px solid ${inputBorder}`, borderRadius:10, background: darkMode?'rgba(2,6,23,0.35)':'#ffffff' }}>
+							<div style={{ fontSize:12, color:textSub, marginBottom:4 }}>Task Management:</div>
+							
+							{/* Task List with Rename/Delete */}
+							<div style={{ display:'flex', gap:4, flexWrap:'wrap', alignItems:'center' }}>
+								{[selectedTask, ...taskSuggestions.filter(t => t !== selectedTask)].map(task => (
+									<div key={task} style={{ display:'flex', alignItems:'center', gap:4 }}>
+										{editingTaskId === task ? (
+											<>
+												<input
+													value={editingTaskName}
+													onChange={e => setEditingTaskName(e.target.value)}
+													onKeyDown={e => {
+														if (e.key === 'Enter' && editingTaskName.trim()) {
+															const oldTask = task;
+															const newTaskName = editingTaskName.trim();
+															// Update suggestions
+															setTaskSuggestions(prev => prev.map(t => t === oldTask ? newTaskName : t));
+															if (selectedTask === oldTask) {
+																setSelectedTask(newTaskName);
+																setTaskInput(newTaskName);
+															}
+															setEditingTaskId(null);
+															setEditingTaskName('');
+															logInfo(`Renamed task: ${oldTask} → ${newTaskName}`);
+														}
+														if (e.key === 'Escape') {
+															setEditingTaskId(null);
+															setEditingTaskName('');
+														}
+													}}
+													style={{ 
+														fontSize:11, 
+														padding:'4px 6px', 
+														background: inputBg, 
+														border:`1px solid ${inputBorder}`, 
+														borderRadius:6,
+														width: '120px'
+													}}
+													autoFocus
+												/>
+												<button
+													onClick={() => {
+														if (editingTaskName.trim()) {
+															const oldTask = task;
+															const newTaskName = editingTaskName.trim();
+															setTaskSuggestions(prev => prev.map(t => t === oldTask ? newTaskName : t));
+															if (selectedTask === oldTask) {
+																setSelectedTask(newTaskName);
+																setTaskInput(newTaskName);
+															}
+															setEditingTaskId(null);
+															setEditingTaskName('');
+															logInfo(`Renamed task: ${oldTask} → ${newTaskName}`);
+														}
+													}}
+													style={{
+														fontSize:9,
+														padding:'2px 4px',
+														border:`1px solid ${chipBorder}`,
+														borderRadius:4,
+														background: darkMode ? '#0b1220' : '#eef2ff',
+														color: darkMode ? 'rgb(230, 240, 250)' : '#1e1b4b',
+														cursor:'pointer'
+													}}
+												>
+													✓
+												</button>
+												<button
+													onClick={() => {
+														setEditingTaskId(null);
+														setEditingTaskName('');
+													}}
+													style={{
+														fontSize:9,
+														padding:'2px 4px',
+														border:`1px solid ${inputBorder}`,
+														borderRadius:4,
+														background:'transparent',
+														color:textSub,
+														cursor:'pointer'
+													}}
+												>
+													✕
+												</button>
+											</>
+										) : (
+											<>
+												<button
+													onClick={() => {
+														setEditingTaskId(task);
+														setEditingTaskName(task);
+													}}
+													style={{
+														fontSize:11,
+														padding:'4px 8px',
+														border:`1px solid ${chipBorder}`,
+														borderRadius:8,
+														background: darkMode ? '#374151' : '#f1f5f9',
+														color: darkMode ? 'rgb(230, 240, 250)' : '#1e1b4b',
+														cursor:'pointer'
+													}}
+													title={`Rename ${task}`}
+												>
+													{task}
+												</button>
+												{/* Delete button - only show if not the only task */}
+												{([selectedTask, ...taskSuggestions].length > 1) && (
+													<button
+														onClick={() => {
+															if (task === selectedTask) {
+																// If deleting current task, switch to first available alternative
+																const remaining = [selectedTask, ...taskSuggestions].filter(t => t !== task);
+																if (remaining.length > 0) {
+																	setSelectedTask(remaining[0]);
+																	setTaskInput(remaining[0]);
+																}
+															}
+															setTaskSuggestions(prev => prev.filter(t => t !== task));
+															logInfo(`Deleted task: ${task}`);
+														}}
+														style={{
+															fontSize:10,
+															padding:'4px 6px',
+															border:`1px solid #dc2626`,
+															borderRadius:12,
+															background:'#dc2626',
+															color:'white',
+															cursor:'pointer'
+														}}
+														title={`Delete ${task}`}
+													>
+														×
+													</button>
+												)}
+											</>
+										)}
+									</div>
+								))}
+								
+								{/* Add New Task */}
+								{showNewTaskInput ? (
+									<div style={{ display:'flex', alignItems:'center', gap:4 }}>
+										<input 
+											value={newTaskInput} 
+											onChange={e => setNewTaskInput(e.target.value)}
+											onKeyDown={e => {
+												if (e.key === 'Enter' && newTaskInput.trim()) {
+													const taskName = newTaskInput.trim();
+													setTaskSuggestions(prev => [...new Set([...prev, taskName])]);
+													setShowNewTaskInput(false);
+													setNewTaskInput('');
+													logInfo(`Added new task: ${taskName}`);
+												}
+												if (e.key === 'Escape') {
+													setShowNewTaskInput(false);
+													setNewTaskInput('');
+												}
+											}}
+											placeholder="Task name..."
+											style={{ 
+												fontSize:11, 
+												padding:'4px 6px', 
+												background: inputBg, 
+												border:`1px solid ${inputBorder}`, 
+												borderRadius:6,
+												width: '120px'
+											}} 
+											autoFocus
+										/>
+										<button
+											onClick={() => {
+												if (newTaskInput.trim()) {
+													const taskName = newTaskInput.trim();
+													setTaskSuggestions(prev => [...new Set([...prev, taskName])]);
+													setShowNewTaskInput(false);
+													setNewTaskInput('');
+													logInfo(`Added new task: ${taskName}`);
+												}
+											}}
+											style={{
+												fontSize:9,
+												padding:'2px 4px',
+												border:`1px solid ${chipBorder}`,
+												borderRadius:4,
+												background: darkMode ? '#0b1220' : '#eef2ff',
+												color: darkMode ? 'rgb(230, 240, 250)' : '#1e1b4b',
+												cursor:'pointer'
+											}}
+										>
+											✓
+										</button>
+										<button
+											onClick={() => {
+												setShowNewTaskInput(false);
+												setNewTaskInput('');
+											}}
+											style={{
+												fontSize:9,
+												padding:'2px 4px',
+												border:`1px solid ${inputBorder}`,
+												borderRadius:4,
+												background:'transparent',
+												color:textSub,
+												cursor:'pointer'
+											}}
+										>
+											✕
+										</button>
+									</div>
+								) : (
+									<button
+										onClick={() => {
+											setShowNewTaskInput(true);
+											setNewTaskInput('');
+										}}
+										style={{
+											fontSize:11,
+											padding:'4px 8px',
+											border:`1px solid ${chipBorder}`,
+											borderRadius:8,
+											background: darkMode ? '#0b1220' : '#eef2ff',
+											color: darkMode ? 'rgb(230, 240, 250)' : '#1e1b4b',
+											cursor:'pointer'
+										}}
+									>
+										+ Add
+									</button>
+								)}
+							</div>
 						</div>
 						{/* Manual Save / Load Controls */}
 						{/* Legacy save/load buttons removed: Push/Update/Revert now in top bar */}
