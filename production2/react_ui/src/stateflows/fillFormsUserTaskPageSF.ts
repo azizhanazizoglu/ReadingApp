@@ -2,6 +2,7 @@ import { getDomAndUrlFromWebview, checkSelectorHasValue } from "../services/webv
 import { BACKEND_URL } from "../config";
 import { runActions } from "../services/ts3ActionRunner";
 import { runInPageFill } from "../services/ts3InPageFiller";
+import { setupPdfDownloadCapture, waitForPdfDownload, cleanupPdfDownloadCapture } from "../services/pdfDownloadService";
 
 export type F3Options = {
   waitAfterActionMs?: number;
@@ -62,20 +63,48 @@ export async function runFillFormsUserTaskPageSF(opts?: F3Options) {
   }
   const ruhsat = input.data;
 
-  let prevHtml = (await getDomAndUrlFromWebview((m)=>log(`[WV] ${m}`))).html || '';
-  if (!prevHtml) return { ok:false, error:'no-initial-html' };
-  // Cache last analyze results to avoid re-calling LLM for same HTML
-  let lastAnaHtml: string | undefined;
-  let lastAna: any | undefined;
+  // Setup PDF download capture
+  log(`PDF-CAPTURE: Setting up download handler`);
+  const pdfSetupOk = await setupPdfDownloadCapture({ 
+    targetDir: 'c:\\Users\\azizh\\Documents\\ReadingApp\\production2\\tmp\\pdf',
+    timeout: 10000, 
+  }, log);
+  log(`PDF-CAPTURE: Setup result: ${JSON.stringify(pdfSetupOk)}`);
+
+  try {
+    let prevHtml = (await getDomAndUrlFromWebview((m)=>log(`[WV] ${m}`))).html || '';
+    if (!prevHtml) return { ok:false, error:'no-initial-html' };
+    // Cache last analyze results to avoid re-calling LLM for same HTML
+    let lastAnaHtml: string | undefined;
+    let lastAna: any | undefined;
 
   for (let i=0; i<maxLoops; i++) {
     // Check final page statically first
     const fin = await postF3('detectFinalPage', { html: prevHtml }, log);
     if (fin?.ok && fin.is_final) {
-      // Try to click final CTA by text
+      // Try to click final CTA by text with PDF capture
       const hits: string[] = fin.hits || [];
       for (const t of hits) {
+        log(`SF-F3 attempting final CTA with PDF capture: ${t}`);
         await runActions([`click#${t}`], true, (c,m)=>log(`${c} ${m}`));
+        
+        // Wait for PDF generation after clicking final CTA
+        if (pdfSetupOk?.ok) {
+          const pdfPrimaryWaitMs = 2000; // 2 seconds like static flow
+          log(`PDF-CAPTURE: Waiting for PDF generation after clicking ${t} (timeout=${pdfPrimaryWaitMs}ms)...`);
+          let pdfResult = await waitForPdfDownload(pdfPrimaryWaitMs, log);
+          
+          if (pdfResult?.ok && pdfResult.path) {
+            log(`PDF-CAPTURE: Successfully captured PDF -> ${pdfResult.path}`);
+            // Clean up and return success
+            await cleanupPdfDownloadCapture(log);
+            return { ok:true, step:'pdf_captured', final:true, pdfPath: pdfResult.path, finalSelector:`text:${t}` };
+          } else {
+            log(`PDF-CAPTURE: Failed to capture PDF -> ${pdfResult?.error || 'timeout'}`);
+            // Continue to check for navigation changes
+          }
+        }
+        
         await new Promise(r=>setTimeout(r, waitMs));
         const cur = (await getDomAndUrlFromWebview((m)=>log(`[WV] ${m}`))).html || prevHtml;
         if (cur !== prevHtml) return { ok:true, changed:true, final:true, finalSelector:`text:${t}` };
@@ -166,5 +195,23 @@ export async function runFillFormsUserTaskPageSF(opts?: F3Options) {
     prevHtml = (await getDomAndUrlFromWebview((m)=>log(`[WV] ${m}`))).html || prevHtml;
   }
 
+  // Cleanup PDF capture before returning
+  if (pdfSetupOk?.ok) {
+    log(`PDF-CAPTURE: Cleaning up download handler`);
+    await cleanupPdfDownloadCapture(log);
+    log(`PDF-CAPTURE: Cleanup complete`);
+  }
+
   return { ok:true, step:'completed' };
+  
+  } catch (error) {
+    log(`SF-F3 error: ${String(error)}`);
+    // Cleanup PDF capture on error
+    if (pdfSetupOk?.ok) {
+      log(`PDF-CAPTURE: Cleaning up download handler after error`);
+      await cleanupPdfDownloadCapture(log);
+      log(`PDF-CAPTURE: Error cleanup complete`);
+    }
+    return { ok:false, error: String(error) };
+  }
 }
