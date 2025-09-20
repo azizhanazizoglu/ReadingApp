@@ -1,5 +1,5 @@
 import { runFillFormsUserTaskPageSF } from "./fillFormsUserTaskPageSF"; // F3 LLM
-import { getDomAndUrlFromWebview, waitForWebviewStop } from "../services/webviewDom";
+import { getDomAndUrlFromWebview } from "../services/webviewDom";
 import { runTs3 } from "../services/ts3Service";
 import { BACKEND_URL } from "../config";
 
@@ -27,12 +27,17 @@ async function runStaticLLMFallback(opts?: {
   log?: (msg: string) => void; 
   maxTsxSteps?: number; 
   tsxCmd?: string;
+  initialUrl?: string; // URL to reset to for LLM fallback
 }): Promise<SFResult> {
   const log = opts?.log || (() => {});
   const maxTsxSteps = opts?.maxTsxSteps || 8;
   const tsxCmd = opts?.tsxCmd || 'Yeni Trafik';
+  const initialUrl = opts?.initialUrl;
 
   log(`StaticLLMFallback: Starting TsX static → F3 LLM fallback for '${tsxCmd}'`);
+  if (initialUrl) {
+    log(`StaticLLMFallback: Initial URL for fallback reset: ${initialUrl}`);
+  }
 
   // Phase 1: TsX Static First
   log(`StaticLLMFallback: Phase 1 - TsX static (max ${maxTsxSteps} steps)`);
@@ -99,7 +104,7 @@ async function runStaticLLMFallback(opts?: {
             });
 
             // Wait and poll for final completion
-            await waitForWebviewStop(8000);
+            await new Promise(resolve => setTimeout(resolve, 8000));
             
             for (let i = 0; i < 5; i++) {
               const { html: curHtml, url: curUrl } = await getDomAndUrlFromWebview((c, m) => log(`[Final-Poll ${i+1}/5] ${c}: ${m}`));
@@ -125,7 +130,7 @@ async function runStaticLLMFallback(opts?: {
               }
               
               prevHtml = curHtml;
-              await waitForWebviewStop(1500);
+              await new Promise(resolve => setTimeout(resolve, 1500));
             }
 
             if (finalOk) {
@@ -162,7 +167,7 @@ async function runStaticLLMFallback(opts?: {
         // Continue TsX loop
         lastExecuted = details?.executed_action;
         prevHtml = html;
-        await waitForWebviewStop(600);
+        await new Promise(resolve => setTimeout(resolve, 600));
 
       } catch (stepError) {
         log(`StaticLLMFallback: TsX step ${step} error: ${stepError}`);
@@ -178,6 +183,22 @@ async function runStaticLLMFallback(opts?: {
 
   // Phase 2: F3 LLM Fallback
   log(`StaticLLMFallback: Phase 2 - F3 LLM fallback`);
+  
+  // Reset URL for LLM fallback if available
+  if (initialUrl) {
+    log(`StaticLLMFallback: Resetting to initial URL for F3 LLM: ${initialUrl}`);
+    try {
+      const webview = document.getElementById('app-webview') as any;
+      if (webview && webview.src) {
+        webview.src = initialUrl;
+        log(`StaticLLMFallback: URL reset initiated, waiting for load...`);
+        await new Promise(resolve => setTimeout(resolve, 3000)); // Wait for page load
+        log(`StaticLLMFallback: URL reset completed`);
+      }
+    } catch (resetError) {
+      log(`StaticLLMFallback: URL reset warning: ${resetError}`);
+    }
+  }
   
   try {
     const f3Result = await runFillFormsUserTaskPageSF({
@@ -217,35 +238,42 @@ async function runStaticLLMFallback(opts?: {
   }
 }
 
-export async function runMasterSF(steps?: MasterStep[], opts?: { log?: (msg: string) => void }) {
+export async function runMasterUserTaskPageSF(steps?: MasterStep[], opts?: { log?: (msg: string) => void }): Promise<SFResult> {
   const log = opts?.log || (() => {});
   
-  const plan: MasterStep[] = steps && steps.length ? steps : [
-    { 
-      name: "staticLLMFallback", 
-      run: ({ log }) => runStaticLLMFallback({ log }), 
-      stopOnChanged: true 
-    },
-  ];
+  // Capture initial URL for fallback reset
+  const { url: initialUrl } = await getDomAndUrlFromWebview((c, m) => log(`[UrlCapture] ${c}: ${m}`));
+  log(`[MasterUserTaskPageSF] Initial URL captured: ${initialUrl}`);
 
-  const results: { name: string; result: SFResult }[] = [];
-  for (const step of plan) {
-    log(`[MasterSF] start: ${step.name}`);
-    const res = await step.run({ log: (m) => log(`[${step.name}] ${m}`) });
-    results.push({ name: step.name, result: res });
-    log(`[MasterSF] done: ${step.name} -> ok=${res.ok} changed=${!!res.changed} method=${(res as any).method || 'unknown'} reason=${res.reason || ""}`);
+  // Master only does StaticLLMFallback - NO findHomePage or navigation
+  log(`[MasterUserTaskPageSF] Starting StaticLLMFallback strategy (TsX → F3 LLM)`);
+  
+  try {
+    const result = await runStaticLLMFallback({ 
+      log: (m) => log(`[StaticLLMFallback] ${m}`),
+      initialUrl: initialUrl 
+    });
     
-    const stopOnChanged = step.stopOnChanged !== false;
-    if (stopOnChanged && res.changed) {
-      log(`[MasterSF] stopping on changed at ${step.name}`);
-      return { ok: true, stoppedAt: step.name, results };
-    }
+    log(`[MasterUserTaskPageSF] StaticLLMFallback completed: ok=${result.ok} method=${result.method || 'unknown'}`);
+    return result;
+    
+  } catch (error) {
+    log(`[MasterUserTaskPageSF] StaticLLMFallback error: ${error}`);
+    return {
+      ok: false,
+      method: "error",
+      error: `StaticLLMFallback failed: ${error}`,
+      reason: "Master strategy exception"
+    };
   }
-  return { ok: true, stoppedAt: null as string | null, results };
 }
 
 // Convenience export
 export const FeatureSF = {
-  staticLLMFallback: (opts?: { log?: (msg: string) => void; maxTsxSteps?: number; tsxCmd?: string }) => 
-    runStaticLLMFallback(opts),
+  staticLLMFallback: (opts?: { 
+    log?: (msg: string) => void; 
+    maxTsxSteps?: number; 
+    tsxCmd?: string; 
+    initialUrl?: string; 
+  }) => runStaticLLMFallback(opts),
 };

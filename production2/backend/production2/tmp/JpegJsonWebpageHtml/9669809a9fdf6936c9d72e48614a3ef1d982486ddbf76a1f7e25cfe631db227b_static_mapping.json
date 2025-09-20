@@ -1,0 +1,26 @@
+{
+  "ok": true,
+  "page_kind": "fill_form",
+  "field_mapping": {
+    "plaka_no": "#plateNo"
+  },
+  "actions": [
+    "devam"
+  ],
+  "validation": {
+    "contexts": {},
+    "counts": {
+      "mapped": 1
+    }
+  },
+  "mapping_source": {
+    "plaka_no": "calib_site"
+  },
+  "fingerprint": "9669809a9fdf6936c9d72e48614a3ef1d982486ddbf76a1f7e25cfe631db227b",
+  "debug_dumps": {
+    "used": "static",
+    "used_hints": {},
+    "used_sections": false
+  },
+  "used": "static"
+}
