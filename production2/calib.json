@@ -35,7 +35,7 @@
         {
           "id": "a1",
           "label": "Action 1",
-          "selector": "[data-lov-id=\"src/pages/InsuranceQuote.tsx:231:10\"]"
+          "selector": "[data-lov-id=\"src/pages/TrafficInsurance.tsx:118:18\"]"
         }
       ],
       "actionsExecutionOrder": [
@@ -65,7 +65,7 @@
             {
               "id": "a1",
               "label": "Action 1",
-              "selector": "[data-lov-id=\"src/pages/InsuranceQuote.tsx:231:10\"]"
+              "selector": "[data-lov-id=\"src/pages/TrafficInsurance.tsx:118:18\"]"
             }
           ],
           "criticalFields": [
@@ -131,8 +131,8 @@
       "currentPageId": "p_mfr5evup",
       "host": "preview--screen-to-data.lovable.app",
       "task": "Yeni Trafik",
-      "updatedAt": "2025-09-20T00:32:41Z",
-      "createdAt": "2025-09-20T00:32:41Z"
+      "updatedAt": "2025-09-20T21:51:09Z",
+      "createdAt": "2025-09-20T21:51:09Z"
     },
     "jhkfg": {
       "fieldSelectors": {

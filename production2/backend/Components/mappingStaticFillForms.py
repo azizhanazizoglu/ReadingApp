@@ -456,12 +456,9 @@ def static_analyze_page(html: str, url: str, task: str, cfg: Dict[str, Any]) -> 
                 mapping_src[key] = "static_synonym"
                 contexts[key] = {"tag": getattr(el, "name", None), "id": el.get("id"), "name": el.get("name")}
 
-            for b in s.select("button, a, [role='button'], input[type='submit']"):
-                txt = _clean(getattr(b, "get_text", lambda *_: "")(" ", strip=True) or b.get("value") or "")
-                if txt:
-                    actions_found.append(txt)
-            # Normalize action list: keep only preferred words and dedup
-            actions_found = [a for a in dict.fromkeys(actions_found) if any(w in a for w in actions_pref)][:5]
+            # Text-based action discovery removed - using only calibration selectors as single source of truth
+            pass
+            # Action filtering removed - actions come only from calibration now
 
     fp = _sha(html)
     out = {

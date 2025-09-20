@@ -1,0 +1,32 @@
+{
+  "ok": true,
+  "page_kind": "fill_form",
+  "field_mapping": {
+    "plaka_no": "[data-lov-id=\"src/pages/VehicleDetails.tsx:79:16\"]",
+    "motor_no": "[data-lov-id=\"src/pages/VehicleDetails.tsx:87:16\"]",
+    "sasi_no": "[data-lov-id=\"src/pages/VehicleDetails.tsx:95:16\"]",
+    "model_yili": "[data-lov-id=\"src/pages/VehicleDetails.tsx:104:16\"]"
+  },
+  "actions": [
+    "devam"
+  ],
+  "validation": {
+    "contexts": {},
+    "counts": {
+      "mapped": 4
+    }
+  },
+  "mapping_source": {
+    "plaka_no": "calib_site",
+    "motor_no": "calib_page",
+    "sasi_no": "calib_page",
+    "model_yili": "calib_page"
+  },
+  "fingerprint": "d410b10fbcffcdf4e3b212ecae72cf44a04a716c02edd86b203ed9c01d00a147",
+  "debug_dumps": {
+    "used": "static",
+    "used_hints": {},
+    "used_sections": false
+  },
+  "used": "static"
+}
