@@ -2,7 +2,31 @@ import { getDomAndUrlFromWebview, checkSelectorHasValue } from "../services/webv
 import { BACKEND_URL } from "../config";
 import { runActions } from "../services/ts3ActionRunner";
 import { runInPageFill } from "../services/ts3InPageFiller";
-import { setupPdfDownloadCapture, waitForPdfDownload, cleanupPdfDownloadCapture } from "../services/pdfDownloadService";
+imp          //          // Wait for PDF generation after actions (likely PDF trigger)
+          if (pdfSetupOk) {
+            log('PDF-CAPTURE: Waiting for PDF generation after no-mapping actions...');
+            const pdfResult = await waitForPdfDownload(8000, log);
+            if (pdfResult.ok && pdfResult.path) {
+              log(`PDF-CAPTURE: Successfully captured PDF -> ${pdfResult.path}`);
+              // Store PDF path globally for backend detection
+              (window as any).__STATIC_LAST_PDF_PATH__ = pdfResult.path;
+              (window as any).__STATIC_LAST_PDF__ = true;
+            } else {
+              log(`PDF-CAPTURE: Failed to capture PDF -> ${pdfResult.error || 'timeout'}`);
+            }
+          } generation after actions (likely PDF trigger)
+          if (pdfSetupOk) {
+            log('PDF-CAPTURE: Waiting for PDF generation after actions...');
+            const pdfResult = await waitForPdfDownload(8000, log);
+            if (pdfResult.ok && pdfResult.path) {
+              log(`PDF-CAPTURE: Successfully captured PDF -> ${pdfResult.path}`);
+              // Store PDF path globally for backend detection
+              (window as any).__STATIC_LAST_PDF_PATH__ = pdfResult.path;
+              (window as any).__STATIC_LAST_PDF__ = true;
+            } else {
+              log(`PDF-CAPTURE: Failed to capture PDF -> ${pdfResult.error || 'timeout'}`);
+            }
+          }fDownloadCapture, waitForPdfDownload, cleanupPdfDownloadCapture, checkPdfInHtml } from "../services/pdfDownloadService";
 
 export type F3Options = {
   waitAfterActionMs?: number;
@@ -82,7 +106,7 @@ export async function runFillFormsUserTaskPageSF(opts?: F3Options) {
   }
   const ruhsat = input.data;
 
-  // Setup PDF download capture for final page detection
+  // Setup PDF download capture
   const pdfTargetDir = 'c:\\Users\\azizh\\Documents\\ReadingApp\\production2\\tmp\\pdf';
   const pdfSetupOk = await setupPdfDownloadCapture({ 
     targetDir: pdfTargetDir, 
@@ -206,77 +230,20 @@ export async function runFillFormsUserTaskPageSF(opts?: F3Options) {
         const committedEnough = committedCount >= dynamicThreshold;
 
         let attemptedAction = false;
-        // Provide richer gating diagnostics
-        log(`SF-F3-Static gates: filledCheck.ok=${!!filledCheck?.ok} criticalPresent=${criticalPresent} criticalOk=${criticalOk} committedEnough=${committedEnough} committedCount=${committedCount} dynamicThreshold=${dynamicThreshold}`);
-
-        // Heuristic: if every mapped selector failed to verify (all false) AND we committed zero fields,
-        // treat this page as effectively "no-mapping" for action purposes. This covers pages where
-        // mapping carried over from a previous page (stale selectors) or fields moved out of the DOM.
-        const allSelectorsFailed = Object.keys(selectorStatus).length > 0 && Object.values(selectorStatus).every(v => !v);
-        const shouldForceActionsDueToMissingSelectors = allSelectorsFailed && committedCount === 0;
-        if (shouldForceActionsDueToMissingSelectors) {
-          log('SF-F3-Static notice: all mapped selectors missing/unfilled; will force action attempt.');
-        }
-
-        if ((filledCheck?.ok && (!criticalPresent || criticalOk) && committedEnough) || shouldForceActionsDueToMissingSelectors) {
+        const hasFieldsToFill = fieldMapping && Object.keys(fieldMapping).length > 0;
+        const noFieldsButHasActions = !hasFieldsToFill && Array.isArray(ana.actions) && ana.actions.length > 0;
+        
+        // Allow actions if: (fields filled properly) OR (no fields but has actions)
+        const gatesOk = ((filledCheck?.ok) && (!criticalPresent || criticalOk) && committedEnough) || noFieldsButHasActions;
+        
+        if (gatesOk) {
           const acts: string[] = Array.isArray(ana.actions) ? ana.actions : [];
           if (acts.length) {
             // Preserve css# selectors; prefix others with click# for text match
             const clickActs = acts.map(a => a.startsWith('css#') ? a : `click#${a}`);
-            log(`SF-F3-Static actions: attempting ${clickActs.join(',')} (reason=${shouldForceActionsDueToMissingSelectors ? 'force-missing-selectors' : 'gates-passed'})`);
-            
-            // Log detailed action analysis for debugging
-            for (let i = 0; i < acts.length; i++) {
-              const orig = acts[i];
-              const processed = clickActs[i];
-              if (orig.startsWith('css#')) {
-                const selector = orig.substring(4);
-                log(`SF-F3-Static action ${i+1}: CSS selector "${selector}" -> ${processed}`);
-              } else {
-                log(`SF-F3-Static action ${i+1}: Text search "${orig}" -> ${processed}`);
-              }
-            }
-            
+            log(`SF-F3-Static actions: attempting ${clickActs.join(',')}`);
             await runActions(clickActs, true, (c,m)=>log(`${c} ${m}`));
             attemptedAction = true;
-            
-            // Only attempt PDF capture on the final page (insurance-quote)
-            const isFinalPage = prevUrl?.includes('insurance-quote') || ana?.is_final || backendFinalCandidate;
-            if (pdfSetupOk && isFinalPage) {
-              const pdfPrimaryWaitMs = 2000; // reduced to 2 seconds for faster processing
-              log(`PDF-CAPTURE: Waiting for PDF generation after actions (timeout=${pdfPrimaryWaitMs}ms)...`);
-              let pdfResult = await waitForPdfDownload(pdfPrimaryWaitMs, log);
-              if (!pdfResult.ok) {
-                // Secondary extended wait if CTA present or final candidate heuristics indicate likely PDF
-                if (ana?.cta_present || ana?.is_final) {
-                  const extendedWaitMs = 1000; // reduced to 1 second for faster processing
-                  log(`PDF-CAPTURE: Primary wait failed (${pdfResult.error||'timeout'}); extending wait by ${extendedWaitMs}ms due to CTA/final heuristics`);
-                  const second = await waitForPdfDownload(extendedWaitMs, log);
-                  // Prefer second result only if it succeeds
-                  if (second.ok) pdfResult = second;
-                }
-              }
-              if (pdfResult.ok && pdfResult.path) {
-                log(`PDF-CAPTURE: Successfully captured PDF -> ${pdfResult.path}`);
-                // Store PDF path globally for backend detection
-                (window as any).__STATIC_LAST_PDF_PATH__ = pdfResult.path;
-                (window as any).__STATIC_LAST_PDF__ = true;
-              } else {
-                log(`PDF-CAPTURE: Failed to capture PDF -> ${pdfResult.error || 'timeout'}`);
-                // Try alternative PDF detection methods
-                log('PDF-CAPTURE: Attempting alternative PDF detection...');
-                const altPdfFound = await checkAlternativePdfGeneration(log);
-                if (altPdfFound) {
-                  log('PDF-CAPTURE: Alternative PDF detection successful');
-                  (window as any).__STATIC_LAST_PDF_PATH__ = altPdfFound;
-                  (window as any).__STATIC_LAST_PDF__ = true;
-                } else {
-                  log('PDF-CAPTURE: No alternative PDF detection methods found PDF');
-                }
-              }
-            } else if (pdfSetupOk) {
-              log(`PDF-CAPTURE: Skipped - not on final page (${prevUrl})`);
-            }
           } else {
             log(`SF-F3-Static no actions for this page`);
           }
@@ -287,9 +254,6 @@ export async function runFillFormsUserTaskPageSF(opts?: F3Options) {
         processedUrls.add(prevUrl);
         // After action attempt, poll for navigation up to 5 times
         if (attemptedAction) {
-          // Check if PDF was successfully captured during action - if so, this might be final completion
-          const pdfCapturedDuringAction = !!(window as any).__STATIC_LAST_PDF__;
-          
           const navTimeoutMs = Math.max(waitMs, 1200);
           const pollInterval = 300;
           const polls = Math.ceil(navTimeoutMs / pollInterval);
@@ -299,19 +263,7 @@ export async function runFillFormsUserTaskPageSF(opts?: F3Options) {
             const snap = await getDomAndUrlFromWebview((m)=>log(`[WV] ${m}`));
             if (snap.url && snap.url !== prevUrl) { navigated = true; prevHtml = snap.html || prevHtml; prevUrl = snap.url; log(`SF-F3-Static navigation detected post-action -> ${prevUrl}`); break; }
           }
-          
           if (!navigated) {
-            // If PDF was captured but no navigation, treat as successful completion instead of error
-            if (pdfCapturedDuringAction) {
-              const pdfPath = (window as any).__STATIC_LAST_PDF_PATH__;
-              log(`SF-F3-Static: No navigation but PDF captured -> treating as successful completion (${pdfPath})`);
-              // Cleanup PDF download handlers
-              if (pdfSetupOk) {
-                await cleanupPdfDownloadCapture(log);
-              }
-              return { ok:true, final:true, step:'pdf_captured_no_nav', pdf_path: pdfPath, last_url: prevUrl };
-            }
-            
             log(`SF-F3-Static ERROR: action did not cause navigation (url stayed ${prevUrl})`);
             return { ok:false, step:'action_navigation', error:'no_navigation_after_action', url: prevUrl };
           }
@@ -326,38 +278,18 @@ export async function runFillFormsUserTaskPageSF(opts?: F3Options) {
           log(`SF-F3-Static actions(no-mapping): attempting ${clickActs.join(',')}`);
           await runActions(clickActs, true, (c,m)=>log(`${c} ${m}`));
           
-          // Only attempt PDF capture on the final page (insurance-quote)  
-          const isFinalPage = prevUrl?.includes('insurance-quote') || ana?.is_final || backendFinalCandidate;
-          if (pdfSetupOk && isFinalPage) {
-            const pdfPrimaryWaitMs = 2000; // reduced to 2 seconds for faster processing
-            log(`PDF-CAPTURE: Waiting for PDF generation after no-mapping actions (timeout=${pdfPrimaryWaitMs}ms)...`);
-            let pdfResult = await waitForPdfDownload(pdfPrimaryWaitMs, log);
-            if (!pdfResult.ok && (ana?.cta_present || ana?.is_final)) {
-              const extendedWaitMs = 1000; // reduced to 1 second for faster processing
-              log(`PDF-CAPTURE: Primary wait failed (${pdfResult.error||'timeout'}); extending wait by ${extendedWaitMs}ms due to CTA/final heuristics`);
-              const second = await waitForPdfDownload(extendedWaitMs, log);
-              if (second.ok) pdfResult = second;
-            }
-            if (pdfResult.ok && pdfResult.path) {
-              log(`PDF-CAPTURE: Successfully captured PDF -> ${pdfResult.path}`);
+          // Wait for PDF generation after actions (likely PDF trigger)
+          if (pdfSetupOk) {
+            log('PDF-CAPTURE: Waiting for PDF generation after no-mapping actions...');
+            const pdfResult = await waitForPdfDownload(8000, log);
+            if (pdfResult.ok && pdfResult.pdfPath) {
+              log(`PDF-CAPTURE: Successfully captured PDF -> ${pdfResult.pdfPath}`);
               // Store PDF path globally for backend detection
-              (window as any).__STATIC_LAST_PDF_PATH__ = pdfResult.path;
+              (window as any).__STATIC_LAST_PDF_PATH__ = pdfResult.pdfPath;
               (window as any).__STATIC_LAST_PDF__ = true;
             } else {
               log(`PDF-CAPTURE: Failed to capture PDF -> ${pdfResult.error || 'timeout'}`);
-              // Try alternative PDF detection methods
-              log('PDF-CAPTURE: Attempting alternative PDF detection...');
-              const altPdfFound = await checkAlternativePdfGeneration(log);
-              if (altPdfFound) {
-                log('PDF-CAPTURE: Alternative PDF detection successful');
-                (window as any).__STATIC_LAST_PDF_PATH__ = altPdfFound;
-                (window as any).__STATIC_LAST_PDF__ = true;
-              } else {
-                log('PDF-CAPTURE: No alternative PDF detection methods found PDF');
-              }
             }
-          } else if (pdfSetupOk) {
-            log(`PDF-CAPTURE: Skipped - not on final page (${prevUrl})`);
           }
           
           processedUrls.add(prevUrl);
@@ -428,132 +360,4 @@ export async function runFillFormsUserTaskPageSF(opts?: F3Options) {
   }
 
   return { ok:true, step:'completed', last_url: lastUrl };
-}
-
-/**
- * Alternative PDF detection methods for when direct download fails
- */
-async function checkAlternativePdfGeneration(log: (m: string) => void): Promise<string | null> {
-  try {
-    // Method 1: Check for new tabs/windows with PDF content
-    const checkNewTabs = (): Promise<string | null> => {
-      return new Promise((resolve) => {
-        let foundPdf = false;
-        const originalOpen = window.open;
-        
-        // Override window.open temporarily to catch new tabs
-        window.open = function(...args) {
-          const result = originalOpen.apply(this, args);
-          const url = args[0]?.toString() || '';
-          
-          if (url.includes('.pdf') || url.includes('pdf') || url.toLowerCase().includes('download')) {
-            log(`PDF-CAPTURE: Detected PDF in new tab: ${url}`);
-            foundPdf = true;
-            resolve(url);
-          }
-          
-          return result;
-        };
-        
-        // Restore after 3 seconds
-        setTimeout(() => {
-          window.open = originalOpen;
-          if (!foundPdf) resolve(null);
-        }, 3000);
-      });
-    };
-
-    // Method 2: Check current page for PDF elements
-    const checkCurrentPagePdf = (): string | null => {
-      // Check for PDF iframe, embed, or object elements
-      const pdfIframes = document.querySelectorAll('iframe[src*="pdf"], iframe[src*=".pdf"]');
-      const pdfEmbeds = document.querySelectorAll('embed[src*="pdf"], embed[src*=".pdf"]');
-      const pdfObjects = document.querySelectorAll('object[data*="pdf"], object[data*=".pdf"]');
-      const pdfLinks = document.querySelectorAll('a[href*="pdf"], a[href*=".pdf"]');
-      
-      if (pdfIframes.length > 0) {
-        const src = (pdfIframes[0] as HTMLIFrameElement).src;
-        log(`PDF-CAPTURE: Found PDF iframe: ${src}`);
-        return src;
-      }
-      
-      if (pdfEmbeds.length > 0) {
-        const src = (pdfEmbeds[0] as HTMLEmbedElement).src;
-        log(`PDF-CAPTURE: Found PDF embed: ${src}`);
-        return src;
-      }
-      
-      if (pdfObjects.length > 0) {
-        const data = (pdfObjects[0] as HTMLObjectElement).data;
-        log(`PDF-CAPTURE: Found PDF object: ${data}`);
-        return data;
-      }
-      
-      if (pdfLinks.length > 0) {
-        const href = (pdfLinks[0] as HTMLAnchorElement).href;
-        log(`PDF-CAPTURE: Found PDF link: ${href}`);
-        return href;
-      }
-      
-      return null;
-    };
-
-    // Method 3: Check for blob URLs (common in modern web apps)
-    const checkBlobUrls = (): string | null => {
-      // Look for any blob URLs in the page that might be PDFs
-      const allLinks = document.querySelectorAll('a[href^="blob:"]');
-      const allSources = document.querySelectorAll('[src^="blob:"]');
-      
-      for (const link of allLinks) {
-        const href = (link as HTMLAnchorElement).href;
-        if (href.includes('blob:')) {
-          log(`PDF-CAPTURE: Found blob URL link: ${href}`);
-          return href;
-        }
-      }
-      
-      for (const source of allSources) {
-        const src = (source as HTMLElement).getAttribute('src') || '';
-        if (src.includes('blob:')) {
-          log(`PDF-CAPTURE: Found blob URL source: ${src}`);
-          return src;
-        }
-      }
-      
-      return null;
-    };
-
-    // Method 4: Check if URL changed to PDF-related endpoint
-    const checkCurrentUrl = (): string | null => {
-      const currentUrl = window.location.href;
-      if (currentUrl.includes('pdf') || currentUrl.includes('download') || currentUrl.includes('quote')) {
-        log(`PDF-CAPTURE: Current URL suggests PDF generation: ${currentUrl}`);
-        return currentUrl;
-      }
-      return null;
-    };
-
-    // Try all methods with delays to allow for async PDF generation
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second for PDF to generate
-    
-    const currentPagePdf = checkCurrentPagePdf();
-    if (currentPagePdf) return currentPagePdf;
-    
-    const blobPdf = checkBlobUrls();
-    if (blobPdf) return blobPdf;
-    
-    const urlPdf = checkCurrentUrl();
-    if (urlPdf) return urlPdf;
-    
-    // Check for new tabs
-    const newTabPdf = await checkNewTabs();
-    if (newTabPdf) return newTabPdf;
-    
-    log('PDF-CAPTURE: No alternative PDF detection methods found PDF');
-    return null;
-    
-  } catch (error) {
-    log(`PDF-CAPTURE: Error in alternative detection: ${error}`);
-    return null;
-  }
 }
