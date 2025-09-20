@@ -13,7 +13,7 @@ import { runFindHomePageSF } from "@/stateflows/findHomePageSF";
 import { runGoUserTaskPageSF } from "@/stateflows/goUserTaskPageSF";
 import { runFillFormsUserTaskPageSF } from "@/stateflows/fillFormsUserTaskPageSF";
 import { runFillFormsUserTaskPageSF as runFillFormsUserTaskPageStaticSF } from "@/stateflows/fillFormsUserTaskPageStaticSF";
-import { runMasterSF } from "@/stateflows/masterSF";
+import { runMasterUserTaskPageSF } from "@/stateflows/masterUserTaskPageSF";
 import { runCalibStart, saveCalibDraft, finalizeCalib } from "@/stateflows/calibFillUserTaskPageStaticSF";
 import { CalibrationPanel } from "@/components/CalibrationPanel";
 
@@ -399,9 +399,9 @@ export const Header: React.FC<HeaderProps> = ({
             style={{ fontFamily: fontStack, minWidth: 72, minHeight: 40, fontWeight: 700 }}
             onClick={async () => {
               try {
-                devLog('HD-MASTER', 'Master SF clicked');
-                const res = await runMasterSF(undefined, { log: (m) => devLog('HD-MASTER-LOG', m) });
-                devLog('HD-MASTER-DONE', `ok=${res.ok} stoppedAt=${(res as any).stoppedAt || null}`);
+                devLog('HD-MASTER', 'Master SF clicked - StaticLLMFallback');
+                const res = await runMasterUserTaskPageSF(undefined, { log: (m) => devLog('HD-MASTER-LOG', m) });
+                devLog('HD-MASTER-DONE', `ok=${res.ok} method=${(res as any).method || 'unknown'} stoppedAt=${(res as any).stoppedAt || null}`);
               } catch (e: any) {
                 devLog('HD-MASTER-ERR', String(e?.message || e));
               }
@@ -465,67 +465,18 @@ export const Header: React.FC<HeaderProps> = ({
             style={{ fontFamily: fontStack, minWidth: 52, minHeight: 40, fontWeight: 700 }}
             onClick={async () => {
               try {
-                devLog('HD-F3', 'F3 clicked - Static-first form filling');
+                devLog('HD-F3', 'F3 clicked - Pure LLM form filling');
                 
-                // Get current page HTML and URL
-                const { html, url } = await getDomAndUrlFromWebview((c, m) => devLog(c, `[F3] ${m}`));
-                if (!html) {
-                  devLog('HD-F3-NOHTML', 'F3: Webview HTML alınamadı');
-                  return;
-                }
-
-                devLog('HD-F3-START', `F3: Analyzing page (${html.length} chars) at ${url}`);
-                
-                // Call TsX static-first endpoint
-                const r = await fetch(`${BACKEND_URL}/api/tsx/dev-run`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ 
-                    user_command: 'Yeni Trafik', 
-                    html, 
-                    current_url: url 
-                  })
+                // Call pure LLM stateflow directly (with PDF capture we added)
+                const result = await runFillFormsUserTaskPageSF({
+                  log: (m) => devLog('HD-F3-LLM-SF', `LLM SF: ${m}`)
                 });
-
-                if (!r.ok) {
-                  devLog('HD-F3-HTTP-ERR', `F3: HTTP ${r.status}`);
-                  return;
-                }
-
-                const result = await r.json();
-                const state = result?.state || 'unknown';
-                const details = result?.details || {};
-
-                devLog('HD-F3-RESULT', `F3: state=${state} method=${details?.method || 'unknown'}`);
-
-                if (state === 'final_page_detected') {
-                  devLog('HD-F3-FINAL', `F3: Final page detected - ready to click`);
-                } else if (state === 'static_ready') {
-                  devLog('HD-F3-READY', `F3: Static form filling ready (${details?.total_fields || 0} fields, ${details?.success_rate || 0}% critical)`);
-                } else if (state === 'need_llm_fallback') {
-                  devLog('HD-F3-FALLBACK', `F3: Static insufficient (${details?.success_rate || 0}% < ${details?.threshold || 75}%) - requires LLM fallback`);
-                  
-                  // Perform LLM fallback using the dedicated LLM stateflow
-                  try {
-                    devLog('HD-F3-LLM-START', 'F3: Starting LLM fallback via stateflow');
-                    const llmResult = await runFillFormsUserTaskPageSF({
-                      log: (m) => devLog('HD-F3-LLM-SF', `LLM SF: ${m}`)
-                    });
-                    
-                    if (llmResult?.ok) {
-                      devLog('HD-F3-LLM-RESULT', `F3: LLM fallback completed successfully - step: ${llmResult.step || 'unknown'}`);
-                    } else {
-                      devLog('HD-F3-LLM-ERR', `F3: LLM fallback failed - step: ${llmResult?.step || 'unknown'}, error: ${llmResult?.error || 'unknown'}`);
-                    }
-                  } catch (llmError: any) {
-                    devLog('HD-F3-LLM-CATCH', `F3: LLM fallback error: ${String(llmError?.message || llmError)}`);
-                  }
-                } else if (state === 'no_forms_detected') {
-                  devLog('HD-F3-NOFORMS', 'F3: No form fields detected on this page');
+                
+                if (result?.ok) {
+                  devLog('HD-F3-LLM-RESULT', `F3: LLM stateflow completed successfully - step: ${result.step || 'unknown'}`);
                 } else {
-                  devLog('HD-F3-OTHER', `F3: ${details?.message || state}`);
+                  devLog('HD-F3-LLM-ERROR', `F3: LLM stateflow failed - step: ${result?.step || 'unknown'}, error: ${result?.error || 'unknown'}`);
                 }
-
               } catch (e: any) {
                 devLog('HD-F3-ERR', `F3: ${String(e?.message || e)}`);
               }
