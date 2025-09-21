@@ -8,7 +8,7 @@
     "model_yili": "[data-lov-id=\"src/pages/VehicleDetails.tsx:104:16\"]"
   },
   "actions": [
-    "devam"
+    "Action 1"
   ],
   "validation": {
     "contexts": {},

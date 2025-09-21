@@ -1,4 +1,5 @@
 import { runFillFormsUserTaskPageSF } from "./fillFormsUserTaskPageSF"; // F3 LLM
+import { runFillFormsUserTaskPageSF as runStaticSF } from "./fillFormsUserTaskPageStaticSF"; // Static
 import { getDomAndUrlFromWebview } from "../services/webviewDom";
 import { runTs3 } from "../services/ts3Service";
 import { BACKEND_URL } from "../config";
@@ -277,24 +278,117 @@ export async function runMasterUserTaskPageSF(steps?: MasterStep[], opts?: { log
   const { url: initialUrl } = await getDomAndUrlFromWebview((c, m) => log(`[UrlCapture] ${c}: ${m}`));
   log(`[MasterUserTaskPageSF] Initial URL captured: ${initialUrl}`);
 
-  // Master only does StaticLLMFallback - NO findHomePage or navigation
-  log(`[MasterUserTaskPageSF] Starting StaticLLMFallback strategy (TsX → F3 LLM)`);
+  // Master strategy: Direct static orchestrator first, then F3 LLM fallback
+  log(`[MasterUserTaskPageSF] Starting Direct Static → F3 LLM strategy`);
   
   try {
-    const result = await runStaticLLMFallback({ 
-      log: (m) => log(`[StaticLLMFallback] ${m}`),
-      initialUrl: initialUrl 
+    // Phase 1: Try the fixed static orchestrator directly
+    log(`[MasterUserTaskPageSF] Phase 1 - Direct Static Orchestrator`);
+    
+    const staticResult = await runStaticSF({
+      log: (m) => log(`[StaticSF] ${m}`)
     });
     
-    log(`[MasterUserTaskPageSF] StaticLLMFallback completed: ok=${result.ok} method=${result.method || 'unknown'}`);
-    return result;
+    if (staticResult?.ok) {
+      log(`[MasterUserTaskPageSF] Direct Static completed successfully: ${staticResult.step || 'completed'}`);
+      return {
+        ok: true,
+        changed: true,
+        method: "static",
+        step: staticResult.step || "completed",
+        reason: "Direct static orchestrator successful",
+        finalSelector: staticResult.finalSelector
+      };
+    }
+    
+    // If static failed but explicitly requested fallback, continue to F3 LLM
+    if (staticResult?.should_fallback) {
+      log(`[MasterUserTaskPageSF] Static requested fallback: ${staticResult.fallback_reason || 'unknown'}`);
+    } else {
+      log(`[MasterUserTaskPageSF] Static failed without fallback request: ${staticResult?.error || 'unknown'}`);
+    }
+    
+    // Phase 2: F3 LLM Fallback (reset URL first)
+    log(`[MasterUserTaskPageSF] Phase 2 - F3 LLM Fallback`);
+    
+    // Reset URL for clean LLM attempt
+    if (initialUrl) {
+      log(`[MasterUserTaskPageSF] Resetting to initial URL for F3 LLM: ${initialUrl}`);
+      try {
+        const webview = document.getElementById('app-webview') as any;
+        if (webview && webview.src) {
+          webview.src = initialUrl;
+          log(`[MasterUserTaskPageSF] URL reset initiated, waiting for load...`);
+          await new Promise(resolve => setTimeout(resolve, 3000)); // Wait for page load
+          log(`[MasterUserTaskPageSF] URL reset completed`);
+        }
+      } catch (resetError) {
+        log(`[MasterUserTaskPageSF] URL reset warning: ${resetError}`);
+      }
+    }
+    
+    const f3Result = await runFillFormsUserTaskPageSF({
+      log: (m) => log(`[F3-LLM] ${m}`)
+    });
+
+    if (f3Result?.ok) {
+      log(`[MasterUserTaskPageSF] F3 LLM fallback completed successfully`);
+      
+      // Trigger LLM feedback to update calibration for future static success
+      try {
+        log(`[MasterUserTaskPageSF] Triggering LLM feedback to update calibration...`);
+        
+        const { url: currentUrl } = await getDomAndUrlFromWebview();
+        const host = currentUrl ? new URL(currentUrl).hostname : "preview--screen-to-data.lovable.app";
+        
+        const feedbackResponse = await fetch(`${BACKEND_URL}/api/calib/auto-capture-llm-feedback`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            host: host,
+            task: "Yeni Trafik",
+            auto_save: true,
+            current_url: currentUrl,
+            source: "master_direct_static_f3_success"
+          })
+        });
+        
+        if (feedbackResponse.ok) {
+          const feedbackResult = await feedbackResponse.json();
+          log(`[MasterUserTaskPageSF] LLM feedback update successful - ${feedbackResult.message || 'calibration updated'}`);
+        } else {
+          const errorText = await feedbackResponse.text();
+          log(`[MasterUserTaskPageSF] LLM feedback update failed - HTTP ${feedbackResponse.status}: ${errorText}`);
+        }
+      } catch (feedbackError) {
+        log(`[MasterUserTaskPageSF] LLM feedback update error: ${feedbackError}`);
+      }
+      
+      return {
+        ok: true,
+        changed: true,
+        method: "llm_fallback",
+        step: f3Result.step || "completed",
+        reason: "F3 LLM fallback successful after static failure",
+        finalSelector: f3Result.finalSelector
+      };
+    } else {
+      log(`[MasterUserTaskPageSF] F3 LLM fallback also failed: ${f3Result?.error || 'unknown'}`);
+      return {
+        ok: false,
+        method: "both_failed",
+        step: "all_failed",
+        error: `Both static and F3 LLM failed. Static: ${staticResult?.error || 'unknown'}, LLM: ${f3Result?.error || 'unknown'}`,
+        reason: "All methods exhausted"
+      };
+    }
     
   } catch (error) {
-    log(`[MasterUserTaskPageSF] StaticLLMFallback error: ${error}`);
+    log(`[MasterUserTaskPageSF] Master strategy error: ${error}`);
     return {
       ok: false,
       method: "error",
-      error: `StaticLLMFallback failed: ${error}`,
+      error: `Master strategy failed: ${error}`,
       reason: "Master strategy exception"
     };
   }
