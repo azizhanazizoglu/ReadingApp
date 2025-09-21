@@ -20,34 +20,47 @@
   "preview--screen-to-data.lovable.app": {
     "Yeni Trafik": {
       "fieldSelectors": {
-        "plaka_no": "#plateNo"
+        "plaka_no": "#plateNo",
+        "motor_no": "[data-lov-id='src/pages/VehicleDetails.tsx:87:16']",
+        "sasi_no": "[data-lov-id='src/pages/VehicleDetails.tsx:95:16']",
+        "model_yili": "[data-lov-id='src/pages/VehicleDetails.tsx:104:16']"
       },
       "fieldKeys": [
+        "model_yili",
+        "motor_no",
+        "plaka_no",
+        "sasi_no"
+      ],
+      "actions": [
+        "Devam",
+        "Poliçeyi Aktifleştir"
+      ],
+      "actionsDetail": [
+        {
+          "id": "a1",
+          "label": "Devam",
+          "selector": ""
+        },
+        {
+          "id": "a2",
+          "label": "Poliçeyi Aktifleştir",
+          "selector": ""
+        }
+      ],
+      "actionsExecutionOrder": [
+        "Devam",
+        "Poliçeyi Aktifleştir"
+      ],
+      "executionOrder": [],
+      "criticalFields": [
         "plaka_no",
         "motor_no",
         "sasi_no",
         "model_yili"
       ],
-      "actions": [
-        "Action 1"
-      ],
-      "actionsDetail": [
-        {
-          "id": "a1",
-          "label": "Action 1",
-          "selector": "[data-lov-id=\"src/pages/TrafficInsurance.tsx:191:10\"]"
-        }
-      ],
-      "actionsExecutionOrder": [
-        "Action 1"
-      ],
-      "executionOrder": [],
-      "criticalFields": [
-        "plaka_no"
-      ],
       "pages": [
         {
-          "id": "p_mfr5evup",
+          "id": "p_mfr4vrnsp",
           "name": "Page 1",
           "urlPattern": "",
           "urlSample": "https://preview--screen-to-data.lovable.app/traffic-insurance",
@@ -55,17 +68,14 @@
             "plaka_no": "#plateNo"
           },
           "fieldKeys": [
-            "plaka_no",
-            "motor_no",
-            "sasi_no",
-            "model_yili"
+            "plaka_no"
           ],
           "executionOrder": [],
           "actionsDetail": [
             {
               "id": "a1",
-              "label": "Action 1",
-              "selector": "[data-lov-id=\"src/pages/TrafficInsurance.tsx:191:10\"]"
+              "label": "Devam",
+              "selector": ""
             }
           ],
           "criticalFields": [
@@ -73,15 +83,15 @@
           ]
         },
         {
-          "id": "p_mfr5hhv8",
+          "id": "p_mfrn20m1n",
           "name": "Page 2",
           "urlPattern": "",
           "urlSample": "https://preview--screen-to-data.lovable.app/vehicle-details",
           "fieldSelectors": {
-            "plaka_no": "[data-lov-id=\"src/pages/VehicleDetails.tsx:79:16\"]",
-            "motor_no": "[data-lov-id=\"src/pages/VehicleDetails.tsx:87:16\"]",
-            "sasi_no": "[data-lov-id=\"src/pages/VehicleDetails.tsx:95:16\"]",
-            "model_yili": "[data-lov-id=\"src/pages/VehicleDetails.tsx:104:16\"]"
+            "plaka_no": "[data-lov-id='src/pages/VehicleDetails.tsx:79:16']",
+            "motor_no": "[data-lov-id='src/pages/VehicleDetails.tsx:87:16']",
+            "sasi_no": "[data-lov-id='src/pages/VehicleDetails.tsx:95:16']",
+            "model_yili": "[data-lov-id='src/pages/VehicleDetails.tsx:104:16']"
           },
           "fieldKeys": [
             "plaka_no",
@@ -92,20 +102,20 @@
           "executionOrder": [],
           "actionsDetail": [
             {
-              "id": "a1",
-              "label": "Action 1",
-              "selector": "[data-lov-id=\"src/pages/VehicleDetails.tsx:189:10\"]"
+              "id": "a2",
+              "label": "Devam",
+              "selector": ""
             }
           ],
           "criticalFields": [
             "plaka_no",
-            "model_yili",
+            "motor_no",
             "sasi_no",
-            "motor_no"
+            "model_yili"
           ]
         },
         {
-          "id": "p_mfrgokk8",
+          "id": "p_mfrs231oq",
           "name": "Page 3",
           "urlPattern": "",
           "urlSample": "https://preview--screen-to-data.lovable.app/insurance-quote",
@@ -114,25 +124,25 @@
           "executionOrder": [],
           "actionsDetail": [
             {
-              "id": "a1",
-              "label": "Action 1",
-              "selector": "[data-lov-id=\"src/pages/InsuranceQuote.tsx:231:10\"]"
+              "id": "a3",
+              "label": "Poliçeyi Aktifleştir",
+              "selector": ""
             }
           ],
           "criticalFields": [
             "plaka_no",
-            "model_yili",
+            "motor_no",
             "sasi_no",
-            "motor_no"
+            "model_yili"
           ],
           "isLast": false
         }
       ],
-      "currentPageId": "p_mfr5evup",
+      "currentPageId": "p_mfr4vrnsp",
       "host": "preview--screen-to-data.lovable.app",
       "task": "Yeni Trafik",
-      "updatedAt": "2025-09-21T00:52:29Z",
-      "createdAt": "2025-09-21T00:52:29Z"
+      "updatedAt": "2025-09-20T23:51:21.503720Z",
+      "createdAt": "2025-09-20T21:51:09Z"
     },
     "jhkfg": {
       "fieldSelectors": {

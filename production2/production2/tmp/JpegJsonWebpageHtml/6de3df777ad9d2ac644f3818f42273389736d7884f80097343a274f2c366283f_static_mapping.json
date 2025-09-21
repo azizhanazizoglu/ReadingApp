@@ -5,24 +5,32 @@
     "plaka_no": "[data-lov-id=\"src/pages/VehicleDetails.tsx:79:16\"]",
     "motor_no": "[data-lov-id=\"src/pages/VehicleDetails.tsx:87:16\"]",
     "sasi_no": "[data-lov-id=\"src/pages/VehicleDetails.tsx:95:16\"]",
-    "model_yili": "[data-lov-id=\"src/pages/VehicleDetails.tsx:104:16\"]"
+    "model_yili": "[data-lov-id=\"src/pages/VehicleDetails.tsx:104:16\"]",
+    "model": "[name='model_yili']"
   },
   "actions": [
     "Action 1"
   ],
   "validation": {
-    "contexts": {},
+    "contexts": {
+      "model": {
+        "tag": "input",
+        "id": null,
+        "name": "model_yili"
+      }
+    },
     "counts": {
-      "mapped": 4
+      "mapped": 5
     }
   },
   "mapping_source": {
     "plaka_no": "calib_site",
     "motor_no": "calib_page",
     "sasi_no": "calib_page",
-    "model_yili": "calib_page"
+    "model_yili": "calib_page",
+    "model": "static_synonym"
   },
-  "fingerprint": "d410b10fbcffcdf4e3b212ecae72cf44a04a716c02edd86b203ed9c01d00a147",
+  "fingerprint": "6de3df777ad9d2ac644f3818f42273389736d7884f80097343a274f2c366283f",
   "debug_dumps": {
     "used": "static",
     "used_hints": {},

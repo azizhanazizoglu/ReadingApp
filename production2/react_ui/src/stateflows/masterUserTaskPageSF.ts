@@ -207,6 +207,38 @@ async function runStaticLLMFallback(opts?: {
 
     if (f3Result?.ok) {
       log(`StaticLLMFallback: F3 LLM fallback completed successfully`);
+      
+      // Trigger LLM feedback to update calibration for future static success
+      try {
+        log(`StaticLLMFallback: Triggering LLM feedback to update calibration...`);
+        
+        // Get current URL to extract host
+        const { url: currentUrl } = await getDomAndUrlFromWebview();
+        const host = currentUrl ? new URL(currentUrl).hostname : "preview--screen-to-data.lovable.app";
+        
+        const feedbackResponse = await fetch(`${BACKEND_URL}/api/calib/auto-capture-llm-feedback`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            host: host,
+            task: "Yeni Trafik",
+            auto_save: true,
+            current_url: currentUrl,
+            source: "master_button_f3_success"
+          })
+        });
+        
+        if (feedbackResponse.ok) {
+          const feedbackResult = await feedbackResponse.json();
+          log(`StaticLLMFallback: LLM feedback update successful - ${feedbackResult.message || 'calibration updated'}`);
+        } else {
+          const errorText = await feedbackResponse.text();
+          log(`StaticLLMFallback: LLM feedback update failed - HTTP ${feedbackResponse.status}: ${errorText}`);
+        }
+      } catch (feedbackError) {
+        log(`StaticLLMFallback: LLM feedback update error: ${feedbackError}`);
+      }
+      
       return {
         ok: true,
         changed: true,

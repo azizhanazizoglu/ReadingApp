@@ -221,8 +221,20 @@ export async function runFillFormsUserTaskPageSF(opts?: F3Options) {
         if ((filledCheck?.ok && (!criticalPresent || criticalOk) && committedEnough) || shouldForceActionsDueToMissingSelectors) {
           const acts: string[] = Array.isArray(ana.actions) ? ana.actions : [];
           if (acts.length) {
-            // Preserve css# selectors; prefix others with click# for text match
-            const clickActs = acts.map(a => a.startsWith('css#') ? a : `click#${a}`);
+            // Use action_selectors mapping when available from static analyzer
+            const actionSelectors = ana.action_selectors || {};
+            const clickActs = acts.map(a => {
+              if (a.startsWith('css#')) {
+                // Already css# prefixed, preserve as is
+                return a;
+              } else if (actionSelectors[a]) {
+                // Map action label to css selector using backend mapping
+                return `css#${actionSelectors[a]}`;
+              } else {
+                // Fall back to text search
+                return `click#${a}`;
+              }
+            });
             log(`SF-F3-Static actions: attempting ${clickActs.join(',')} (reason=${shouldForceActionsDueToMissingSelectors ? 'force-missing-selectors' : 'gates-passed'})`);
             
             // Log detailed action analysis for debugging
@@ -231,9 +243,12 @@ export async function runFillFormsUserTaskPageSF(opts?: F3Options) {
               const processed = clickActs[i];
               if (orig.startsWith('css#')) {
                 const selector = orig.substring(4);
-                log(`SF-F3-Static action ${i+1}: CSS selector "${selector}" -> ${processed}`);
+                log(`SF-F3-Static action ${i+1}: CSS selector (preserved) "${selector}" -> ${processed}`);
+              } else if (actionSelectors[orig]) {
+                const selector = actionSelectors[orig];
+                log(`SF-F3-Static action ${i+1}: CSS selector (mapped) "${selector}" -> ${processed}`);
               } else {
-                log(`SF-F3-Static action ${i+1}: Text search "${orig}" -> ${processed}`);
+                log(`SF-F3-Static action ${i+1}: Text search (fallback) "${orig}" -> ${processed}`);
               }
             }
             
@@ -322,7 +337,35 @@ export async function runFillFormsUserTaskPageSF(opts?: F3Options) {
         // No fields to fill – but we may still have actions (e.g. final activation button)
         const acts: string[] = Array.isArray(ana.actions) ? ana.actions : [];
         if (acts.length && !alreadyProcessed) {
-          const clickActs = acts.map(a => a.startsWith('css#') ? a : `click#${a}`);
+          // Use action_selectors mapping when available from static analyzer (same logic as main branch)
+          const actionSelectors = ana.action_selectors || {};
+          const clickActs = acts.map(a => {
+            if (a.startsWith('css#')) {
+              // Already css# prefixed, preserve as is
+              return a;
+            } else if (actionSelectors[a]) {
+              // Map action label to css selector using backend mapping
+              return `css#${actionSelectors[a]}`;
+            } else {
+              // Fall back to text search
+              return `click#${a}`;
+            }
+          });
+          
+          // Log detailed action analysis for debugging
+          for (let i = 0; i < acts.length; i++) {
+            const orig = acts[i];
+            const processed = clickActs[i];
+            if (orig.startsWith('css#')) {
+              log(`SF-F3-Static action ${i+1} (no-mapping): CSS selector (preserved) "${orig.substring(4)}" -> ${processed}`);
+            } else if (actionSelectors[orig]) {
+              const selector = actionSelectors[orig];
+              log(`SF-F3-Static action ${i+1} (no-mapping): CSS selector (mapped) "${selector}" -> ${processed}`);
+            } else {
+              log(`SF-F3-Static action ${i+1} (no-mapping): Text search (fallback) "${orig}" -> ${processed}`);
+            }
+          }
+          
           log(`SF-F3-Static actions(no-mapping): attempting ${clickActs.join(',')}`);
           await runActions(clickActs, true, (c,m)=>log(`${c} ${m}`));
           
