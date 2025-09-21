@@ -30,6 +30,13 @@ async function postF3Static(op: string, body: any, log?: (m: string)=>void) {
 
 export async function runFillFormsUserTaskPageSF(opts?: F3Options) {
   const log = opts?.log || (()=>{});
+  
+  // Clear previous PDF state at start of each run to ensure fresh PDF generation
+  (window as any).__STATIC_LAST_PDF__ = false;
+  (window as any).__STATIC_LAST_PDF_PATH__ = null;
+  (window as any).__STATIC_LAST_CTA__ = false;
+  log('SF-F3-Static: Cleared previous PDF state for fresh run');
+  
   // Load config from backend to allow dynamic tuning
   let cfg: any = undefined;
   try {
