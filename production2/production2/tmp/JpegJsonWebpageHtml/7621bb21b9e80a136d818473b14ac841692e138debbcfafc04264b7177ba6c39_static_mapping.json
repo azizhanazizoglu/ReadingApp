@@ -1,0 +1,26 @@
+{
+  "ok": true,
+  "page_kind": "fill_form",
+  "field_mapping": {
+    "plaka_no": "#plateNo"
+  },
+  "actions": [
+    "Action 1"
+  ],
+  "validation": {
+    "contexts": {},
+    "counts": {
+      "mapped": 1
+    }
+  },
+  "mapping_source": {
+    "plaka_no": "calib_site"
+  },
+  "fingerprint": "7621bb21b9e80a136d818473b14ac841692e138debbcfafc04264b7177ba6c39",
+  "debug_dumps": {
+    "used": "static",
+    "used_hints": {},
+    "used_sections": false
+  },
+  "used": "static"
+}

@@ -462,6 +462,9 @@ def calib(req: F3Request) -> Dict[str, Any]:
         plan_calib_load,
         plan_calib_finalize_to_config,
         plan_calib_test_fill_plan,
+        plan_calib_llm_feedback_update,
+        plan_calib_capture_llm_mappings,
+        plan_calib_preview_llm_update,
     )
     # Directly import storage.clear for maintenance op
     from Components.calibStorage import clear as calib_clear
@@ -508,7 +511,233 @@ def calib(req: F3Request) -> Dict[str, Any]:
         task = body.get("task")
         res = calib_clear(host, task)
         return res
+    if op == "llmFeedbackUpdate":
+        body = req.mapping or {}
+        host = body.get("host") or ""
+        task = body.get("task") or (req.task or "Yeni Trafik")
+        llm_session_results = body.get("llm_session_results") or []
+        auto_save = body.get("auto_save", True)
+        if not host:
+            raise HTTPException(status_code=422, detail="missing host")
+        if not llm_session_results:
+            raise HTTPException(status_code=422, detail="missing llm_session_results")
+        return plan_calib_llm_feedback_update(llm_session_results, host, task, auto_save)
+    if op == "captureLlmMappings":
+        body = req.mapping or {}
+        task = body.get("task") or (req.task or "Yeni Trafik")
+        llm_results = body.get("llm_results") or []
+        if not llm_results:
+            raise HTTPException(status_code=422, detail="missing llm_results")
+        return plan_calib_capture_llm_mappings(llm_results, task)
+    if op == "previewLlmUpdate":
+        body = req.mapping or {}
+        host = body.get("host") or ""
+        task = body.get("task") or (req.task or "Yeni Trafik")
+        llm_session_results = body.get("llm_session_results") or []
+        if not host:
+            raise HTTPException(status_code=422, detail="missing host")
+        if not llm_session_results:
+            raise HTTPException(status_code=422, detail="missing llm_session_results")
+        return plan_calib_preview_llm_update(llm_session_results, host, task)
     raise HTTPException(status_code=422, detail=f"invalid op: {op}")
+
+
+class LLMFeedbackRequest(BaseModel):
+    llm_session_results: List[Dict[str, Any]]
+    host: str
+    task: str = "Yeni Trafik"
+    auto_save: bool = True
+    current_url: Optional[str] = None
+
+
+@app.post("/api/calib/llm-feedback")
+def calib_llm_feedback(req: LLMFeedbackRequest) -> Dict[str, Any]:
+    """
+    Dedicated endpoint for Master Button LLM feedback integration.
+    
+    This endpoint processes successful F3 LLM session results and automatically
+    updates calib.json with the working selectors for future static runs.
+    
+    Args:
+        llm_session_results: List of F3 LLM page analysis results
+        host: Domain host extracted from URLs
+        task: Task domain (default: "Yeni Trafik")
+        auto_save: Whether to update calib.json directly (default: True)
+        current_url: Optional current URL for logging
+        
+    Returns:
+        {
+            "ok": True,
+            "method": "llm_feedback_auto_update",
+            "fields_updated": [...],
+            "actions_updated": [...],
+            "backup_path": "...",
+            "calib_updated": True
+        }
+    """
+    from Features.calibFillUserTaskPageStatic import plan_calib_llm_feedback_update
+    
+    try:
+        # Extract host from current_url if not provided
+        if not req.host and req.current_url:
+            from urllib.parse import urlparse
+            parsed_url = urlparse(req.current_url)
+            req.host = parsed_url.netloc
+        
+        if not req.host:
+            raise HTTPException(status_code=422, detail="Host required (either explicitly or via current_url)")
+        
+        if not req.llm_session_results:
+            raise HTTPException(status_code=422, detail="LLM session results required")
+        
+        # Process LLM feedback
+        result = plan_calib_llm_feedback_update(
+            req.llm_session_results,
+            req.host,
+            req.task,
+            req.auto_save
+        )
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"LLM feedback processing failed: {str(e)}")
+
+
+@app.post("/api/calib/auto-capture-llm-feedback")
+def auto_capture_llm_feedback(body: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    LLM feedback endpoint that reads F3 mapping files and updates calib.json.
+    
+    This endpoint reads the latest F3 LLM mapping files from tmp/JpegJsonWebpageHtml
+    and updates calib.json with working selectors while preserving the exact format.
+    
+    Args:
+        host: Domain host 
+        task: Task name (default: "Yeni Trafik")
+        auto_save: Whether to update calib.json (default: True)
+        current_url: Current page URL for context
+        source: Source identifier for logging
+        
+    Returns:
+        {
+            "ok": True,
+            "method": "auto_llm_feedback_real_data",
+            "message": "LLM feedback auto-capture completed",
+            "calib_updated": True,
+            "pages_updated": 3
+        }
+    """
+    try:
+        host = body.get("host", "")
+        task = body.get("task", "Yeni Trafik")
+        auto_save = body.get("auto_save", True)
+        current_url = body.get("current_url", "")
+        source = body.get("source", "auto_capture")
+        
+        if not host:
+            raise HTTPException(status_code=422, detail="Host required")
+        
+        # Import our new components
+        from Components.llmFeedbackManager import llm_feedback_manager
+        
+        if auto_save:
+            # Use the new LLM feedback manager to update calib.json
+            result = llm_feedback_manager.update_calib_from_latest_mappings(host, task)
+            
+            if result.get("calib_updated"):
+                # Clean up old mapping files after successful update
+                cleanup_result = llm_feedback_manager.clean_old_mapping_files(keep_latest=10)
+                
+                return {
+                    "ok": True,
+                    "method": "auto_llm_feedback_real_data",
+                    "message": f"LLM feedback auto-capture completed for {host}/{task} using REAL F3 session data",
+                    "host": host,
+                    "task": task,
+                    "auto_save": auto_save,
+                    "source": source,
+                    "calib_updated": True,
+                    "pages_updated": result.get("pages_updated", 0),
+                    "mapping_files_processed": result.get("mapping_files_processed", 0),
+                    "files_cleaned": cleanup_result.get("cleaned", 0),
+                    "timestamp": result.get("timestamp", "")
+                }
+            else:
+                return {
+                    "ok": True,
+                    "method": "auto_llm_feedback_no_update",
+                    "message": f"LLM feedback auto-capture attempted for {host}/{task} but no update needed",
+                    "host": host,
+                    "task": task,
+                    "auto_save": auto_save,
+                    "source": source,
+                    "calib_updated": False,
+                    "reason": result.get("reason", "unknown")
+                }
+        else:
+            # Preview mode - show what would be updated
+            from Components.mappingFileProcessor import mapping_processor
+            
+            session_result = mapping_processor.process_session_mappings()
+            if session_result.get("ok"):
+                mappings = session_result["mappings"]
+                calib_structure = mapping_processor.build_calib_structure(mappings, host, task)
+                
+                return {
+                    "ok": True,
+                    "method": "auto_llm_feedback_preview",
+                    "message": f"LLM feedback preview for {host}/{task} using REAL F3 session data",
+                    "host": host,
+                    "task": task,
+                    "auto_save": False,
+                    "source": source,
+                    "calib_updated": False,
+                    "preview_data": {
+                        "ok": True,
+                        "session_files": session_result.get("total_files", 0),
+                        "valid_mappings": session_result.get("valid_mappings", 0),
+                        "calib_structure": calib_structure,
+                        "would_update": calib_structure.get("ok", False)
+                    }
+                }
+            else:
+                return {
+                    "ok": True,
+                    "method": "auto_llm_feedback_preview_no_data",
+                    "message": f"LLM feedback preview for {host}/{task} - no recent F3 session data found",
+                    "host": host,
+                    "task": task,
+                    "auto_save": False,
+                    "source": source,
+                    "calib_updated": False,
+                    "preview_data": {
+                        "ok": False,
+                        "reason": session_result.get("reason", "no_data")
+                    }
+                }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Auto LLM feedback capture failed: {str(e)}")
+
+
+@app.post("/api/calib/cleanup-mapping-files")
+def cleanup_mapping_files() -> Dict[str, Any]:
+    """Clean up old F3 mapping files, keeping only recent ones."""
+    try:
+        from Components.llmFeedbackManager import llm_feedback_manager
+        
+        result = llm_feedback_manager.clean_old_mapping_files(keep_latest=5)
+        
+        return {
+            "ok": True,
+            "message": "Mapping files cleanup completed",
+            "files_cleaned": result.get("cleaned", 0),
+            "files_kept": result.get("kept", 0)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
 
 
 @app.post("/api/f3")

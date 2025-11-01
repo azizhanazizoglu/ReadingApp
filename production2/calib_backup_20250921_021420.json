@@ -1,0 +1,231 @@
+{
+  "test-host": {
+    "test-task": {
+      "test": "data",
+      "host": "test-host",
+      "task": "test-task",
+      "updatedAt": "2025-09-19T14:47:08Z",
+      "createdAt": "2025-09-19T14:47:08Z"
+    }
+  },
+  "test-host2": {
+    "test-task2": {
+      "test": "data2",
+      "host": "test-host2",
+      "task": "test-task2",
+      "updatedAt": "2025-09-19T14:47:21Z",
+      "createdAt": "2025-09-19T14:47:21Z"
+    }
+  },
+  "preview--screen-to-data.lovable.app": {
+    "Yeni Trafik": {
+      "fieldSelectors": {
+        "plaka_no": "#plateNo",
+        "motor_no": "[data-lov-id='src/pages/VehicleDetails.tsx:87:16']",
+        "sasi_no": "[data-lov-id='src/pages/VehicleDetails.tsx:95:16']",
+        "model_yili": "[data-lov-id='src/pages/VehicleDetails.tsx:104:16']"
+      },
+      "fieldKeys": [
+        "model_yili",
+        "motor_no",
+        "plaka_no",
+        "sasi_no"
+      ],
+      "actions": [
+        "Devam",
+        "Poliçeyi Aktifleştir"
+      ],
+      "actionsDetail": [
+        {
+          "id": "a1",
+          "label": "Devam",
+          "selector": "button[type='submit']"
+        },
+        {
+          "id": "a2",
+          "label": "Poliçeyi Aktifleştir",
+          "selector": "[data-lov-id='src/pages/Quote.tsx:89:16']"
+        }
+      ],
+      "actionsExecutionOrder": [
+        "Devam",
+        "Poliçeyi Aktifleştir"
+      ],
+      "executionOrder": [],
+      "criticalFields": [
+        "plaka_no",
+        "motor_no",
+        "sasi_no",
+        "model_yili"
+      ],
+      "pages": [
+        {
+          "id": "p_mfro3vnoq",
+          "name": "Page 1",
+          "urlPattern": "",
+          "urlSample": "https://preview--screen-to-data.lovable.app/traffic-insurance",
+          "fieldSelectors": {
+            "plaka_no": "#plateNo"
+          },
+          "fieldKeys": [
+            "plaka_no"
+          ],
+          "executionOrder": [],
+          "actionsDetail": [
+            {
+              "id": "a1",
+              "label": "Devam",
+              "selector": "button[type='submit']"
+            }
+          ],
+          "criticalFields": [
+            "plaka_no"
+          ]
+        },
+        {
+          "id": "p_mfr2zop4s",
+          "name": "Page 2",
+          "urlPattern": "",
+          "urlSample": "https://preview--screen-to-data.lovable.app/vehicle-details",
+          "fieldSelectors": {
+            "plaka_no": "[data-lov-id='src/pages/VehicleDetails.tsx:79:16']",
+            "motor_no": "[data-lov-id='src/pages/VehicleDetails.tsx:87:16']",
+            "sasi_no": "[data-lov-id='src/pages/VehicleDetails.tsx:95:16']",
+            "model_yili": "[data-lov-id='src/pages/VehicleDetails.tsx:104:16']"
+          },
+          "fieldKeys": [
+            "plaka_no",
+            "motor_no",
+            "sasi_no",
+            "model_yili"
+          ],
+          "executionOrder": [],
+          "actionsDetail": [
+            {
+              "id": "a2",
+              "label": "Devam",
+              "selector": "[data-lov-id='src/pages/VehicleDetails.tsx:112:16']"
+            }
+          ],
+          "criticalFields": [
+            "plaka_no",
+            "motor_no",
+            "sasi_no",
+            "model_yili"
+          ]
+        },
+        {
+          "id": "p_mfr0qrut3",
+          "name": "Page 3",
+          "urlPattern": "",
+          "urlSample": "https://preview--screen-to-data.lovable.app/insurance-quote",
+          "fieldSelectors": {},
+          "fieldKeys": [],
+          "executionOrder": [],
+          "actionsDetail": [
+            {
+              "id": "a3",
+              "label": "Poliçeyi Aktifleştir",
+              "selector": "[data-lov-id='src/pages/Quote.tsx:89:16']"
+            }
+          ],
+          "criticalFields": [
+            "plaka_no",
+            "motor_no",
+            "sasi_no",
+            "model_yili"
+          ],
+          "isLast": false
+        }
+      ],
+      "currentPageId": "p_mfro3vnoq",
+      "host": "preview--screen-to-data.lovable.app",
+      "task": "Yeni Trafik",
+      "updatedAt": "2025-09-21T00:10:31.440015Z",
+      "createdAt": "2025-09-20T21:51:09Z"
+    },
+    "jhkfg": {
+      "fieldSelectors": {
+        "plaka_no": "#name"
+      },
+      "fieldKeys": [
+        "plaka_no",
+        "marka",
+        "model",
+        "model_yili",
+        "sasi_no",
+        "motor_no",
+        "yakit",
+        "renk"
+      ],
+      "actions": [
+        "Action 1"
+      ],
+      "actionsDetail": [
+        {
+          "id": "a1",
+          "label": "Action 1",
+          "selector": ""
+        }
+      ],
+      "actionsExecutionOrder": [
+        "Action 1"
+      ],
+      "executionOrder": [],
+      "criticalFields": [
+        "plaka_no",
+        "marka",
+        "model",
+        "model_yili",
+        "sasi_no",
+        "motor_no",
+        "yakit",
+        "renk"
+      ],
+      "pages": [
+        {
+          "id": "p_mfr9loir",
+          "name": "Page 1",
+          "urlPattern": "",
+          "urlSample": "https://preview--screen-to-data.lovable.app/life-insurance",
+          "fieldSelectors": {
+            "plaka_no": "#name"
+          },
+          "fieldKeys": [
+            "plaka_no",
+            "marka",
+            "model",
+            "model_yili",
+            "sasi_no",
+            "motor_no",
+            "yakit",
+            "renk"
+          ],
+          "executionOrder": [],
+          "actionsDetail": [
+            {
+              "id": "a1",
+              "label": "Action 1",
+              "selector": ""
+            }
+          ],
+          "criticalFields": [
+            "plaka_no",
+            "marka",
+            "model",
+            "model_yili",
+            "sasi_no",
+            "motor_no",
+            "yakit",
+            "renk"
+          ]
+        }
+      ],
+      "currentPageId": "p_mfr9loir",
+      "host": "preview--screen-to-data.lovable.app",
+      "task": "jhkfg",
+      "updatedAt": "2025-09-19T20:01:25Z",
+      "createdAt": "2025-09-19T20:01:25Z"
+    }
+  }
+}

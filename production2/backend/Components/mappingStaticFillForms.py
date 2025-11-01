@@ -251,6 +251,7 @@ def static_analyze_page(html: str, url: str, task: str, cfg: Dict[str, Any]) -> 
     calib_page_match = None
     calib_page_actions: List[str] = []              # text labels (for text-based clicking)
     calib_page_action_selectors: List[str] = []      # css selectors for deterministic clicking
+    action_selectors_map: Dict[str, str] = {}        # label -> selector map for deterministic clicking
     if host:
         site_map = resolve_site_mapping(host, task, cfg) or {}
         seeded = site_map.get("fieldSelectors") or {}
@@ -321,6 +322,7 @@ def static_analyze_page(html: str, url: str, task: str, cfg: Dict[str, Any]) -> 
                                     calib_page_actions.append(str(lbl))
                                 if sel:
                                     calib_page_action_selectors.append(sel)
+                                    action_selectors_map[str(lbl)] = sel
             except Exception as _e:
                 pass
 
@@ -487,22 +489,47 @@ def static_analyze_page(html: str, url: str, task: str, cfg: Dict[str, Any]) -> 
     calib_mappings = {k: v for k, v in mapping.items() if mapping_src.get(k) == "calib_site"}
     other_mappings = {k: v for k, v in mapping.items() if mapping_src.get(k) != "calib_site"}
     
-    # If we had page-level action selectors, expose them as css# actions first & log presence
+    # Prune global calib_site mappings not present in this page's HTML to avoid multi-page leakage
+    if _HAS_BS:
+        try:
+            s2 = _soup(html)
+            if s2:
+                to_remove = []
+                for fld, sel in mapping.items():
+                    if mapping_src.get(fld) == "calib_site":
+                        try:
+                            if not sel or not s2.select(sel):
+                                to_remove.append(fld)
+                        except Exception:
+                            to_remove.append(fld)
+                for fld in to_remove:
+                    mapping.pop(fld, None)
+                    mapping_src.pop(fld, None)
+        except Exception:
+            pass
+
+    # Ensure page-specific selectors are kept (even if pruning removed them earlier)
+    if calib_page_match:
+        try:
+            psel = calib_page_match.get("fieldSelectors") or {}
+            if isinstance(psel, dict):
+                for k, v in psel.items():
+                    if v and _exists_selector_in_html(html, v):
+                        mapping[k] = v
+                        if mapping_src.get(k) != "calib_site":
+                            mapping_src[k] = mapping_src.get(k) or "calib_page"
+        except Exception:
+            pass
+
+    # Log page action selectors (no css# injection; actions list stays as labels only)
     if calib_page_action_selectors:
         from backend.logging_utils import log  # type: ignore
         missing = [s for s in calib_page_action_selectors if s not in html]
         present = [s for s in calib_page_action_selectors if s in html]
-        css_actions = [f"css#{s}" for s in calib_page_action_selectors]
-        new_actions: List[str] = []
-        for a in css_actions + actions_found:
-            if a not in new_actions:
-                new_actions.append(a)
-        actions_found = new_actions
         log("INFO", "CALIB-PAGE-ACTIONS", f"Page action selectors resolved ({len(calib_page_action_selectors)})", component="StaticAnalyze", extra={
             "present": present,
             "missing": missing,
-            "labels": calib_page_actions,
-            "css_actions_injected": css_actions
+            "labels": calib_page_actions
         })
 
     log("INFO", "STATIC-MAPPING-FINAL", f"Static analysis complete for {host}/{task}", component="StaticAnalyze", extra={
@@ -513,9 +540,11 @@ def static_analyze_page(html: str, url: str, task: str, cfg: Dict[str, Any]) -> 
         "other_count": len(other_mappings),
         "mapping_sources": mapping_src,
         "actions_found": actions_found,
+        "action_selectors": action_selectors_map,
         "url": url or "",
         "fingerprint": fp[:8] if fp else None
     })
 
+    out["action_selectors"] = action_selectors_map
     return out
 

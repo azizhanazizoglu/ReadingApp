@@ -29,321 +29,171 @@ Bu bölüm, tüm alt klasörlerdeki bilgileri tek bir “kitapçık” formatın
 
 ## İçindekiler (Index)
 1. [Özet (Abstract)](#abstract)
-2. [Sistem Mimarisi (Architecture)](#architecture)
-3. [Bileşen Özeti (Components Overview)](#components-overview)
-4. [Veri Akışı ve Durum Makinesi (TS1/TS2)](#ts-flow)
-5. [Geçici Veri Politikası (TmpData)](#tmpdata-policy)
-6. [API Tanımı (Flask Endpoints)](#api)
-7. [Frontend (React UI)](#frontend)
-8. [Zamanlayıcı (Scheduler)](#scheduler)
-9. [LLM Bileşenleri (llm_agent, license_llm)](#llm-components)
-10. [WebBot Bileşeni (webbot)](#webbot)
-11. [Qt Browser ve Electron](#qt-electron)
-12. [Girdi HTML’leri (input_htmls)](#input-htmls)
-13. [Test ve İzlenebilirlik](#tests-traceability)
-14. [Loglama ve Hata Kodları](#logging-errors)
-15. [Kurulum ve Çalıştırma](#setup-run)
-16. [Sorun Giderme ve Destek](#troubleshooting)
-17. [Belgeler Dizini (docs/ Index)](#docs-index)
+## Production2 — Modern Automation Prototype (Single Focus README)
 
-<a id="abstract"></a>
-## 1) Özet (Abstract)
-ReadingApp, ruhsat JPEG → LLM JSON → HTML mapping → form doldurma akışını uçtan uca yöneten modüler bir platformdur. Frontend (React + Vite + TS) ve Backend (Flask) arasında yapılandırılmış loglama ve izlenebilirlik ilkeleri esastır. Geçici veri politikası, her çalıştırmada yalnızca “son” çıktıların kalmasını sağlar.
+This repository now documents only the Production2 prototype. Earlier experiments (e.g., the older `react_ui` root) are considered Prototype A. Production2 is Prototype B and is the product we iterate on.
 
-<a id="architecture"></a>
-## 2) Sistem Mimarisi (Architecture)
-- Backend (Flask): Routes, stateflow agent, structured logging, in-memory durum (memory)
-- Frontend (React + Vite + TS): Header, MainLayout, Log paneli, Geliştirici Modu
-- Electron (opsiyonel): Masaüstü paketleme
-- İlgili alt bileşenler: `llm_agent`, `license_llm`, `webbot`, `qt_browser`
+- UI: React + Vite + Electron (desktop) under `production2/react_ui` and `production2/electron_app`
+- Backend: FastAPI under `production2/backend` with structured logs and stateflow endpoints
+- Automation: Static-first with LLM fallback, plus a Calibration panel for deterministic multi‑page mappings
+- Data areas: clearly separated input, output and temp folders under `production2/tmp`
 
-<a id="components-overview"></a>
-## 3) Bileşen Özeti (Components Overview)
-- `backend/`: API uçları; TS1/TS2 akışını tetikler; log ve state yönetimi
-- `react_ui/`: UI, developer mod butonları (Home, Ts1, Ts2), birleşik log paneli, sabit footer
-- `scheduler/`: Basit job scheduler ve adım takibi (waiting → running → done → error)
-- `llm_agent/`: OCR/LLM metinlerinden yapılandırılmış veri üretimi için yardımcı bileşen
-- `license_llm/`: Ruhsat görüntüsünden LLM ile yapılandırılmış veri çıkarımı
-- `webbot/`: HTML analiz ederek alanların doldurulmasını ve ilerlemeyi planlar
-- `qt_browser/`: PyQt5 ile basit tarayıcı; HTML snapshot alma ve manuel giriş akışı
-- `input_htmls/`: Test ve mapping akışları için HTML örnekleri
+This README is the single place to learn how Production2 works end‑to‑end.
 
-<a id="ts-flow"></a>
-## 4) Veri Akışı ve Durum Makinesi (TS1/TS2)
-Durumlar: başladı → devam ediyor (her job) → tamamlandı | hata
-- TS1: JPEG → LLM → JSON (jpg2json’a yazılır; base adı JPG ile eşleşir)
-- TS2: Web HTML (webbot) + LLM mapping → JSON (json2mapping’e yazılır)
+## Table of contents
+- What’s included
+- Quick start (Windows)
+- UI overview and main actions
+- Automation flows (F1/F2/F3 and Thunderbolt)
+- Calibration (multi‑page static mapping)
+- Data directories (input/output/temp)
+- Config knobs
+- Folder structure (Production2 only)
+- Troubleshooting
 
-<a id="tmpdata-policy"></a>
-## 5) Geçici Veri Politikası (TmpData)
-- Upload: `memory/TmpData/jpgDownload` yeni yükleme öncesi temizlenir → yalnızca son JPEG kalır.
-- TS1: `/api/start-automation` öncesi `memory/TmpData/jpg2json` temizlenir → yalnızca son JSON kalır.
-- TS2: `/api/test-state-2` öncesi `memory/TmpData/json2mapping` temizlenir → yalnızca son mapping JSON kalır (silinmez).
-- Bellek: `memory` içinde son `ruhsat_json`, `html`, `mapping`, `latest_base` tutulur. TS2 gerekirse `jpg2json`’dan fallback ile JSON’u yükleyebilir.
+---
 
-<a id="api"></a>
-## 6) API Tanımı (Flask Endpoints)
-- POST `/api/upload`: JPEG yükler; `jpgDownload` temizlenir ve yeni dosya kaydedilir.
-- POST `/api/start-automation`: TS1’i başlatır; `jpg2json` temizlenir; LLM JSON üretilir ve kaydedilir.
-- POST `/api/test-state-2`: TS2’yi tetikler; `json2mapping` temizlenir; mapping JSON üretilir ve kaydedilir (kalıcı).
-- GET `/api/state`: Bellekteki son durum döner.
-- GET `/api/mapping`: Son mapping (memory) döner.
-- GET `/api/logs`: Yapılandırılmış log halkası döner.
-- GET `/health`: Sağlık kontrolü.
+## What’s included
 
-<a id="frontend"></a>
-## 7) Frontend (React UI)
-- Header: App adı, arama, upload, otomasyon; Geliştirici Mod butonları (Home, Ts1, Ts2). İnce dikey ayraçlar kaldırılmıştır; sade görünüm.
-- MainLayout: Sağdan açılan birleşik log paneli (frontend + backend), footer için compact özet üretir.
-- Footer: Sabit 60px yükseklik; tek satır truncation. Türkçe tek tip format: `[BİLGİ|UYARI|HATA|DEBUG] KOD: kısa_metin (klasör/dosya)`; hover’da tam metin `title` ile görülebilir.
+Production2 contains everything needed to run the end-to-end flow:
 
-<a id="scheduler"></a>
-## 8) Zamanlayıcı (Scheduler)
-Basit JobScheduler: her adım (llm_extract, wait_for_file, webbot, memory, llm) sırayla çalışır. Her job “waiting → running → done | error” durumlarını raporlar. Hata durumunda akış durdurulur ve kullanıcıya bildirilir.
+- Electron app with a webview and a professional two‑row header
+	- Always-visible User Task input
+	- Thunderbolt button for full automation
+	- Calibrate icon (crosshair) that opens the docked calibration panel
+	- Debug toggle that expands developer actions (Auto, Find Home, Go to Task, Fill Static, Fill LLM, Home)
+- FastAPI backend providing feature endpoints for navigation and filling
+- A static‑first filling engine with TS3 selectors and robust verification
+- Calibration tooling and a merge step into `config.json`
 
-<a id="llm-components"></a>
-## 9) LLM Bileşenleri (llm_agent, license_llm)
-- `llm_agent`: OCR metninden yapılandırılmış veri üretimine yardımcı işlevler; örnek kullanım testlerde.
-- `license_llm`: Ruhsat görüntüsünden LLM ile alan çıkarımı; `extract_vehicle_info_from_image` ana fonksiyondur.
+## Quick start (Windows)
 
-<a id="webbot"></a>
-## 10) WebBot Bileşeni (webbot)
-HTML arayüzleri analiz ederek hangi alanların doldurulacağını belirler; LLM ile birlikte form doldurma otomasyonunda kullanılır.
+Prereqs: Node.js 18+, npm or pnpm; Python 3.10+; PowerShell.
 
-<a id="qt-electron"></a>
-## 11) Qt Browser ve Electron
-- `qt_browser`: PyQt5 tabanlı basit tarayıcı; manuel giriş sonrası HTML snapshot alır; otomasyon user story’si test dokümanında.
-- `electron_app`: React UI build’in masaüstüne gömülmesi için temel yapı (örnek entegrasyon komutları ileride).
+Run the helper script from Production2:
 
-<a id="input-htmls"></a>
-## 12) Girdi HTML’leri (input_htmls)
-Testler ve mapping akışları için örnek HTML’ler (ör. `traffic-insurance.html`, `vehicle-details.html`). WebBot/LLM mapping için kullanılır.
-
-<a id="tests-traceability"></a>
-## 13) Test ve İzlenebilirlik
-- Test stratejisi ve dosya yolu standartları: `docs/08_test_strategy.md`, `docs/09_test_files_and_paths.md`
-- İzlenebilirlik matrisi: `docs/traceability_matrix.md`
-- Tüm testler ve PDF özet: `python run_all_tests.py`
-
-<a id="tsx-orchestrator-tests"></a>
-## TsX Orchestrator ve Entegrasyon Testleri
-- TsX dev endpoint: `POST /api/tsx/dev-run` (FE Dev Mode “TsX” butonu ile tetiklenir), çıktısı: `{ state, details }`.
-- Orchestrator kodu ve entegrasyon testleri için detaylı açıklama: `docs/17_tsx_orchestrator_and_tests.md`.
-- Canlı URL entegrasyon testleri (opsiyonel, manuel): `tests/integration/test_tsx_live_urls.py` — `RUN_LIVE_TESTS=1` ile çalışır.
-
-<a id="logging-errors"></a>
-## 14) Loglama ve Hata Kodları
-- Yapılandırılmış log alanları: level, code, component, message, time, extra
-- FE/BE kod aralıkları: `docs/error_codes.md`
-- Log paneli: sağdan açılır; footer’da compact Türkçe özet gösterilir.
-
-<a id="setup-run"></a>
-## 15) Kurulum ve Çalıştırma
-Önkoşullar: Python 3.12+, Node.js 18+, pnpm
 ```
-# Backend
-pip install -r requirements.txt
-python backend/app.py  # http://localhost:5001
-
-# React UI
-cd react_ui
-pnpm install
-pnpm dev
-
-# Electron (opsiyonel)
-cd electron_app
-pnpm install
-pnpm start
+cd production2
+./build2run.ps1
 ```
 
-<a id="troubleshooting"></a>
-## 16) Sorun Giderme ve Destek
-- Backend başlatma sorunları: bağımlılıkları ve portu (5001) kontrol edin; konsol traceback’ine bakın.
-- UI derleme sorunları: Node 18+, pnpm; temiz kuruluma `pnpm install` sonrası `pnpm dev`.
-- Destek: azizhanazizoglu@gmail.com
+What it does:
+- Builds `production2/react_ui`
+- Mirrors the UI into `production2/react_gui/dist`
+- Starts Electron via `production2/electron_app/start_all.ps1` (falls back to repo `electron_app` if needed)
+- If Electron isn’t present, starts the Vite dev server instead
 
-<a id="docs-index"></a>
-## 17) Belgeler Dizini (docs/ Index)
-- [01_project_overview.md](docs/01_project_overview.md)
-- [02_vmodel_and_methodology.md](docs/02_vmodel_and_methodology.md)
-- [03_user_stories.md](docs/03_user_stories.md)
-- [04_software_requirements.md](docs/04_software_requirements.md)
-- [05_architecture_and_components.md](docs/05_architecture_and_components.md)
-- [06_data_interfaces_and_variables.md](docs/06_data_interfaces_and_variables.md)
-- [07_technologies_and_methods.md](docs/07_technologies_and_methods.md)
-- [08_test_strategy.md](docs/08_test_strategy.md)
-- [09_test_files_and_paths.md](docs/09_test_files_and_paths.md)
-- [10_electron_react_desktop_user_story.md](docs/10_electron_react_desktop_user_story.md)
-- [10_qt_browser_user_story.md](docs/10_qt_browser_user_story.md)
-- [11_scheduler_and_state_flow.md](docs/11_scheduler_and_state_flow.md)
-- [12_llm_agent_integration.md](docs/12_llm_agent_integration.md)
-- [12_react_components_and_hooks.md](docs/12_react_components_and_hooks.md)
-- [error_codes.md](docs/error_codes.md)
-- [FOLDER_STRUCTURE_AND_NAMING_CONVENTION.md](docs/FOLDER_STRUCTURE_AND_NAMING_CONVENTION.md)
-- [traceability_matrix.md](docs/traceability_matrix.md)
-- [SAFETY_ASSURANCE_AND_TRACEABILITY.md](docs/SAFETY_ASSURANCE_AND_TRACEABILITY.md)
+## UI overview and main actions
 
-<a id="features-updates"></a>
-## Özellikler ve Güncellemeler
-Tüm .txt dokümanlar .md’ye taşındı. Detaylar ve derinlemesine anlatımlar için `docs/` klasörüne bakın.
+Top header (always visible):
+- Back / Forward / Refresh / Go (address)
+- Thunderbolt (full automation)
+- Upload (JPG)
+- Calibrate (crosshair icon)
+- User Task input (e.g., “Yeni Trafik”)
+- Theme + Debug toggle
 
-### Neler Yeni (2025-09-05)
-### Neler Yeni (2025-09-17)
-- Kalibrasyon (C) paneli: Çok-sayfalı eşleme desteği eklendi. Her sayfa için: Page Name, URL Sample/Pattern, Ruhsat Alanları + Seçiciler, Actions listesi, sürükle-bırak sıralama.
-- İframe destekli seçici yakalama (Pick/Live): Aynı-origin iframe’ler için hover highlight + tıklama ile anında seçici doldurma.
-- HTML snippet görünümü: Seçilen elementin outerHTML’i panelde izlenebilir ve kopyalanabilir.
-- Finish Automation: Geçerli sayfayı “Last Page” olarak işaretleyip kaydetme için hızlı erişim.
-- Finalize to Config: Tüm sayfalar `config.json`’a multi-page yapı olarak kaydedilir (eski üst seviye alanlar korunur).
-- TsX Dev akışı: statik-önce gezinme, başarısız olursa LLM fallback (deneme sayısı: 4). Aşamalar: home → task → filling → final.
-- Yeni endpoint: `POST /api/tsx/dev-run` — adım adım orkestrasyon; parametreler: `user_command`, `html`, `prev_html?`, `executed_action?`, `force_llm?`, `current_url?`, `hard_reset?`. Çıktı: `phase`, `mapping_ready`, `details`, adım debug dump’ları.
-- Yeni endpoint: `POST /api/mapping/dump` — güncel mapping JSON’u backend loglarına (ve `memory/TmpData/json2mapping` altına) yazdırır.
-- FE TsX döngüsü: `phase` filling veya `mapping_ready` olduğunda otomatik TS3 doldurma çalışır; sonrası final sayfa/PDF algısı için poll yapılır. “Final yoksa hata” politikası uygulanır.
-- Log görünürlüğü: mapping JSON (TS2/TSX) loglarda gösterilir; script doldurma planı ve eylem özetleri loglanır.
+When Debug is ON, header extends to show developer actions:
+- Auto (Master flow)
+- Find Home (F1)
+- Go to Task (F2)
+- Fill (Static)
+- Fill (LLM)
+- Home (quick open)
 
-### Neler Yeni (2025-08-28)
-- TS2 şeması revize edildi: LLM-yalnız, kod bloklu (```json) sıkı JSON; alanlar: `version`, `page_kind` (fill_form|final_activation), `is_final_page`, `final_reason`, `evidence`, `field_mapping`, `actions`.
-- TS3 doldurma komitleri güçlendirildi: kontrollü/maskeli inputlar için Enter basma (commitEnter) ve blur ile kalıcılık garanti altına alındı (backend script ve in-page path).
-- TS3 yardımcı uçlar eklendi: `/api/ts3/plan`, `/api/ts3/analyze-selectors`, `/api/ts3/generate-script` (test edilebilir, log dostu).
- 
+Design principles:
+- No horizontal sliders; two‑row responsive layout
+- Icon-only where space matters; tooltips and accessible labels everywhere
+- “User Task” stays visible even when Debug is OFF
 
-### Neler Yeni (2025-08-25)
-- Yapılandırılmış backend loglama (level, code, component, message, time, extra); `/api/logs` ile FE panelde birleşik gösterim
-- Ts1 (JPG → LLM → JSON) ve Ts2 (Webbot → Mapping) uçtan uca akışlar; mapping çıktıları `memory/TmpData/json2mapping` altında kalıcı
-- Geçici klasör standardı ve temizlik politikası:
-	- Upload: `jpgDownload` yeni yükleme öncesi temizlenir; yalnızca son JPEG saklanır.
-	- TS1: `/api/start-automation` öncesi `jpg2json` temizlenir; yalnızca son JSON saklanır.
-	- TS2: `/api/test-state-2` öncesi `json2mapping` temizlenir; yalnızca son mapping JSON saklanır (silinmez).
-- Türkçe state makinesi: “başladı → devam ediyor → tamamlandı | hata”
-- Developer Mode: Header’da Home/Ts1/Ts2, kompakt SearchBar, Toaster ve yapılandırılmış log paneli
-- Footer: Sabit 60px yükseklik, tek satır compact Türkçe format: `[BİLGİ|UYARI|HATA|DEBUG] KOD: kısa_metin (klasör/dosya)`
-- Backend route’ları: `/api/upload`, `/api/start-automation`, `/api/state`, `/api/mapping`, `/api/logs`, `/api/test-state-2`, `/health`
+## Automation flows
 
-<a id="monorepo-components"></a>
-## Monorepo Yapısı ve Bileşenler
-- Backend (Flask): `backend/` — Uygulama ve servisler, stateflow, yapılandırılmış loglama
-- React UI (Vite + TS): `react_ui/` — Arayüz, geliştirici modu, log paneli
-- Electron (opsiyonel): `electron_app/` — Masaüstü paketleme/başlatma
-- LLM Agent: `llm_agent/` ve `license_llm/` — LLM/ocr entegrasyonu ve örnek çıkarımlar
-- OCR Agent: `ocr_agent/` — OCR/LLM bağımlılıkları (requirements)
-	- Gereksinimler: `ocr_agent/requirements.txt`
-- Qt Browser (opsiyonel): `qt_browser/`
-- Dokümantasyon: `docs/` — Proje genel dokümanları ve izlenebilirlik
-	- Giriş: `docs/` dizinindeki ilgili başlıklar
+F1 Find Home
+- Captures DOM/URL, asks backend for candidate plans, clicks, waits for navigation events, then detects change
+- Logs selectors and detection reasons; LLM fallback is available where configured
 
-<a id="quick-start"></a>
-## Hızlı Başlangıç
-Önkoşullar: Python 3.12+, Node.js 18+, pnpm.
+F2 Go to Task
+- Uses the “User Task” label (e.g., Yeni Trafik)
+- Static-first: find the correct button; if not, open the side menu; optional LLM planning
+- Early‑exit as soon as a real change is detected (improves speed and avoids 6 loops)
 
-1) Backend (Flask)
-		- Bağımlılıklar: `pip install -r requirements.txt`
-	- Çalıştırma: `python backend/app.py` (varsayılan: http://localhost:5001)
+F3 Fill Forms (Static-first)
+- Loads ruhsat (from Vision LLM output under tmp) and analyzes current page
+- Fills sequentially with verify/commit; runs actions (e.g., Devam)
+- Detects final page and captures PDF when applicable
 
-2) React UI
-	 - `cd react_ui`
-	 - `pnpm install`
-	 - `pnpm dev`
+Thunderbolt — Full automation
+- Runs F1 → F2 (with the current User Task) → Auto/Master (static → LLM as needed)
+- Uses a “fast profile”: shorter waits (3s webview settle), reduced F2 loops (4), and early exits on success
 
-3) Electron (opsiyonel)
-	 - `cd electron_app`
-	 - `pnpm install`
-	 - `pnpm start`
+## Calibration (multi‑page static mapping)
 
-Notlar ve troubleshooting için `docs/README.md` ve aşağıdaki Sorun Giderme bölümünü inceleyin.
+The Calibration panel lets you build a deterministic mapping per site/task:
+- Pick/Live selectors with status and HTML snippets
+- Actions list with drag order
+- Multi‑page: Page Name, URL sample/pattern, Add Next Page, Mark as Last Page
+- Save Draft → `production2/calib.json`
+- Finalize → merges into `production2/config.json` under `staticFormMapping.sites[host][task]`
 
-<a id="api-summary-contracts"></a>
-## API Özeti ve Sözleşmeler
-- POST `/api/upload` → JPEG yükle
-- POST `/api/start-automation` → Ts1 başlatır
-- POST `/api/test-state-2` → Ts2 (webbot + mapping) test
-- POST `/api/tsx/dev-run` → TsX geliştirme adımı (statik+LLM gezinme ve aşama yönetimi; `current_url`, `hard_reset` destekler)
-- GET `/api/state` → state
-- GET `/api/mapping` → son mapping
-- POST `/api/mapping/dump` → mevcut mapping’i loglara ve diske yaz
-- GET `/api/logs` → yapılandırılmış loglar
-- GET `/health` → sağlık kontrolü
+Why use calibration?
+- Faster, cheaper, and reliable automation (static-first) with LLM only as a fallback
 
-Ek TS3 yardımcı uçlar (test edilebilir doldurma planı ve script üretimi):
-- POST `/api/ts3/plan` → mapping + TS1 verisi + raw ile çözümleyip plan ve resolved değerler döner
-- POST `/api/ts3/analyze-selectors` → seçici analizi ve adaylar
-- POST `/api/ts3/generate-script` → vurgulama/typing/commitEnter ayarlarıyla injection script üretir ve FE çalıştırır
+## Data directories (production2/tmp)
 
-Tam sözleşmeler ve akışlar: `docs/12_llm_agent_integration.md`.
+Input, temp, outputs are kept under `production2/tmp`:
 
-## Test, Raporlama ve İzlenebilirlik
-- Test stratejisi: `docs/08_test_strategy.md`
-- Test dosyaları ve yolları: `docs/09_test_files_and_paths.md`
-- İzlenebilirlik matrisi: `docs/traceability_matrix.md`
-- Tüm testleri çalıştırma ve PDF özet: `python run_all_tests.py`
+- tmp/data — image staging for uploads (e.g., Ruhsat.jpg)
+- tmp/ruhsat_json — normalized ruhsat JSON saved by ingestion
+- tmp/jsonDatafromLLM — raw/parsed Vision LLM outputs
+- tmp/prompts/findHomePage — F1 prompt/meta/filtered artifacts
+- tmp/prompts/goUserTaskPage — F2 prompt/meta/filtered artifacts
+- tmp/pdf — generated/captured PDFs
 
-<a id="smoke-tests"></a>
-## Smoke Tests (Hızlı Sağlık Kontrolü)
-Smoke test, sistemin en kritik uçlarının “ayakta” olduğunu hızlıca doğrulayan, küçük ve uçtan uca mini testlerdir. Amaç; derin senaryolardan ziyade, temel servislerin kalkıp kalkmadığını ve basit bir akışın hata vermeden çalıştığını görmek. Bu proje için smoke testler:
+Cleanup policy
+- Workspaces are reused across runs; critical paths overwrite prior results (last run wins) where applicable
 
-- Konum: `tests/smokeTests/`
-- Kapsam ve doğrulamalar:
-	- GET `/health` → 200 ve `{ "status": "ok" }`
-	- POST `/api/upload` → Basit bir JPEG yüklemesi kabul ediliyor mu? Dosya `memory/TmpData/jpgDownload` altına kaydoluyor mu?
-	- POST `/api/start-automation` → TS1 akışı (JPEG→JSON) çalışıyor mu? `memory/TmpData/jpg2json` altında JSON üretiliyor mu? (OpenAI çağrısı monkeypatch ile taklit edilir.)
-	- POST `/api/test-state-2` → Basit bir HTML + JSON ile mapping üretilip `memory/TmpData/json2mapping` altına kaydediliyor mu? (LLM çağrısı monkeypatch ile taklit edilir; test, code-fenced JSON’dan sağlam parse’ı da doğrular.)
-- Dış bağımlılıklar: OpenAI ve internet erişimi gerektirmez; testler LLM fonksiyonlarını monkeypatch ile taklit eder ve offline, deterministik çalışır.
-- Disk etkileri: `memory/TmpData` altında küçük JSON dosyaları yazılır ve eski mapping’ler temizlenebilir (kalıcı veri etkisi yoktur).
+## Config knobs
 
-Hedef sayfa (referans):
-- https://preview--screen-to-data.lovable.app/traffic-insurance
+Location: `production2/config.json` and helpers in `production2/config.py`.
 
-TS2 Doğrulama kriterleri (acceptance):
-- Mapping JSON içinde şu alanlar bulunmalı ve input seçicilerine eşlenmiş olmalı:
-	- `tckimlik` → örn. `input#identity`
-	- `dogum_tarihi` → örn. `input#birthDate`
-	- `ad_soyad` → örn. `input#name`
-	- `plaka_no` → örn. `input#plateNo`
-- Actions içinde `click#DEVAM` olmalı.
+- findHomePage: prompts and attempt limits
+- goUserTaskPage:
+	- userTaskButtons (synonyms/selectors)
+	- sideMenuToggle detection
+	- stateflow defaults (maxLoops, waits)
+- goFillForms:
+	- llm.mappingPrompt and model
+	- stateflow timings (per field waits, verify delays, actions wait)
+- staticFormMapping: target site/task mappings merged from calibration
 
-Tek komut (Windows PowerShell) — tam JSON çıktısı terminale yazdırılır:
+## Folder structure (Production2)
+
 ```
-python -m pytest tests/smokeTests -s -vv
+production2/
+	backend/               # FastAPI app and features
+	react_ui/              # React UI (Vite + TS)
+	electron_app/          # Electron starter used by build2run.ps1
+	react_gui/dist/        # Mirrored UI build for Electron
+	calib.json             # Calibration drafts (by host/task)
+	config.json            # Runtime configuration (includes staticFormMapping)
+	tmp/                   # Input/output/temp artifacts (see Data directories)
+	build2run.ps1          # Build + run helper (prefers production2 electron)
+	start_all.ps1          # Convenience starter (Electron)
+	tests...               # Production2 test suites
 ```
 
-Koşum sonunda “Smoke Mapping Output” bölümünde son mapping dosya yolu ve pretty-printed JSON görüntülenir.
+## Troubleshooting
 
-Örnek çıktı (özetlenmiş):
-```
------------------------------ Smoke Mapping Output -----------------------------
-Latest mapping file: memory/TmpData/json2mapping/<...>_mapping.json
-Fields: ad_soyad, dogum_tarihi, plaka_no, tckimlik
-Actions: ['click#DEVAM']
-Full JSON:
-{
-	"field_mapping": {
-		"tckimlik": "input#identity",
-		"dogum_tarihi": "input#birthDate",
-		"ad_soyad": "input#name",
-		"plaka_no": "input#plateNo"
-	},
-	"actions": ["click#DEVAM"]
-}
-```
+- UI doesn’t start with Electron: build2run falls back to Vite dev server; check Node/pnpm and reinstall deps
+- Backend config or timing feels slow: adjust waits/loops in `config.json`; Thunderbolt fast profile already reduces waits
+- Go to Task loops even after click: fixed — stateflow now early‑exits once a change is detected
+- PDF capture didn’t appear: check logs for final‑page detection and see `production2/tmp/pdf`
 
-CI
-- GitHub Actions, main dalına push/PR geldiğinde smoke testleri çalıştırır ve son mapping JSON’u bir artifact olarak yükler.
-- Workflow: `.github/workflows/ci-smoke.yml`
+---
 
-Jenkins tecrübesi olanlar için GitHub Actions kullanım ipuçları
-- Nerede göreceğim?
-	- Repo sayfasında “Actions” sekmesinden tüm koşumları görebilirsin.
-	- PR açarsan, PR üzerinde workflow sonucu ve eklenen otomatik yorum (mapping özeti) görünür.
-- Nasıl tetiklerim?
-	- Push veya Pull Request ile otomatik tetiklenir.
-	- Manuel tetikleme için “Actions” → “CI - Smoke” → “Run workflow”.
-- Sonuçları nasıl incelerim?
-	- Job loglarında pytest çıktıları ve “Smoke Mapping Output” özeti var.
-	- Artifacts bölümünden `json2mapping-<branch>-<sha>` paketini indir; içinde:
-
-<a id="static-first"></a>
-## Statik-Önce Akış ve LLM Fallback
-Amaç: Hızlı, deterministik ve log dostu bir otomasyon. Statik sezgisel eşleme yeterli değilse, LLM fallback devreye girer.
-
-- Kısayol/Trigger: F3 (Dev Mode)
+Contributions
+- Branch: `fea/calibration-improvements` (current)
+- Open a PR to `main` when ready
 - Backend endpoint: `POST /api/f3-static` ve `POST /api/tsx/dev-run`
 - Davranış:
 	1) Statik analiz (etiket, eşanlamlılar, attribute skorlama) + varsa kalibrasyon kayıtlarını kullanır.

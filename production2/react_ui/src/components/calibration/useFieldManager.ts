@@ -1,10 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
 
-// Standard ruhsat fields for static heuristic mapping
-const DEFAULT_RUHSAT_KEYS = [
-	'plaka_no','marka','model','model_yili','sasi_no','motor_no','yakit','renk'
-];
-
 export interface FieldManagerOptions {
 	ruhsat: Record<string, string>;
 	logInfo: (msg: string) => void;
@@ -29,13 +24,11 @@ export const useFieldManager = (options: FieldManagerOptions) => {
 	const [htmlSnippets, setHtmlSnippets] = useState<Record<string, string>>({});
 	const [openHtml, setOpenHtml] = useState<Record<string, boolean>>({});
 
-	// Available keys for field selection
+	// Available keys for field selection (derive ONLY from ruhsat JSON)
 	const availableKeys = useMemo(() => {
 		const used = new Set(fieldKeys);
 		const candidates = Object.keys(ruhsat || {});
-		const missing = DEFAULT_RUHSAT_KEYS.filter(k => !used.has(k));
-		const extra = candidates.filter(k => !used.has(k) && !DEFAULT_RUHSAT_KEYS.includes(k));
-		return [...missing, ...extra];
+		return candidates.filter(k => !used.has(k)).sort();
 	}, [fieldKeys, ruhsat]);
 
 	// Utility functions

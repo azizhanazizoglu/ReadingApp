@@ -5,7 +5,7 @@
     "plaka_no": "#plateNo"
   },
   "actions": [
-    "devam"
+    "Action 1"
   ],
   "validation": {
     "contexts": {},

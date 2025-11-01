@@ -1,0 +1,38 @@
+{
+  "ok": true,
+  "page_kind": "fill_form",
+  "field_mapping": {
+    "plaka_no": "[data-lov-id='src/pages/VehicleDetails.tsx:79:16']",
+    "tckimlik": "#identity",
+    "dogum_tarihi": "#birthDate",
+    "ad_soyad": "#name",
+    "motor_no": "[data-lov-id='src/pages/VehicleDetails.tsx:87:16']",
+    "sasi_no": "[data-lov-id='src/pages/VehicleDetails.tsx:95:16']",
+    "model_yili": "[data-lov-id='src/pages/VehicleDetails.tsx:104:16']"
+  },
+  "actions": [
+    "Action 1"
+  ],
+  "validation": {
+    "contexts": {},
+    "counts": {
+      "mapped": 7
+    }
+  },
+  "mapping_source": {
+    "plaka_no": "calib_site",
+    "tckimlik": "calib_site",
+    "dogum_tarihi": "calib_site",
+    "ad_soyad": "calib_site",
+    "motor_no": "calib_page",
+    "sasi_no": "calib_page",
+    "model_yili": "calib_page"
+  },
+  "fingerprint": "5c9acc12551a1056de312eef5ba54f06a8d37ba7bff587b3ca0ff4b3a2d4f667",
+  "debug_dumps": {
+    "used": "static",
+    "used_hints": {},
+    "used_sections": false
+  },
+  "used": "static"
+}
