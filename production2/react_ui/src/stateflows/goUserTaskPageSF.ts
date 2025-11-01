@@ -274,7 +274,9 @@ export async function runGoUserTaskPageSF(taskLabel: string, opts?: RunOpts): Pr
     const maxLoops = Math.max(1, opts?.maxLoops ?? 6);
     const maxStaticTries = Math.max(0, opts?.maxStaticTries ?? 8);
     const maxLLMTries = Math.max(0, opts?.maxLLMTries ?? 3);
-    let lastChange = false;
+  let lastChange = false;
+  let overallChanged = false;
+  let finalSelector: string | undefined = undefined;
     let llmSeen = false;
     let staticTries = 0;
     let llmTries = 0;
@@ -316,7 +318,12 @@ export async function runGoUserTaskPageSF(taskLabel: string, opts?: RunOpts): Pr
         lastChange = !!det.changed;
         prevHtml = afterCap.html || prevHtml;
         logFn(`UTASK after goUserPage click changed=${lastChange}`);
-        // Always continue to call goUserPage on every change as requested
+        if (lastChange) {
+          overallChanged = true;
+          finalSelector = plan.selector;
+          logFn('UTASK success: navigation change detected after goUserPage click; exiting loop');
+          break;
+        }
         continue;
       }
       // No selector (or llmPrompt) -> try opening side menu every time
@@ -353,7 +360,7 @@ export async function runGoUserTaskPageSF(taskLabel: string, opts?: RunOpts): Pr
         logFn('UTASK openSideMenu plan not available; skipping');
       }
     }
-    return { ok:true, changed: false, taskLabel, triedSelectors, staticCandidatesTried: triedSelectors.length, sideMenuOpened, llmUsed: llmSeen, attempts, logs: [] };
+    return { ok:true, changed: overallChanged, finalSelector, taskLabel, triedSelectors, staticCandidatesTried: triedSelectors.length, sideMenuOpened, llmUsed: llmSeen, attempts, logs: [] };
   }
   // DOM-LOCAL MODE (legacy)
 
