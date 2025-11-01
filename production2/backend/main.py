@@ -607,10 +607,10 @@ def calib_llm_feedback(req: LLMFeedbackRequest) -> Dict[str, Any]:
 @app.post("/api/calib/auto-capture-llm-feedback")
 def auto_capture_llm_feedback(body: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Simplified LLM feedback endpoint that auto-captures session results.
+    LLM feedback endpoint that reads F3 mapping files and updates calib.json.
     
-    This endpoint reconstructs LLM session results from F3's existing output files
-    and current state, then updates calibration automatically.
+    This endpoint reads the latest F3 LLM mapping files from tmp/JpegJsonWebpageHtml
+    and updates calib.json with working selectors while preserving the exact format.
     
     Args:
         host: Domain host 
@@ -622,10 +622,10 @@ def auto_capture_llm_feedback(body: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         {
             "ok": True,
-            "method": "auto_llm_feedback",
-            "fields_updated": [...],
-            "actions_updated": [...],
-            "calib_updated": True
+            "method": "auto_llm_feedback_real_data",
+            "message": "LLM feedback auto-capture completed",
+            "calib_updated": True,
+            "pages_updated": 3
         }
     """
     try:
@@ -638,121 +638,106 @@ def auto_capture_llm_feedback(body: Dict[str, Any]) -> Dict[str, Any]:
         if not host:
             raise HTTPException(status_code=422, detail="Host required")
         
-        # Auto-reconstruct LLM session results from F3 debug dumps
-        try:
-            from pathlib import Path
+        # Import our new components
+        from Components.llmFeedbackManager import llm_feedback_manager
+        
+        if auto_save:
+            # Use the new LLM feedback manager to update calib.json
+            result = llm_feedback_manager.update_calib_from_latest_mappings(host, task)
             
-            # Look for recent F3 LLM debug dumps
-            dump_dir = Path("tmp/JpegJsonWebpageHtml")
-            if not dump_dir.exists():
-                # Try alternative debug location
-                dump_dir = Path("tmp")
-            
-            # Mock session results based on F3 LLM successful flow
-            # This simulates what F3 LLM discovered during its successful run
-            mock_llm_results = [
-                {
-                    "ok": True,
-                    "url": "https://preview--screen-to-data.lovable.app/traffic-insurance",
-                    "field_mapping": {
-                        "plaka_no": "#plateNo"
-                    },
-                    "actions": ["css#button[type='submit']"],  # F3 found submit button with CSS selector
-                    "action_selectors": {
-                        "Devam": "button[type='submit']"  # Explicit action to selector mapping
-                    },
-                    "validation": {
-                        "critical_fields": ["plaka_no"]
-                    }
-                },
-                {
-                    "ok": True,
-                    "url": "https://preview--screen-to-data.lovable.app/vehicle-details", 
-                    "field_mapping": {
-                        "plaka_no": "[data-lov-id='src/pages/VehicleDetails.tsx:79:16']",
-                        "motor_no": "[data-lov-id='src/pages/VehicleDetails.tsx:87:16']", 
-                        "sasi_no": "[data-lov-id='src/pages/VehicleDetails.tsx:95:16']",
-                        "model_yili": "[data-lov-id='src/pages/VehicleDetails.tsx:104:16']"
-                    },
-                    "actions": ["css#[data-lov-id='src/pages/VehicleDetails.tsx:112:16']"],  # F3 found Devam button
-                    "action_selectors": {
-                        "Devam": "[data-lov-id='src/pages/VehicleDetails.tsx:112:16']"  # Working CSS selector for Devam button
-                    },
-                    "validation": {
-                        "critical_fields": ["plaka_no", "motor_no", "sasi_no", "model_yili"]
-                    }
-                },
-                {
-                    "ok": True,
-                    "url": "https://preview--screen-to-data.lovable.app/insurance-quote",
-                    "field_mapping": {},
-                    "actions": ["css#[data-lov-id='src/pages/Quote.tsx:89:16']"],  # F3 found final activation button
-                    "action_selectors": {
-                        "Poliçeyi Aktifleştir": "[data-lov-id='src/pages/Quote.tsx:89:16']"  # Working CSS selector for activation button
-                    },
-                    "validation": {
-                        "critical_fields": ["plaka_no", "motor_no", "sasi_no", "model_yili"]
-                    }
-                }
-            ]
-            
-            # Use the existing LLM feedback update logic with mock data
-            from Features.calibFillUserTaskPageStatic import plan_calib_llm_feedback_update
-            
-            if auto_save:
-                result = plan_calib_llm_feedback_update(
-                    mock_llm_results,
-                    host,
-                    task,
-                    auto_save=True
-                )
+            if result.get("calib_updated"):
+                # Clean up old mapping files after successful update
+                cleanup_result = llm_feedback_manager.clean_old_mapping_files(keep_latest=10)
                 
                 return {
                     "ok": True,
-                    "method": "auto_llm_feedback_implemented",
-                    "message": f"LLM feedback auto-capture completed for {host}/{task}",
+                    "method": "auto_llm_feedback_real_data",
+                    "message": f"LLM feedback auto-capture completed for {host}/{task} using REAL F3 session data",
                     "host": host,
                     "task": task,
                     "auto_save": auto_save,
                     "source": source,
-                    "calib_updated": result.get("ok", False),
-                    "fields_updated": result.get("fields_captured", 0),
-                    "actions_updated": result.get("actions_captured", 0),
-                    "pages_processed": len(mock_llm_results)
+                    "calib_updated": True,
+                    "pages_updated": result.get("pages_updated", 0),
+                    "mapping_files_processed": result.get("mapping_files_processed", 0),
+                    "files_cleaned": cleanup_result.get("cleaned", 0),
+                    "timestamp": result.get("timestamp", "")
                 }
             else:
-                # Preview mode
-                from Features.calibFillUserTaskPageStatic import plan_calib_preview_llm_update
-                preview_result = plan_calib_preview_llm_update(mock_llm_results, host, task)
+                return {
+                    "ok": True,
+                    "method": "auto_llm_feedback_no_update",
+                    "message": f"LLM feedback auto-capture attempted for {host}/{task} but no update needed",
+                    "host": host,
+                    "task": task,
+                    "auto_save": auto_save,
+                    "source": source,
+                    "calib_updated": False,
+                    "reason": result.get("reason", "unknown")
+                }
+        else:
+            # Preview mode - show what would be updated
+            from Components.mappingFileProcessor import mapping_processor
+            
+            session_result = mapping_processor.process_session_mappings()
+            if session_result.get("ok"):
+                mappings = session_result["mappings"]
+                calib_structure = mapping_processor.build_calib_structure(mappings, host, task)
                 
                 return {
                     "ok": True,
                     "method": "auto_llm_feedback_preview",
-                    "message": f"LLM feedback preview for {host}/{task}",
+                    "message": f"LLM feedback preview for {host}/{task} using REAL F3 session data",
                     "host": host,
                     "task": task,
                     "auto_save": False,
                     "source": source,
                     "calib_updated": False,
-                    "preview_data": preview_result
+                    "preview_data": {
+                        "ok": True,
+                        "session_files": session_result.get("total_files", 0),
+                        "valid_mappings": session_result.get("valid_mappings", 0),
+                        "calib_structure": calib_structure,
+                        "would_update": calib_structure.get("ok", False)
+                    }
                 }
-                
-        except Exception as capture_error:
-            # Fallback to simple response if capture fails
-            return {
-                "ok": True,
-                "method": "auto_llm_feedback_fallback",
-                "message": f"LLM feedback auto-capture attempted for {host}/{task} - capture error: {capture_error}",
-                "host": host,
-                "task": task,
-                "auto_save": auto_save,
-                "source": source,
-                "calib_updated": False,
-                "error": str(capture_error)
-            }
+            else:
+                return {
+                    "ok": True,
+                    "method": "auto_llm_feedback_preview_no_data",
+                    "message": f"LLM feedback preview for {host}/{task} - no recent F3 session data found",
+                    "host": host,
+                    "task": task,
+                    "auto_save": False,
+                    "source": source,
+                    "calib_updated": False,
+                    "preview_data": {
+                        "ok": False,
+                        "reason": session_result.get("reason", "no_data")
+                    }
+                }
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Auto LLM feedback capture failed: {str(e)}")
+
+
+@app.post("/api/calib/cleanup-mapping-files")
+def cleanup_mapping_files() -> Dict[str, Any]:
+    """Clean up old F3 mapping files, keeping only recent ones."""
+    try:
+        from Components.llmFeedbackManager import llm_feedback_manager
+        
+        result = llm_feedback_manager.clean_old_mapping_files(keep_latest=5)
+        
+        return {
+            "ok": True,
+            "message": "Mapping files cleanup completed",
+            "files_cleaned": result.get("cleaned", 0),
+            "files_kept": result.get("kept", 0)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
 
 
 @app.post("/api/f3")

@@ -1,0 +1,32 @@
+{
+  "ok": true,
+  "page_kind": "fill_form",
+  "field_mapping": {
+    "plaka_no": "#plateNo",
+    "tckimlik": "#identity",
+    "dogum_tarihi": "#birthDate",
+    "ad_soyad": "#name"
+  },
+  "actions": [
+    "Action 1"
+  ],
+  "validation": {
+    "contexts": {},
+    "counts": {
+      "mapped": 4
+    }
+  },
+  "mapping_source": {
+    "plaka_no": "calib_site",
+    "tckimlik": "calib_site",
+    "dogum_tarihi": "calib_site",
+    "ad_soyad": "calib_site"
+  },
+  "fingerprint": "073ab2b270b1263ee30367ceae7e0c1d031628e94bd3e72ad09074520a6af41b",
+  "debug_dumps": {
+    "used": "static",
+    "used_hints": {},
+    "used_sections": false
+  },
+  "used": "static"
+}
