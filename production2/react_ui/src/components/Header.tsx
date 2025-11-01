@@ -102,6 +102,15 @@ export const Header: React.FC<HeaderProps> = ({
   const [calibRuhsat, setCalibRuhsat] = React.useState<Record<string, string>>({});
   const [calibCandidates, setCalibCandidates] = React.useState<any[]>([]);
   const [calibLoadedOnce, setCalibLoadedOnce] = React.useState(false);
+  // Fast profile for thunderbolt full automation
+  const FAST = React.useMemo(() => ({
+    wvStopMs: 3000,
+    f1WaitAfterClickMs: 600,
+    f2WaitAfterClickMs: 450,
+    f2MaxLoops: 4,
+    f2MaxStaticTries: 6,
+    f2MaxLLMTries: 2,
+  }), []);
 
   // Wait for webview stop
   const waitForWebviewStop = (timeoutMs = 7000) => new Promise<void>((resolve) => {
@@ -187,13 +196,13 @@ export const Header: React.FC<HeaderProps> = ({
     try {
       // 1) Find Home (F1)
       try {
-        const result = await runFindHomePageSF({ waitAfterClickMs: 800, name: 'F1', log: (m) => devLog('HD-F1-LOG', m) });
+        const result = await runFindHomePageSF({ waitAfterClickMs: FAST.f1WaitAfterClickMs, name: 'F1', log: (m) => devLog('HD-F1-LOG', m) });
         if (result.changed) devLog('HD-F1-DONE', `changed via selector=${result.selector} index=${result.index}`);
         else devLog('HD-F1-NOCHANGE', result.reason || 'no-change');
       } catch (e: any) {
         devLog('HD-F1-ERR', String(e?.message || e));
       }
-      await waitForWebviewStop(8000);
+      await waitForWebviewStop(FAST.wvStopMs);
 
       // 2) Go to Task (F2)
       try {
@@ -210,14 +219,14 @@ export const Header: React.FC<HeaderProps> = ({
           } catch {}
         }
         const res = await runGoUserTaskPageSF(label, {
-          waitAfterClickMs: Number(sfCfg?.waitAfterClickMs ?? 800),
+          waitAfterClickMs: FAST.f2WaitAfterClickMs,
           log: (m) => devLog('HD-F2-LOG', m),
           useBackend: true,
           fuzzy: true,
           forceLLM: false,
-          maxLoops: Number(sfCfg?.maxLoops ?? 6),
-          maxStaticTries: Number(sfCfg?.maxStaticTries ?? 8),
-          maxLLMTries: Number(sfCfg?.maxLLMTries ?? 3),
+          maxLoops: FAST.f2MaxLoops,
+          maxStaticTries: FAST.f2MaxStaticTries,
+          maxLLMTries: FAST.f2MaxLLMTries,
         });
         if (res.changed) devLog('HD-F2-DONE', `changed finalSelector=${res.finalSelector || ''}`);
         else devLog('HD-F2-NOCHANGE', `no change; sideMenuOpened=${res.sideMenuOpened} tried=${res.triedSelectors.length}`);
@@ -225,7 +234,7 @@ export const Header: React.FC<HeaderProps> = ({
       } catch (e: any) {
         devLog('HD-F2-ERR', String(e?.message || e));
       }
-      await waitForWebviewStop(8000);
+  await waitForWebviewStop(FAST.wvStopMs);
 
       // 3) Auto/Master (F3 pipeline)
       try {

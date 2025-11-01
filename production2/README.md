@@ -1,6 +1,29 @@
-# Production2 Architecture: FindHomePage + F1 Button
+# Production2 Architecture and UI (F1/F2/F3 + Thunderbolt)
 
-This README documents what we built in production2: the architecture, naming, components, and StateFlows (SFs) for FindHomePage and the F1 button. It also defines the FE/BE contracts and tunables.
+This README documents Production2 end‑to‑end: architecture, key StateFlows (F1/F2/F3), contracts, and the latest UI updates (two‑row header, Calibrate icon, Thunderbolt full automation, fast profile).
+
+## quick start (Windows)
+
+```
+cd production2
+./build2run.ps1
+```
+
+What it does:
+- Builds `react_ui` and mirrors to `react_gui/dist`
+- Starts the Electron app (falls back to Vite dev server if Electron not available)
+- Opens the desktop UI with a webview and the new header
+
+## UI overview (what changed)
+
+- Two‑row compact header, no horizontal scroll; professional iconography
+- Calibrate button is a circular Crosshair icon and is always visible (outside Debug)
+- “User Task” input is always visible in the top header
+- Debug toggle expands a developer action bar (Auto/Master, Find Home, Go to Task, Fill Static, Fill LLM, Home)
+- Thunderbolt triggers full automation: F1 → F2 (with current task) → Auto/Master
+- Fast profile reduces waits and loops for snappier runs
+- Calibration dropdowns use only Ruhsat‑derived fields (default keyword list removed)
+- Removed “Force LLM” checkbox from Debug
 
 ## quick map
 
@@ -177,6 +200,17 @@ Artifacts: `tmp/prompts/findHomePage/`
 Logs:
 - Backend: LLM-SAVED, LLM-CLEAN, LLM-RESP, LLM-CANDS, F1-MAP, F1-DET.
 - Frontend: F1 plan/LLM iteration, selectorsInOrder, click/wait/detect traces.
+
+## data directories (production2/tmp)
+
+Input/output/temp artifacts live under `production2/tmp`:
+
+- `tmp/data` — image staging for uploads (e.g., ruhsat.jpg)
+- `tmp/ruhsat_json` — normalized ruhsat JSON
+- `tmp/jsonDatafromLLM` — raw/parsed Vision LLM outputs
+- `tmp/prompts/findHomePage` — F1 prompts/meta/filtered HTML and LLM outputs
+- `tmp/prompts/goUserTaskPage` — F2 prompts/meta/filtered HTML and LLM outputs
+- `tmp/pdf` — generated/captured PDFs
 
 ## extending the system
 
